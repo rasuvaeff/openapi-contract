@@ -32,6 +32,9 @@
         "league/openapi-psr7-validator": "^0.24",
         "maglnet/composer-require-checker": "^4.17",
         "nyholm/psr7": "^1.8",
+        "phpunit/phpunit": "^11.5 || ^12.0 || ^13.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-server-handler": "^1.0",
         "rasuvaeff/property-testing-testo": "^0.4",
         "rasuvaeff/rector-named-literals": "^1.0",
         "rasuvaeff/understudy-testo": "^0.1",
@@ -75,7 +78,8 @@
             "@require-checker",
             "@cs",
             "@psalm",
-            "@test"
+            "@test",
+            "@test:phpunit-feasibility"
         ],
         "cs": "php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.php",
         "cs:fix": "php-cs-fixer fix --diff --config=.php-cs-fixer.php",
@@ -91,6 +95,7 @@
         "require-checker": "composer-require-checker check composer.json",
         "test": "testo --suite=Unit",
         "test:coverage": "testo --suite=Unit --coverage --coverage-clover=build/coverage.xml",
-        "test:coverage:ci": "testo --suite=Unit --coverage-clover=build/coverage.xml"
+        "test:coverage:ci": "testo --suite=Unit --coverage-clover=build/coverage.xml",
+        "test:phpunit-feasibility": "phpunit --configuration=tests/PhpUnit/phpunit.xml"
     }
 }
