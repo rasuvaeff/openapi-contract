@@ -22,6 +22,7 @@
     },
     "require": {
         "php": "8.3 - 8.5",
+        "opis/json-schema": "^2.6",
         "psr/http-message": "^1.1 || ^2.0"
     },
     "require-dev": {
@@ -31,7 +32,6 @@
         "league/openapi-psr7-validator": "^0.24",
         "maglnet/composer-require-checker": "^4.17",
         "nyholm/psr7": "^1.8",
-        "opis/json-schema": "^2.6",
         "rasuvaeff/property-testing-testo": "^0.4",
         "rasuvaeff/rector-named-literals": "^1.0",
         "rasuvaeff/understudy-testo": "^0.1",

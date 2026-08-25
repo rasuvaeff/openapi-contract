@@ -30,6 +30,8 @@ Tests use property-based checks for laws and serialization round-trips, and
 Understudy Testo doubles for observable PSR boundary interactions.
 
 See [examples/README.md](examples/README.md) for the current example status.
+The current backend decision and executable corpus status are recorded in
+[FEASIBILITY.md](FEASIBILITY.md).
 
 ## License
 

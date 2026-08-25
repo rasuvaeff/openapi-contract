@@ -30,6 +30,8 @@ make build
 а doubles Understudy Testo — наблюдаемые взаимодействия на PSR-границах.
 
 Текущий статус примеров описан в [examples/README.md](examples/README.md).
+Решение по backend и статус исполняемого корпуса описаны в
+[FEASIBILITY.md](FEASIBILITY.md).
 
 ## Лицензия
 
