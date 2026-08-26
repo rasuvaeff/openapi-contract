@@ -3,13 +3,14 @@
 Framework-neutral validation of PSR-7 request/response exchanges against
 OpenAPI contracts.
 
-> Status: feasibility work for the 0.1 contract is in progress. There is no
-> stable public API yet and the package must not be released in this state.
+> Status: implementation in progress. The initial public contract API is
+> available for pre-release use; response validation and generators are still
+> being expanded.
 
 ## Scope
 
-The package will load OpenAPI 3.0 and 3.1 documents, match PSR-7 requests to
-operations, and validate both sides of an exchange. Unsupported versions,
+The package loads OpenAPI 3.0 and 3.1 documents, matches PSR-7 requests to
+operations, and validates both sides of an exchange. Unsupported versions,
 dialects, references, and serialization styles fail closed.
 
 OpenAPI 3.2, remote and file references, XML, multipart, form-urlencoded, and
@@ -17,9 +18,9 @@ binary bodies are outside the initial release.
 
 ## Development
 
-The current milestone evaluates JSON Schema backends with an executable OAS
-3.0/3.1 corpus and establishes response selection semantics. Install and run
-the gate in Docker:
+The current slice provides `Contract::fromArray()`, `fromJson()`, `fromFile()`,
+operation matching, request validation, response selection, and JSON body
+validation. Install and run the gate in Docker:
 
 ```bash
 make install

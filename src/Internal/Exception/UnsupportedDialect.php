@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Exception;
 
+use Rasuvaeff\OpenApiContract\InvalidContract;
+
 /**
  * @internal
  */
-final class UnsupportedDialect extends \InvalidArgumentException
+final class UnsupportedDialect extends InvalidContract
 {
     public static function forUri(string $uri): self
     {

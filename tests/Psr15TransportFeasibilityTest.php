@@ -33,13 +33,11 @@ final class Psr15TransportFeasibilityTest
             headers: ['Content-Type' => 'application/json'],
             body: Stream::create('{"name":"Pico"}'),
         );
-        expect(fn() => $handler->handle(Arg::satisfies(static function (mixed $received): bool {
-            return $received instanceof ServerRequestInterface
-                && $received->getMethod() === 'POST'
-                && (string) $received->getUri() === 'https://api.example.test/pets?limit=2'
-                && $received->getHeaderLine('Content-Type') === 'application/json'
-                && (string) $received->getBody() === '{"name":"Pico"}';
-        })))->returns($expectedResponse);
+        expect(fn() => $handler->handle(Arg::satisfies(static fn(mixed $received): bool => $received instanceof ServerRequestInterface
+            && $received->getMethod() === 'POST'
+            && (string) $received->getUri() === 'https://api.example.test/pets?limit=2'
+            && $received->getHeaderLine('Content-Type') === 'application/json'
+            && (string) $received->getBody() === '{"name":"Pico"}')))->returns($expectedResponse);
 
         $actualResponse = (new Psr15TransportFixture($handler, new Psr17Factory()))->send($request);
 

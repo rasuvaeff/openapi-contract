@@ -55,9 +55,9 @@ final class ParameterCodecTest
     public function formListRoundTrip(array $value): void
     {
         $codec = new ParameterCodec();
-        $wire = $codec->serialize('tags', $value, ParameterStyle::Form, true);
+        $wire = $codec->serialize('tags', $value, ParameterStyle::Form, explode: true);
 
-        Assert::same($codec->parse('tags', $wire, ParameterStyle::Form, true, ParameterKind::List), $value);
+        Assert::same($codec->parse('tags', $wire, ParameterStyle::Form, explode: true, kind: ParameterKind::List), $value);
     }
 
     /** @return array<string, ArbitraryInterface> */

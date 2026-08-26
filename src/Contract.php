@@ -1,0 +1,433 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Rasuvaeff\OpenApiContract;
+
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
+use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
+use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
+use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
+
+/**
+ * Compiled OpenAPI 3.0/3.1 contract.
+ *
+ * @api
+ */
+final readonly class Contract
+{
+    public const int MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+    /** @var list<Operation> */
+    private array $operations;
+
+    private SchemaDialect $dialect;
+
+    /**
+     * @param array<string, mixed> $document
+     */
+    private function __construct(private array $document)
+    {
+        $version = $this->document['openapi'] ?? null;
+        if (!is_string($version) || !preg_match('/^3\.(0|1)\.[0-9]+$/', $version)) {
+            throw UnsupportedVersion::forVersion(is_string($version) ? $version : 'missing');
+        }
+        $this->dialect = str_starts_with($version, '3.0.') ? SchemaDialect::OpenApi30 : SchemaDialect::OpenApi31;
+        $this->assertDocumentDialect($this->document, $this->dialect);
+        if (!isset($this->document['paths']) || !is_array($this->document['paths']) || $this->document['paths'] === []) {
+            throw new InvalidContract('OpenAPI document must contain a non-empty paths object');
+        }
+
+        $resolver = new JsonPointerResolver($this->document);
+        $rootServers = $this->serverBases($this->document['servers'] ?? null);
+        $operations = [];
+        $templates = [];
+        $paths = $this->document['paths'];
+        /** @var mixed $pathItem */
+        foreach ($paths as $path => $pathItem) {
+            if (!is_string($path)) {
+                continue;
+            }
+            $pathString = $path;
+            if (!str_starts_with($pathString, '/') || !is_array($pathItem)) {
+                continue;
+            }
+            /** @var array<array-key, mixed> $pathItem */
+            $pathServers = $this->serverBases($pathItem['servers'] ?? null, $rootServers);
+            /** @var mixed $pathParametersValue */
+            $pathParametersValue = $pathItem['parameters'] ?? null;
+            $pathParameters = is_array($pathParametersValue) ? $pathParametersValue : [];
+            foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
+                $raw = $pathItem[$method] ?? null;
+                if (!is_array($raw)) {
+                    continue;
+                }
+                /** @var array<array-key, mixed> $raw */
+                /** @var mixed $operationIdValue */
+                $operationIdValue = $raw['operationId'] ?? null;
+                if ($operationIdValue === null) {
+                    $operationId = null;
+                } elseif (is_string($operationIdValue) && $operationIdValue !== '') {
+                    $operationId = $operationIdValue;
+                } else {
+                    throw new InvalidContract(sprintf('Operation at %s %s has an invalid operationId', strtoupper($method), $pathString));
+                }
+                $key = $operationId ?? strtoupper($method) . ' ' . $pathString;
+                if (isset($operations[$key])) {
+                    throw new InvalidContract(sprintf('Duplicate operation identity "%s"', $key));
+                }
+                /** @var mixed $rawParameters */
+                $rawParameters = $raw['parameters'] ?? null;
+                $normalizedTemplate = preg_replace('/\{[^{}]+\}/', '{}', $pathString);
+                if (!is_string($normalizedTemplate)) {
+                    throw new \LogicException('Path template normalization failed');
+                }
+                $templateKey = strtoupper($method) . ' ' . $normalizedTemplate;
+                if (isset($templates[$templateKey]) && $templates[$templateKey] !== $pathString) {
+                    throw new InvalidContract(sprintf(
+                        'Ambiguous OpenAPI paths "%s" and "%s" for method %s',
+                        $templates[$templateKey],
+                        $pathString,
+                        strtoupper($method),
+                    ));
+                }
+                $templates[$templateKey] = $pathString;
+                $operations[$key] = new Operation(
+                    key: $key,
+                    operationId: $operationId,
+                    method: strtoupper($method),
+                    path: $pathString,
+                    parameters: $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver),
+                    requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
+                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
+                    serverBases: $this->serverBases($raw['servers'] ?? null, $pathServers),
+                );
+            }
+        }
+        $this->operations = array_values($operations);
+    }
+
+    /** @param array<string, mixed> $document */
+    public static function fromArray(array $document): self
+    {
+        return new self($document);
+    }
+
+    public static function fromJson(string $json, string $source = 'openapi.json'): self
+    {
+        if (strlen($json) > self::MAX_DOCUMENT_BYTES) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $source, self::MAX_DOCUMENT_BYTES));
+        }
+
+        try {
+            $document = json_decode($json, associative: true, depth: 64, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" is not valid JSON', $source), $exception->getCode(), previous: $exception);
+        }
+        if (!is_array($document) || array_is_list($document)) {
+            throw new InvalidContract('OpenAPI document must decode to an object');
+        }
+
+        /** @var array<string, mixed> $document */
+        return new self($document);
+    }
+
+    public static function fromFile(string $path): self
+    {
+        $size = @filesize($path);
+        if (is_int($size) && $size > self::MAX_DOCUMENT_BYTES) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $path, self::MAX_DOCUMENT_BYTES));
+        }
+        $contents = @file_get_contents($path);
+        if ($contents === false) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" is not readable', $path));
+        }
+        if (str_ends_with(strtolower($path), '.yaml') || str_ends_with(strtolower($path), '.yml')) {
+            $yamlClass = 'Symfony\\Component\\Yaml\\' . 'Yaml';
+            if (!class_exists($yamlClass)) {
+                throw new InvalidContract('YAML loading requires symfony/yaml');
+            }
+            $document = call_user_func([$yamlClass, 'parse'], $contents);
+            if (!is_array($document) || array_is_list($document)) {
+                throw new InvalidContract('OpenAPI YAML document must decode to an object');
+            }
+
+            /** @var array<string, mixed> $document */
+            return new self($document);
+        }
+
+        return self::fromJson($contents, $path);
+    }
+
+    /** @return list<Operation> */
+    public function operations(): array
+    {
+        return $this->operations;
+    }
+
+    public function operation(string $key): Operation
+    {
+        foreach ($this->operations as $operation) {
+            if ($operation->key === $key) {
+                return $operation;
+            }
+        }
+
+        throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
+    }
+
+    public function match(RequestInterface $request): ?MatchedOperation
+    {
+        $method = strtoupper($request->getMethod());
+        $path = parse_url((string) $request->getUri(), PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            $path = '/';
+        }
+        $candidates = [];
+        foreach ($this->operations as $operation) {
+            if ($operation->method !== $method) {
+                continue;
+            }
+            foreach ($operation->serverBases as $base) {
+                $route = $base === '/' ? $operation->path : rtrim($base, '/') . $operation->path;
+                $matched = $this->matchPath($route, $path);
+                if ($matched !== null) {
+                    $candidates[] = [$operation, $matched, substr_count($operation->path, '{')];
+                }
+            }
+        }
+        usort($candidates, static fn(array $a, array $b): int => $a[2] <=> $b[2]);
+        if ($candidates === []) {
+            return null;
+        }
+
+        return new MatchedOperation($candidates[0][0], $candidates[0][1]);
+    }
+
+    public function requireMatch(RequestInterface $request): MatchedOperation
+    {
+        return $this->match($request) ?? throw new UnknownOperation(sprintf('No operation matches %s %s', $request->getMethod(), (string) $request->getUri()));
+    }
+
+    public function validateRequest(RequestInterface $request): ValidationResult
+    {
+        $matched = $this->match($request);
+        if (!$matched instanceof \Rasuvaeff\OpenApiContract\MatchedOperation) {
+            return new ValidationResult([new Violation(
+                code: 'request.operation.unknown',
+                operation: 'unknown',
+                location: 'request',
+                instancePath: (string) $request->getUri(),
+                specPointer: '/paths',
+                expected: 'declared operation',
+                actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
+                message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
+            )]);
+        }
+
+        return (new RequestValidator())->validate($matched, $request, $this->dialect);
+    }
+
+    public function validateExchange(RequestInterface $request, ResponseInterface $response): ValidationResult
+    {
+        $matched = $this->match($request);
+        if (!$matched instanceof \Rasuvaeff\OpenApiContract\MatchedOperation) {
+            return new ValidationResult([new Violation(
+                code: 'request.operation.unknown',
+                operation: 'unknown',
+                location: 'request',
+                instancePath: (string) $request->getUri(),
+                specPointer: '/paths',
+                expected: 'declared operation',
+                actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
+                message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
+            )]);
+        }
+
+        $requestResult = (new RequestValidator())->validate($matched, $request, $this->dialect);
+        $responseResult = (new ResponseValidator())->validate($matched, $response, $this->dialect);
+
+        return new ValidationResult([...$requestResult->violations, ...$responseResult->violations]);
+    }
+
+    /** @param array<string, mixed> $document */
+    private function assertDocumentDialect(array $document, SchemaDialect $dialect): void
+    {
+        $value = $document['jsonSchemaDialect'] ?? null;
+        if ($value === null) {
+            return;
+        }
+        if (!is_string($value)) {
+            throw UnsupportedDialect::forUri('non-string');
+        }
+        if ($dialect === SchemaDialect::OpenApi30 || !in_array($value, [
+            'https://json-schema.org/draft/2020-12/schema',
+            'https://spec.openapis.org/oas/3.1/dialect/base',
+        ], strict: true)) {
+            throw UnsupportedDialect::forUri($value);
+        }
+    }
+
+    /**
+     * @param list<string> $fallback
+     * @return list<string>
+     */
+    private function serverBases(mixed $servers, array $fallback = ['/']): array
+    {
+        if (!is_array($servers) || $servers === []) {
+            return $fallback;
+        }
+        $bases = [];
+        /** @var mixed $server */
+        foreach ($servers as $server) {
+            if (!is_array($server)) {
+                throw new InvalidContract('OpenAPI server must contain a URL');
+            }
+            $url = $server['url'] ?? null;
+            if (!is_string($url)) {
+                throw new InvalidContract('OpenAPI server must contain a URL');
+            }
+            $parsed = parse_url($url, PHP_URL_PATH);
+            $bases[] = is_string($parsed) && $parsed !== '' ? rtrim($parsed, '/') : '/';
+        }
+
+        return $bases;
+    }
+
+    /**
+     * @param array<array-key, mixed> $path
+     * @param array<array-key, mixed> $operation
+     * @return list<array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>}>
+     */
+    private function parameters(array $path, array $operation, JsonPointerResolver $resolver): array
+    {
+        $result = [];
+        foreach ([...$path, ...$operation] as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $raw = $resolver->resolve($raw);
+            $name = $raw['name'] ?? null;
+            $in = $raw['in'] ?? null;
+            if (!is_string($name) || $name === '' || !is_string($in) || !in_array($in, ['path', 'query', 'header', 'cookie'], strict: true)) {
+                throw new InvalidContract('OpenAPI parameter must have a valid name and location');
+            }
+            /** @var mixed $schemaValue */
+            $schemaValue = $raw['schema'] ?? null;
+            $schema = $this->resolvedSchema($schemaValue, $resolver);
+            $key = $in . ':' . ($in === 'header' ? strtolower($name) : $name);
+            /** @var mixed $styleValue */
+            $styleValue = $raw['style'] ?? null;
+            /** @var mixed $explodeValue */
+            $explodeValue = $raw['explode'] ?? null;
+            $style = is_string($styleValue) ? $styleValue : ($in === 'query' || $in === 'cookie' ? 'form' : 'simple');
+            $this->assertSupportedStyle($name, $in, $style, $raw);
+            $result[$key] = [
+                'name' => $name,
+                'in' => $in,
+                'required' => $in === 'path' || (($raw['required'] ?? false) === true),
+                'style' => $style,
+                'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
+                'allowReserved' => ($raw['allowReserved'] ?? false) === true,
+                'schema' => $schema,
+            ];
+        }
+
+        return array_values($result);
+    }
+
+    /** @param array<array-key, mixed> $parameter */
+    private function assertSupportedStyle(string $name, string $in, string $style, array $parameter): void
+    {
+        if (array_key_exists('content', $parameter)) {
+            throw new UnsupportedSerialization(sprintf('Parameter "%s" uses unsupported content serialization', $name));
+        }
+        $supported = match ($in) {
+            'path' => ['simple', 'label', 'matrix'],
+            'query' => ['form', 'spaceDelimited', 'pipeDelimited', 'deepObject'],
+            'header' => ['simple'],
+            'cookie' => ['form'],
+            default => [],
+        };
+        if (!in_array($style, $supported, strict: true)) {
+            throw new UnsupportedSerialization(sprintf('Parameter "%s" uses unsupported %s style "%s"', $name, $in, $style));
+        }
+    }
+
+    /** @return array<array-key, mixed> */
+    private function resolvedObject(mixed $value, JsonPointerResolver $resolver): array
+    {
+        return is_array($value) ? $resolver->resolve($value) : [];
+    }
+
+    /** @return array<string, mixed> */
+    private function resolvedSchema(mixed $value, JsonPointerResolver $resolver): array
+    {
+        if ($value === null) {
+            return [];
+        }
+        if (!is_array($value) || array_is_list($value)) {
+            throw new InvalidContract('OpenAPI parameter schema must be an object');
+        }
+        $schema = $resolver->resolve($value);
+        foreach (array_keys($schema) as $key) {
+            if (!is_string($key)) {
+                throw new InvalidContract('OpenAPI schema keys must be strings');
+            }
+        }
+
+        /** @var array<string, mixed> $schema */
+        return $schema;
+    }
+
+    /** @return array<array-key, mixed> */
+    private function resolvedResponses(mixed $value, JsonPointerResolver $resolver): array
+    {
+        if (!is_array($value) || $value === []) {
+            throw new InvalidContract('Operation responses must be an object');
+        }
+        $result = [];
+        /** @var mixed $response */
+        foreach ($value as $key => $response) {
+            if (!is_array($response)) {
+                throw new InvalidContract(sprintf('Response "%s" must be an object', (string) $key));
+            }
+            $result[$key] = $resolver->resolve($response);
+        }
+
+        return $result;
+    }
+
+    /** @return array<string, string>|null */
+    private function matchPath(string $route, string $requestPath): ?array
+    {
+        $routeParts = explode('/', trim($route, '/'));
+        $requestParts = explode('/', trim($requestPath, '/'));
+        if (trim($route, '/') === '' && trim($requestPath, '/') === '') {
+            return [];
+        }
+        if (count($routeParts) !== count($requestParts)) {
+            return null;
+        }
+        $params = [];
+        foreach ($routeParts as $index => $part) {
+            $rawRequestPart = $requestParts[$index];
+            $requestPart = rawurldecode($rawRequestPart);
+            if (str_contains($requestPart, '/') || str_contains($requestPart, '\\\\')) {
+                return null;
+            }
+            if (preg_match('/^\{([^{}]+)\}$/', $part, $match) === 1) {
+                $params[$match[1]] = $rawRequestPart;
+                continue;
+            }
+            if ($part !== $requestPart) {
+                return null;
+            }
+        }
+
+        return $params;
+    }
+}

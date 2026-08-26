@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Rasuvaeff\RectorNamedLiterals\AddNameToLiteralArgumentRector;
 use Rector\Config\RectorConfig;
+use Rector\DeadCode\Rector\Property\RemoveUselessVarTagRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -12,4 +13,5 @@ return RectorConfig::configure()
     ])
     ->withPhpSets(php83: true)
     ->withPreparedSets(deadCode: true, codeQuality: true)
+    ->withSkip([RemoveUselessVarTagRector::class])
     ->withRules([AddNameToLiteralArgumentRector::class]);

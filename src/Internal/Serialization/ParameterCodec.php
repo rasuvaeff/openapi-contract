@@ -96,7 +96,7 @@ final readonly class ParameterCodec
         }
 
         if (!$explode) {
-            return ';' . $this->encode($name) . '=' . $this->simple($this->asObject($value), false, ',');
+            return ';' . $this->encode($name) . '=' . $this->simple($this->asObject($value), explode: false, pairSeparator: ',');
         }
 
         $parts = [];
@@ -130,7 +130,7 @@ final readonly class ParameterCodec
             return implode('&', $parts);
         }
 
-        return $this->pair($name, $this->simple($this->asObject($value), false, ','), encoded: true);
+        return $this->pair($name, $this->simple($this->asObject($value), explode: false, pairSeparator: ','), encoded: true);
     }
 
     /** @param list<string> $value */
@@ -268,7 +268,8 @@ final readonly class ParameterCodec
 
         /** @var array<string, string> $result */
         $result = [];
-        for ($index = 0; $index < count($pieces); $index += 2) {
+        $counter = count($pieces);
+        for ($index = 0; $index < $counter; $index += 2) {
             $result[$this->decode($pieces[$index])] = $this->decode($pieces[$index + 1]);
         }
 
@@ -291,13 +292,13 @@ final readonly class ParameterCodec
         }
 
         if (!$explode) {
-            return $this->parseSimple($this->valueForName($name, $parts), false, ParameterKind::Object, ',');
+            return $this->parseSimple($this->valueForName($name, $parts), explode: false, kind: ParameterKind::Object, pairSeparator: ',');
         }
 
         /** @var array<string, string> $result */
         $result = [];
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, true);
+            [$key, $value] = $this->splitPair($part, equals: true);
             $result[$this->decode($key)] = $this->decode($value);
         }
 
@@ -314,7 +315,7 @@ final readonly class ParameterCodec
      * @param non-empty-string $delimiter
      * @return list<string>
      */
-    private function parseDelimitedQuery(string $name, string $wire, string $delimiter, ParameterKind $kind): string|array
+    private function parseDelimitedQuery(string $name, string $wire, string $delimiter, ParameterKind $kind): array
     {
         if ($kind !== ParameterKind::List) {
             throw new \InvalidArgumentException('Delimited query parameters require a list shape');
@@ -331,7 +332,7 @@ final readonly class ParameterCodec
         /** @var array<string, string> $result */
         $result = [];
         foreach (explode('&', $wire) as $part) {
-            [$key, $value] = $this->splitPair($part, true);
+            [$key, $value] = $this->splitPair($part, equals: true);
             $prefix = $this->encode($name) . '%5B';
             if (!str_starts_with($key, $prefix) || !str_ends_with($key, '%5D')) {
                 throw new \InvalidArgumentException('Invalid deepObject parameter');
@@ -360,13 +361,13 @@ final readonly class ParameterCodec
             return $this->decodeList(explode(',', $this->valueForName($name, $parts)));
         }
         if (!$explode) {
-            return $this->parseSimple($this->valueForName($name, $parts), false, ParameterKind::Object, ',');
+            return $this->parseSimple($this->valueForName($name, $parts), explode: false, kind: ParameterKind::Object, pairSeparator: ',');
         }
 
         /** @var array<string, string> $result */
         $result = [];
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, true);
+            [$key, $value] = $this->splitPair($part, equals: true);
             $result[$this->decode($key)] = $this->decode($value);
         }
 
@@ -378,7 +379,7 @@ final readonly class ParameterCodec
     {
         $encodedName = $this->encode($name);
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, true);
+            [$key, $value] = $this->splitPair($part, equals: true);
             if ($key === $encodedName) {
                 return $value;
             }
@@ -396,7 +397,7 @@ final readonly class ParameterCodec
         $encodedName = $this->encode($name);
         $values = [];
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, true);
+            [$key, $value] = $this->splitPair($part, equals: true);
             if ($key === $encodedName) {
                 $values[] = $value;
             }

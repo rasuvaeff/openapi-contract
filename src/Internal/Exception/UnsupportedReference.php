@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Exception;
 
+use Rasuvaeff\OpenApiContract\InvalidContract;
+
 /**
  * @internal
  */
-final class UnsupportedReference extends \InvalidArgumentException
+final class UnsupportedReference extends InvalidContract
 {
     public static function forValue(mixed $reference): self
     {
