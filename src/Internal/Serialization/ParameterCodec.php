@@ -66,7 +66,7 @@ final readonly class ParameterCodec
             return $this->encode($value);
         }
         if (array_is_list($value)) {
-            return implode(',', array_map($this->encode(...), $this->asList($value)));
+            return implode($pairSeparator, array_map($this->encode(...), $this->asList($value)));
         }
 
         $value = $this->asObject($value);
@@ -236,7 +236,7 @@ final readonly class ParameterCodec
             return $this->decode($wire);
         }
         if ($kind === ParameterKind::List) {
-            return $this->decodeList($wire === '' ? [] : explode(',', $wire));
+            return $this->decodeList($wire === '' ? [] : explode($pairSeparator, $wire));
         }
 
         if (!$explode) {

@@ -8,6 +8,7 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 use Testo\Assert;
@@ -66,5 +67,94 @@ final class ParameterCodecTest
         return [
             'value' => Gen::nonEmptyArrayOf(Gen::stringFrom('abcXYZ', minLength: 1, maxLength: 4), maxSize: 5),
         ];
+    }
+
+    #[Property(runs: 400)]
+    public function everySupportedStyleAndExplodeCombinationRoundTrips(array $case): void
+    {
+        $codec = new ParameterCodec();
+        $wire = $codec->serialize(
+            name: $case['name'],
+            value: $case['value'],
+            style: $case['style'],
+            explode: $case['explode'],
+        );
+
+        Classify::cover(condition: $case['label'] === 'simple scalar', label: 'simple scalar', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'simple list exploded', label: 'simple list exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'simple list unexploded', label: 'simple list unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'simple object exploded', label: 'simple object exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'simple object unexploded', label: 'simple object unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'label list exploded', label: 'label list exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'label list unexploded', label: 'label list unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'matrix list exploded', label: 'matrix list exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'matrix list unexploded', label: 'matrix list unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'matrix object exploded', label: 'matrix object exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'matrix object unexploded', label: 'matrix object unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'form list exploded', label: 'form list exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'form list unexploded', label: 'form list unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'form object exploded', label: 'form object exploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'form object unexploded', label: 'form object unexploded', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'space delimited list', label: 'space delimited list', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'pipe delimited list', label: 'pipe delimited list', minPercent: 3.0);
+        Classify::cover(condition: $case['label'] === 'deep object', label: 'deep object', minPercent: 3.0);
+        Assert::same(
+            $codec->parse(
+                name: $case['name'],
+                wire: $wire,
+                style: $case['style'],
+                explode: $case['explode'],
+                kind: $case['kind'],
+            ),
+            $case['value'],
+        );
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function everySupportedStyleAndExplodeCombinationRoundTripsGenerators(): array
+    {
+        $scalar = Gen::stringFrom('abcXYZ', minLength: 1, maxLength: 4);
+        $list = Gen::nonEmptyArrayOf($scalar, maxSize: 4);
+        $object = Gen::record(['role' => $scalar, 'name' => $scalar]);
+
+        return [
+            'case' => Gen::frequency([
+                [1, self::case('simple scalar', $scalar, ParameterStyle::Simple, explode: false, kind: ParameterKind::Scalar)],
+                [1, self::case('simple list exploded', $list, ParameterStyle::Simple, explode: true, kind: ParameterKind::List)],
+                [1, self::case('simple list unexploded', $list, ParameterStyle::Simple, explode: false, kind: ParameterKind::List)],
+                [1, self::case('simple object exploded', $object, ParameterStyle::Simple, explode: true, kind: ParameterKind::Object)],
+                [1, self::case('simple object unexploded', $object, ParameterStyle::Simple, explode: false, kind: ParameterKind::Object)],
+                [1, self::case('label list exploded', $list, ParameterStyle::Label, explode: true, kind: ParameterKind::List)],
+                [1, self::case('label list unexploded', $list, ParameterStyle::Label, explode: false, kind: ParameterKind::List)],
+                [1, self::case('matrix list exploded', $list, ParameterStyle::Matrix, explode: true, kind: ParameterKind::List)],
+                [1, self::case('matrix list unexploded', $list, ParameterStyle::Matrix, explode: false, kind: ParameterKind::List)],
+                [1, self::case('matrix object exploded', $object, ParameterStyle::Matrix, explode: true, kind: ParameterKind::Object)],
+                [1, self::case('matrix object unexploded', $object, ParameterStyle::Matrix, explode: false, kind: ParameterKind::Object)],
+                [1, self::case('form list exploded', $list, ParameterStyle::Form, explode: true, kind: ParameterKind::List)],
+                [1, self::case('form list unexploded', $list, ParameterStyle::Form, explode: false, kind: ParameterKind::List)],
+                [1, self::case('form object exploded', $object, ParameterStyle::Form, explode: true, kind: ParameterKind::Object)],
+                [1, self::case('form object unexploded', $object, ParameterStyle::Form, explode: false, kind: ParameterKind::Object)],
+                [1, self::case('space delimited list', $list, ParameterStyle::SpaceDelimited, explode: false, kind: ParameterKind::List)],
+                [1, self::case('pipe delimited list', $list, ParameterStyle::PipeDelimited, explode: false, kind: ParameterKind::List)],
+                [1, self::case('deep object', $object, ParameterStyle::DeepObject, explode: true, kind: ParameterKind::Object)],
+            ]),
+        ];
+    }
+
+    private static function case(
+        string $label,
+        ArbitraryInterface $value,
+        ParameterStyle $style,
+        bool $explode,
+        ParameterKind $kind,
+    ): ArbitraryInterface {
+        return Gen::map($value, static fn(string|array $value): array => [
+            'label' => $label,
+            'name' => $kind === ParameterKind::Object ? 'user' : 'tags',
+            'value' => $value,
+            'style' => $style,
+            'explode' => $explode,
+            'kind' => $kind,
+        ]);
     }
 }
