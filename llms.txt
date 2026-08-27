@@ -18,6 +18,4 @@ Contract rules:
 
 Test strategy:
 - property-testing-testo: laws, round-trips, generated-value postconditions;
-- understudy-testo: PSR factory, transport, handler, and credential interaction
-  contracts;
 - real backend objects: backend feasibility and differential fixtures.

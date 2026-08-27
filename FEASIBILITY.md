@@ -26,8 +26,9 @@ validation remain useful future comparison fixtures.
 - OAS 3.0 boolean schemas fail closed.
 - Response selection is exact status, then NXX, then default.
 - Testo property tests cover generated numeric boundary distribution.
-- understudy-testo is registered for future PSR boundary interaction tests;
-  no manual double is used in backend compatibility fixtures.
+- PSR-15 transport boundary coverage lives in `property-testing-openapi`, where
+  the public transport adapters are implemented; backend compatibility fixtures
+  use real backend objects.
 
-The PSR-15 fixture, request serialization round-trip, bounded references, and
-runner adapters are not complete and remain subsequent milestones.
+Request serialization round-trip, bounded references, and runner adapters are
+not complete and remain subsequent milestones.

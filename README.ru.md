@@ -27,8 +27,7 @@ make install
 make build
 ```
 
-В тестах property-based проверки покрывают законы и serialization round-trip,
-а doubles Understudy Testo — наблюдаемые взаимодействия на PSR-границах.
+В тестах property-based проверки покрывают законы и serialization round-trip.
 
 Текущий статус примеров описан в [examples/README.md](examples/README.md).
 Решение по backend и статус исполняемого корпуса описаны в

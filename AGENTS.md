@@ -46,9 +46,10 @@ make release-check
 - Diagnostics are bounded and redacted. Credentials never belong in rendered
   expected/actual values.
 - Use `property-testing-testo` for algebraic laws, round-trips, generation
-  postconditions, and corpus replay. Use `understudy-testo` for observable
-  interaction contracts at PSR-7/PSR-15, transport, factory, and credential
-  boundaries. Backend compatibility fixtures use real backend objects.
+  postconditions, and corpus replay. Transport, factory, and credential
+  interaction contracts belong in `property-testing-openapi`, where public
+  adapters use `understudy-testo`. Backend compatibility fixtures use real
+  backend objects.
 - Code uses `declare(strict_types=1)`, internal feasibility types carry
   `@internal`, and public types carry `@api`.
 - `examples/` is part of the public contract; every listed script must run.

@@ -1,9 +1,10 @@
 DOCKER := docker run --rm -v "$(PWD)":/app -w /app composer:2
 DOCKER_HOST := docker run --rm --network host -v "$(PWD)":/app -w /app
-PCOV_BOOTSTRAP := apk add --no-cache $$PHPIZE_DEPS >/dev/null && pecl install pcov >/dev/null && docker-php-ext-enable pcov
+PCOV_IMAGE := composer-pcov:local
+DOCKER_PCOV := docker run --rm -v "$(PWD)":/app -w /app --entrypoint sh $(PCOV_IMAGE) -lc
 
 .PHONY: bench build cs cs-fix psalm test mutation rector rector-fix install normalize require-checker \
-       test-coverage test-coverage-ci update-deps release-check bc-check audit-package help
+       test-coverage test-coverage-ci update-deps release-check bc-check audit-package help pcov-image pcov-image-refresh
 
 install:
 	$(DOCKER) composer install --no-interaction --no-progress --prefer-dist
@@ -26,14 +27,20 @@ psalm:
 test:
 	$(DOCKER) composer test
 
-test-coverage:
-	$(DOCKER) sh -lc '$(PCOV_BOOTSTRAP) && composer test:coverage'
+pcov-image:
+	@docker image inspect $(PCOV_IMAGE) >/dev/null 2>&1 || $(MAKE) pcov-image-refresh
 
-test-coverage-ci:
-	$(DOCKER) sh -lc '$(PCOV_BOOTSTRAP) && composer test:coverage:ci'
+pcov-image-refresh:
+	@printf 'FROM composer:2\nRUN apk add --no-cache $$PHPIZE_DEPS >/dev/null \\\n+ && pecl install pcov >/dev/null \\\n+ && docker-php-ext-enable pcov\n' | docker build -t $(PCOV_IMAGE) -
 
-mutation:
-	$(DOCKER) sh -lc '$(PCOV_BOOTSTRAP) && composer mutation'
+test-coverage: pcov-image
+	$(DOCKER_PCOV) 'composer test:coverage'
+
+test-coverage-ci: pcov-image
+	$(DOCKER_PCOV) 'composer test:coverage:ci'
+
+mutation: pcov-image
+	$(DOCKER_PCOV) 'composer mutation'
 
 rector:
 	$(DOCKER) composer rector
