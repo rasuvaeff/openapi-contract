@@ -99,6 +99,35 @@ final class ContractTest
         ]);
     }
 
+    public function resolvesPathItemReferences(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['pathItems' => [
+                'pet' => ['get' => ['operationId' => 'pet.get', 'responses' => ['200' => []]]],
+            ]],
+            'paths' => ['/pet' => ['$ref' => '#/components/pathItems/pet']],
+        ]);
+
+        Assert::same($contract->requireMatch(new ServerRequest('GET', '/pet'))->operation->operationId, 'pet.get');
+    }
+
+    public function rejectsMalformedPathEntries(): void
+    {
+        Expect::exception(InvalidContract::class);
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/broken' => 'not-an-object']]);
+    }
+
+    public function rejectsDecodedBackslashPathSegments(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/pets/{id}' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+
+        Assert::null($contract->match(new ServerRequest('GET', '/pets/%5C')));
+    }
+
     public function rejectsUnsupportedParameterStyle(): void
     {
         Expect::exception(UnsupportedSerialization::class);

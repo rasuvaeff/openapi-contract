@@ -53,21 +53,31 @@ final readonly class Contract
         /** @var mixed $pathItem */
         foreach ($paths as $path => $pathItem) {
             if (!is_string($path)) {
-                continue;
+                throw new InvalidContract('OpenAPI paths keys must be strings');
             }
             $pathString = $path;
-            if (!str_starts_with($pathString, '/') || !is_array($pathItem)) {
+            if (str_starts_with($pathString, 'x-')) {
                 continue;
             }
+            if (!str_starts_with($pathString, '/')) {
+                throw new InvalidContract(sprintf('OpenAPI path "%s" must start with /', $pathString));
+            }
+            if (!is_array($pathItem)) {
+                throw new InvalidContract(sprintf('OpenAPI path item "%s" must be an object', $pathString));
+            }
             /** @var array<array-key, mixed> $pathItem */
+            $pathItem = $resolver->resolve($pathItem);
             $pathServers = $this->serverBases($pathItem['servers'] ?? null, $rootServers);
             /** @var mixed $pathParametersValue */
             $pathParametersValue = $pathItem['parameters'] ?? null;
             $pathParameters = is_array($pathParametersValue) ? $pathParametersValue : [];
             foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
-                $raw = $pathItem[$method] ?? null;
-                if (!is_array($raw)) {
+                if (!array_key_exists($method, $pathItem)) {
                     continue;
+                }
+                $raw = $pathItem[$method];
+                if (!is_array($raw)) {
+                    throw new InvalidContract(sprintf('Operation at %s %s must be an object', strtoupper($method), $pathString));
                 }
                 /** @var array<array-key, mixed> $raw */
                 /** @var mixed $operationIdValue */
@@ -501,7 +511,7 @@ final readonly class Contract
         foreach ($routeParts as $index => $part) {
             $rawRequestPart = $requestParts[$index];
             $requestPart = rawurldecode($rawRequestPart);
-            if (str_contains($requestPart, '/') || str_contains($requestPart, '\\\\')) {
+            if (str_contains($requestPart, '/') || str_contains($requestPart, '\\')) {
                 return null;
             }
             if (preg_match('/^\{([^{}]+)\}$/', $part, $match) === 1) {
