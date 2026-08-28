@@ -174,4 +174,26 @@ final class ContractTest
             'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
         ]);
     }
+
+    public function rejectsNullSecurityFields(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray([
+            'openapi' => '3.1.0',
+            'security' => null,
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+    }
+
+    public function rejectsNullSecuritySchemes(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['securitySchemes' => null],
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+    }
 }

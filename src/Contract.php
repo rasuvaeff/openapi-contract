@@ -44,7 +44,9 @@ final readonly class Contract
         $resolver = new JsonPointerResolver($this->document);
         $rootServers = $this->serverBases($this->document['servers'] ?? null);
         $securitySchemes = $this->securitySchemes($this->document['components'] ?? null);
-        $rootSecurity = $this->securityRequirements($this->document['security'] ?? null, $securitySchemes);
+        $rootSecurity = array_key_exists('security', $this->document)
+            ? $this->securityRequirements($this->document['security'], $securitySchemes)
+            : [];
         $operations = [];
         $templates = [];
         $paths = $this->document['paths'];
@@ -106,7 +108,9 @@ final readonly class Contract
                     requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
                     serverBases: $this->serverBases($raw['servers'] ?? null, $pathServers),
-                    security: $this->securityRequirements($raw['security'] ?? $rootSecurity, $securitySchemes),
+                    security: array_key_exists('security', $raw)
+                        ? $this->securityRequirements($raw['security'], $securitySchemes)
+                        : $rootSecurity,
                 );
             }
         }
@@ -417,7 +421,7 @@ final readonly class Contract
             throw new InvalidContract('OpenAPI components must be an object');
         }
         /** @var mixed $schemesValue */
-        $schemesValue = $components['securitySchemes'] ?? [];
+        $schemesValue = array_key_exists('securitySchemes', $components) ? $components['securitySchemes'] : [];
         if (!is_array($schemesValue) || ($schemesValue !== [] && array_is_list($schemesValue))) {
             throw new InvalidContract('OpenAPI securitySchemes must be an object');
         }
@@ -445,9 +449,6 @@ final readonly class Contract
      */
     private function securityRequirements(mixed $value, array $securitySchemes): array
     {
-        if ($value === null) {
-            return [];
-        }
         if (!is_array($value) || !array_is_list($value)) {
             throw new InvalidContract('OpenAPI security must be a list of requirement objects');
         }
