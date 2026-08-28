@@ -109,7 +109,7 @@ final readonly class ResponseValidator
 
         try {
             /** @var mixed $value */
-            $value = json_decode($body, flags: JSON_THROW_ON_ERROR);
+            $value = json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
             $violations[] = new Violation(
                 code: 'response.body.json',
@@ -170,7 +170,7 @@ final readonly class ResponseValidator
             if (!is_string($declared) || !is_array($definition)) {
                 continue;
             }
-            if (strtolower($declared) === $mediaType || ($declared === 'application/*+json' && str_ends_with($mediaType, '+json'))) {
+            if ($this->mediaMatches($declared, $mediaType)) {
                 return $definition;
             }
         }
@@ -181,6 +181,21 @@ final readonly class ResponseValidator
     private function isJsonMediaType(string $mediaType): bool
     {
         return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
+    }
+
+    private function mediaMatches(string $declared, string $actual): bool
+    {
+        $declared = strtolower(trim(explode(';', $declared, 2)[0]));
+        if ($declared === $actual || $declared === '*/*') {
+            return true;
+        }
+        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
+        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
+        if ($declaredType !== $actualType) {
+            return false;
+        }
+
+        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
     }
 
     private function escape(string $value): string

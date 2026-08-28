@@ -51,6 +51,19 @@ final class ResponseValidationTest
         Assert::true($contract->validateExchange(new ServerRequest('GET', '/health'), new Response(418))->isValid());
     }
 
+    public function matchesWildcardResponseMediaType(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/wild' => ['get' => ['responses' => [
+                '200' => ['content' => ['application/*' => ['schema' => ['type' => 'object']]]],
+            ]]]],
+        ]);
+
+        $response = new Response(200, ['Content-Type' => 'application/json'], '{}');
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/wild'), $response)->isValid());
+    }
+
     private function contract(): Contract
     {
         return Contract::fromArray([

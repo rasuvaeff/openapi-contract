@@ -162,6 +162,9 @@ final readonly class Contract
         if ($contents === false) {
             throw new InvalidContract(sprintf('OpenAPI document "%s" is not readable', $path));
         }
+        if (strlen($contents) > self::MAX_DOCUMENT_BYTES) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $path, self::MAX_DOCUMENT_BYTES));
+        }
         if (str_ends_with(strtolower($path), '.yaml') || str_ends_with(strtolower($path), '.yml')) {
             $yamlClass = 'Symfony\\Component\\Yaml\\' . 'Yaml';
             if (!class_exists($yamlClass)) {
@@ -208,15 +211,31 @@ final readonly class Contract
             if ($operation->method !== $method) {
                 continue;
             }
-            foreach ($operation->serverBases as $base) {
+            foreach ($operation->serverBases as $baseIndex => $base) {
                 $route = $base === '/' ? $operation->path : rtrim($base, '/') . $operation->path;
                 $matched = $this->matchPath($route, $path);
                 if ($matched !== null) {
-                    $candidates[] = [$operation, $matched, substr_count($operation->path, '{')];
+                    $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
                 }
             }
         }
-        usort($candidates, static fn(array $a, array $b): int => $a[2] <=> $b[2]);
+        /** @var list<array{0: Operation, 1: array<string, string>, 2: int, 3: int, 4: string, 5: int}> $candidates */
+        usort($candidates, static function (array $a, array $b): int {
+            $aRoute = $a[4] ?? null;
+            $bRoute = $b[4] ?? null;
+            $aOperation = $a[0] ?? null;
+            $bOperation = $b[0] ?? null;
+            if (!is_string($aRoute) || !is_string($bRoute) || !$aOperation instanceof Operation || !$bOperation instanceof Operation) {
+                throw new \LogicException('Operation match candidate has an invalid shape');
+            }
+
+            return ($a[2] <=> $b[2])
+                ?: ($a[5] <=> $b[5])
+                ?: ($b[3] <=> $a[3])
+                ?: strcmp($aRoute, $bRoute)
+                ?: strcmp($aOperation->key, $bOperation->key)
+                ?: 0;
+        });
         if ($candidates === []) {
             return null;
         }

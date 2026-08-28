@@ -78,6 +78,41 @@ final class RequestValidationTest
         Assert::same($result->violations[0]->code, 'request.operation.unknown');
     }
 
+    public function acceptsExplodedAdditionalPropertiesObject(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/search' => ['get' => [
+                'parameters' => [[
+                    'name' => 'filter', 'in' => 'query', 'required' => true,
+                    'style' => 'form', 'explode' => true,
+                    'schema' => [
+                        'type' => 'object',
+                        'properties' => ['kind' => ['type' => 'string']],
+                        'additionalProperties' => ['type' => 'string'],
+                    ],
+                ]],
+                'responses' => ['200' => []],
+            ]]],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/search?kind=animal&term=cat'))->isValid());
+    }
+
+    public function matchesWildcardRequestMediaType(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/wild' => ['post' => [
+                'requestBody' => ['required' => true, 'content' => ['*/*' => ['schema' => ['type' => 'object']]]],
+                'responses' => ['204' => []],
+            ]]],
+        ]);
+
+        $request = new ServerRequest('POST', '/wild', ['Content-Type' => 'application/json'], '{}');
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
     private function contract(): Contract
     {
         return Contract::fromArray([

@@ -113,6 +113,10 @@ final readonly class RequestValidator
             return $this->filterPairs($query, static fn(string $key): bool => str_starts_with($key, $parameter['name'] . '['));
         }
         if ($parameter['explode'] && $this->kind($parameter['schema']) === ParameterKind::Object) {
+            if (($parameter['schema']['additionalProperties'] ?? true) !== false) {
+                return $query;
+            }
+
             $properties = $this->propertyNames($parameter['schema']);
 
             return $this->filterPairs($query, static fn(string $key): bool => in_array($key, $properties, strict: true));
@@ -134,6 +138,10 @@ final readonly class RequestValidator
             return null;
         }
         if ($parameter['explode'] && $this->kind($parameter['schema']) === ParameterKind::Object) {
+            if (($parameter['schema']['additionalProperties'] ?? true) !== false) {
+                return $wire;
+            }
+
             $properties = $this->propertyNames($parameter['schema']);
 
             return $this->filterPairs($wire, static fn(string $key): bool => in_array($key, $properties, strict: true));
@@ -221,7 +229,7 @@ final readonly class RequestValidator
             if (!is_string($declared) || !is_array($definition)) {
                 continue;
             }
-            if (strtolower($declared) === $mediaType || ($declared === 'application/*+json' && str_ends_with($mediaType, '+json'))) {
+            if ($this->mediaMatches($declared, $mediaType)) {
                 return $definition;
             }
         }
@@ -234,11 +242,26 @@ final readonly class RequestValidator
         return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
     }
 
+    private function mediaMatches(string $declared, string $actual): bool
+    {
+        $declared = strtolower(trim(explode(';', $declared, 2)[0]));
+        if ($declared === $actual || $declared === '*/*') {
+            return true;
+        }
+        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
+        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
+        if ($declaredType !== $actualType) {
+            return false;
+        }
+
+        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
+    }
+
     /** @return null|bool|int|float|string|array<array-key, mixed>|\stdClass */
     private function decodeJson(string $body): bool|int|float|string|array|\stdClass|null
     {
         /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass */
-        return json_decode($body, flags: JSON_THROW_ON_ERROR);
+        return json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
     }
 
     /** @return array<string, mixed>|null */
