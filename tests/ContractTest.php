@@ -132,4 +132,46 @@ final class ContractTest
             'paths' => ['/x' => ['get' => ['responses' => []]]],
         ]);
     }
+
+    public function inheritsAndOverridesSecurityRequirements(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['securitySchemes' => [
+                'oauth' => ['type' => 'oauth2'],
+                'apiKey' => ['type' => 'apiKey', 'in' => 'header', 'name' => 'X-Api-Key'],
+            ]],
+            'security' => [['oauth' => ['read']]],
+            'paths' => [
+                '/secure' => ['get' => ['operationId' => 'secure', 'responses' => ['200' => []]]],
+                '/public' => ['get' => ['operationId' => 'public', 'security' => [], 'responses' => ['200' => []]]],
+            ],
+        ]);
+
+        Assert::same($contract->operation('secure')->security, [['oauth' => ['read']]]);
+        Assert::same($contract->operation('public')->security, []);
+    }
+
+    public function rejectsUnknownSecuritySchemeReferences(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray([
+            'openapi' => '3.1.0',
+            'security' => [['missing' => []]],
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+    }
+
+    public function rejectsMalformedSecurityRequirement(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['securitySchemes' => ['apiKey' => ['type' => 'apiKey']]],
+            'security' => [['apiKey' => 'read']],
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+    }
 }

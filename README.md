@@ -13,6 +13,11 @@ The package loads OpenAPI 3.0 and 3.1 documents, matches PSR-7 requests to
 operations, and validates both sides of an exchange. Unsupported versions,
 dialects, references, and serialization styles fail closed.
 
+Root-level security requirements are inherited by operations; an operation's
+explicit empty `security` list marks it anonymous. The core validates security
+scheme names and requirement shapes, while credential acquisition remains in
+the generator package.
+
 OpenAPI 3.2, remote and file references, XML, multipart, form-urlencoded, and
 binary bodies are outside the initial release.
 

@@ -15,6 +15,9 @@ Contract rules:
 - `validateRequest` checks matched parameters and JSON request bodies;
 - `validateExchange` additionally selects exact, `NXX`, or `default` response
   and validates required headers and JSON response bodies.
+- Root `security` is inherited by operations; explicit operation `security: []`
+  means anonymous. Security scheme references and requirement shapes are
+  validated, but credentials are supplied by the generator package.
 
 Test strategy:
 - property-testing-testo: laws, round-trips, generated-value postconditions;

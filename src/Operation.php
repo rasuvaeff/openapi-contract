@@ -16,6 +16,7 @@ final readonly class Operation
      * @param array<array-key, mixed> $requestBody
      * @param array<array-key, mixed> $responses
      * @param list<string> $serverBases
+     * @param list<array<string, list<string>>> $security
      */
     public function __construct(
         public string $key,
@@ -26,5 +27,6 @@ final readonly class Operation
         public array $requestBody = [],
         public array $responses = [],
         public array $serverBases = ['/'],
+        public array $security = [],
     ) {}
 }

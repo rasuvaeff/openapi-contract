@@ -43,6 +43,8 @@ final readonly class Contract
 
         $resolver = new JsonPointerResolver($this->document);
         $rootServers = $this->serverBases($this->document['servers'] ?? null);
+        $securitySchemes = $this->securitySchemes($this->document['components'] ?? null);
+        $rootSecurity = $this->securityRequirements($this->document['security'] ?? null, $securitySchemes);
         $operations = [];
         $templates = [];
         $paths = $this->document['paths'];
@@ -104,6 +106,7 @@ final readonly class Contract
                     requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
                     serverBases: $this->serverBases($raw['servers'] ?? null, $pathServers),
+                    security: $this->securityRequirements($raw['security'] ?? $rootSecurity, $securitySchemes),
                 );
             }
         }
@@ -396,6 +399,87 @@ final readonly class Contract
                 throw new InvalidContract(sprintf('Response "%s" must be an object', (string) $key));
             }
             $result[$key] = $resolver->resolve($response);
+        }
+
+        return $result;
+    }
+
+    /** @return list<string> */
+    private function securitySchemes(mixed $components): array
+    {
+        if ($components === null) {
+            return [];
+        }
+        if (!is_array($components)) {
+            throw new InvalidContract('OpenAPI components must be an object');
+        }
+        if ($components !== [] && array_is_list($components)) {
+            throw new InvalidContract('OpenAPI components must be an object');
+        }
+        /** @var mixed $schemesValue */
+        $schemesValue = $components['securitySchemes'] ?? [];
+        if (!is_array($schemesValue) || ($schemesValue !== [] && array_is_list($schemesValue))) {
+            throw new InvalidContract('OpenAPI securitySchemes must be an object');
+        }
+        /** @var array<array-key, mixed> $schemes */
+        $schemes = $schemesValue;
+        foreach (array_keys($schemes) as $name) {
+            if (!is_string($name) || $name === '' || !is_array($schemes[$name]) || ($schemes[$name] !== [] && array_is_list($schemes[$name]))) {
+                throw new InvalidContract('OpenAPI security scheme must be a named object');
+            }
+        }
+        $names = [];
+        foreach (array_keys($schemes) as $name) {
+            if (!is_string($name)) {
+                throw new InvalidContract('OpenAPI security scheme names must be strings');
+            }
+            $names[] = $name;
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param list<string> $securitySchemes
+     * @return list<array<string, list<string>>>
+     */
+    private function securityRequirements(mixed $value, array $securitySchemes): array
+    {
+        if ($value === null) {
+            return [];
+        }
+        if (!is_array($value) || !array_is_list($value)) {
+            throw new InvalidContract('OpenAPI security must be a list of requirement objects');
+        }
+        /** @var list<mixed> $value */
+        $result = [];
+        foreach (array_keys($value) as $index) {
+            /** @var mixed $requirementValue */
+            $requirementValue = $value[$index];
+            if (!is_array($requirementValue)) {
+                throw new InvalidContract('OpenAPI security requirement must be an object');
+            }
+            if ($requirementValue !== [] && array_is_list($requirementValue)) {
+                throw new InvalidContract('OpenAPI security requirement must be an object');
+            }
+            $requirement = $requirementValue;
+            $normalized = [];
+            foreach ($requirement as $name => $scopes) {
+                if (!is_string($name) || $name === '' || !in_array($name, $securitySchemes, strict: true)) {
+                    throw new InvalidContract(sprintf('OpenAPI security requirement references unknown scheme "%s"', (string) $name));
+                }
+                if (!is_array($scopes) || !array_is_list($scopes)) {
+                    throw new InvalidContract(sprintf('OpenAPI security scopes for "%s" must be a list', $name));
+                }
+                foreach ($scopes as $scope) {
+                    if (!is_string($scope)) {
+                        throw new InvalidContract(sprintf('OpenAPI security scopes for "%s" must contain strings', $name));
+                    }
+                }
+                /** @var list<string> $scopes */
+                $normalized[$name] = $scopes;
+            }
+            $result[] = $normalized;
         }
 
         return $result;

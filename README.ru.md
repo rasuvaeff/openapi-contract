@@ -13,6 +13,11 @@ OpenAPI.
 с операциями и валидировать обе стороны exchange. Неподдерживаемые версии,
 диалекты, ссылки и стили сериализации отвергаются fail-closed.
 
+Security requirements верхнего уровня наследуются операциями; явный пустой
+список `security` у операции означает anonymous access. Core проверяет имена
+security schemes и форму requirements, а получение credentials остаётся в
+пакете генераторов.
+
 OpenAPI 3.2, remote- и file-ссылки, XML, multipart, form-urlencoded и binary
 body не входят в первый релиз.
 
