@@ -141,6 +141,17 @@ final class SchemaValidatorTest
         Assert::true($validator->isValid($value, ['allOf' => [$object]], SchemaDialect::OpenApi31));
     }
 
+    public function toleratesSchemasWhereEveryPropertyIsFilteredOut(): void
+    {
+        $validator = new SchemaValidator();
+        $readOnly = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]], 'required' => ['id']];
+
+        Assert::true($validator->isValid((object) [], $readOnly, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['id' => 'free-form'], $readOnly, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) [], ['type' => 'object', 'properties' => []], SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid('scalar', $readOnly, SchemaDialect::OpenApi31));
+    }
+
     public function normalizesNestedOas30SchemasInEveryContainer(): void
     {
         $validator = new SchemaValidator();

@@ -76,7 +76,11 @@ final readonly class SchemaValidator
                     }
                     $properties[$name] = $this->effectiveSchema($property, $direction);
                 }
-                $schema['properties'] = $properties;
+                if ($properties === []) {
+                    unset($schema['properties']);
+                } else {
+                    $schema['properties'] = $properties;
+                }
                 /** @var mixed $required */
                 $required = $schema['required'] ?? null;
                 if (is_array($required)) {
