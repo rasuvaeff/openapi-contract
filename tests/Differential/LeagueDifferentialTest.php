@@ -85,7 +85,7 @@ final class LeagueDifferentialTest
     }
 
     /** @return array<string, mixed> */
-    private static function document(): array
+    private function document(): array
     {
         return [
             'openapi' => '3.0.3',
@@ -131,13 +131,13 @@ final class LeagueDifferentialTest
 
     private function contract(): Contract
     {
-        return Contract::fromArray(self::document());
+        return Contract::fromArray($this->document());
     }
 
     private function leagueAcceptsResponse(ResponseInterface $response): bool
     {
         $validator = (new ValidatorBuilder())
-            ->fromJson(json_encode(self::document(), JSON_THROW_ON_ERROR))
+            ->fromJson(json_encode($this->document(), JSON_THROW_ON_ERROR))
             ->getResponseValidator();
 
         try {
@@ -152,7 +152,7 @@ final class LeagueDifferentialTest
     private function leagueAcceptsRequest(ServerRequestInterface $request): bool
     {
         $validator = (new ValidatorBuilder())
-            ->fromJson(json_encode(self::document(), JSON_THROW_ON_ERROR))
+            ->fromJson(json_encode($this->document(), JSON_THROW_ON_ERROR))
             ->getServerRequestValidator();
 
         try {
