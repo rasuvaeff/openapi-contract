@@ -212,7 +212,8 @@ final readonly class Contract
                 continue;
             }
             foreach ($operation->serverBases as $baseIndex => $base) {
-                $route = $base === '/' ? $operation->path : rtrim($base, '/') . $operation->path;
+                // Bases from serverBases() are already '/'-canonical: rtrimmed or the bare '/'.
+                $route = $base === '/' ? $operation->path : $base . $operation->path;
                 $matched = $this->matchPath($route, $path);
                 if ($matched !== null) {
                     $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
@@ -250,17 +251,8 @@ final readonly class Contract
     public function validateRequest(RequestInterface $request): ValidationResult
     {
         $matched = $this->match($request);
-        if (!$matched instanceof \Rasuvaeff\OpenApiContract\MatchedOperation) {
-            return new ValidationResult([new Violation(
-                code: 'request.operation.unknown',
-                operation: 'unknown',
-                location: 'request',
-                instancePath: (string) $request->getUri(),
-                specPointer: '/paths',
-                expected: 'declared operation',
-                actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
-                message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
-            )]);
+        if (!$matched instanceof MatchedOperation) {
+            return $this->unknownOperationResult($request);
         }
 
         return (new RequestValidator())->validate($matched, $request, $this->dialect);
@@ -269,23 +261,28 @@ final readonly class Contract
     public function validateExchange(RequestInterface $request, ResponseInterface $response): ValidationResult
     {
         $matched = $this->match($request);
-        if (!$matched instanceof \Rasuvaeff\OpenApiContract\MatchedOperation) {
-            return new ValidationResult([new Violation(
-                code: 'request.operation.unknown',
-                operation: 'unknown',
-                location: 'request',
-                instancePath: (string) $request->getUri(),
-                specPointer: '/paths',
-                expected: 'declared operation',
-                actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
-                message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
-            )]);
+        if (!$matched instanceof MatchedOperation) {
+            return $this->unknownOperationResult($request);
         }
 
         $requestResult = (new RequestValidator())->validate($matched, $request, $this->dialect);
         $responseResult = (new ResponseValidator())->validate($matched, $response, $this->dialect);
 
         return new ValidationResult([...$requestResult->violations, ...$responseResult->violations]);
+    }
+
+    private function unknownOperationResult(RequestInterface $request): ValidationResult
+    {
+        return new ValidationResult([new Violation(
+            code: 'request.operation.unknown',
+            operation: 'unknown',
+            location: 'request',
+            instancePath: (string) $request->getUri(),
+            specPointer: '/paths',
+            expected: 'declared operation',
+            actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
+            message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
+        )]);
     }
 
     /** @param array<string, mixed> $document */
@@ -519,9 +516,6 @@ final readonly class Contract
     {
         $routeParts = explode('/', trim($route, '/'));
         $requestParts = explode('/', trim($requestPath, '/'));
-        if (trim($route, '/') === '' && trim($requestPath, '/') === '') {
-            return [];
-        }
         if (count($routeParts) !== count($requestParts)) {
             return null;
         }

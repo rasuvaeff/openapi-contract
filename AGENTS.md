@@ -56,6 +56,17 @@ make release-check
 - CI actions stay SHA-pinned with read-only permissions and checkout
   credentials disabled.
 
+## Mutation gate: known equivalent classes
+
+`composer mutation` (minMsi 92) leaves a stable set of escaped mutants that
+are equivalent by analysis — do not chase them, and re-classify anything new:
+injective key/template concatenations (a reordered or trimmed key that stays
+injective changes nothing observable), unreachable defensive guards kept for
+psalm typing, `explode()` limit bumps where only `[0]` is read, `array_pad`
+on inputs that always split into two parts, throw-order swaps that surface
+the identical message from a later check, and opis parser options that gate
+keywords the schema compiler already rejects fail-closed.
+
 ## When you finish
 
 Run `composer build`, `composer rector`, and `git diff --check`. Run mutation

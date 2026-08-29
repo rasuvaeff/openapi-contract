@@ -19,6 +19,8 @@ use Rasuvaeff\OpenApiContract\Violation;
  */
 final readonly class RequestValidator
 {
+    use MessageReading;
+
     public function __construct(
         private SchemaValidator $schemas = new SchemaValidator(),
         private ParameterCodec $parameters = new ParameterCodec(),
@@ -182,7 +184,7 @@ final readonly class RequestValidator
         if ($body === '') {
             return $required ? [$this->bodyViolation($matched, 'request.body.missing', 'Required request body is missing')] : [];
         }
-        $mediaType = strtolower(trim(explode(';', $request->getHeaderLine('Content-Type'), 2)[0]));
+        $mediaType = $this->mediaTypeOf($request);
         $definition = $this->mediaDefinition($content, $mediaType);
         if ($definition === null) {
             return [$this->bodyViolation($matched, 'request.body.media_type', sprintf('Request media type "%s" is not declared', $mediaType))];
@@ -204,57 +206,6 @@ final readonly class RequestValidator
         }
 
         return [];
-    }
-
-    private function bodyContents(RequestInterface $request): string
-    {
-        $stream = $request->getBody();
-        if (!$stream->isSeekable()) {
-            return $stream->getContents();
-        }
-        $position = $stream->tell();
-        $stream->rewind();
-        $contents = $stream->getContents();
-        $stream->seek($position);
-
-        return $contents;
-    }
-
-    /** @param array<array-key, mixed> $content
-     * @return array<array-key, mixed>|null
-     */
-    private function mediaDefinition(array $content, string $mediaType): ?array
-    {
-        foreach ($content as $declared => $definition) {
-            if (!is_string($declared) || !is_array($definition)) {
-                continue;
-            }
-            if ($this->mediaMatches($declared, $mediaType)) {
-                return $definition;
-            }
-        }
-
-        return null;
-    }
-
-    private function isJsonMediaType(string $mediaType): bool
-    {
-        return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
-    }
-
-    private function mediaMatches(string $declared, string $actual): bool
-    {
-        $declared = strtolower(trim(explode(';', $declared, 2)[0]));
-        if ($declared === $actual || $declared === '*/*') {
-            return true;
-        }
-        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
-        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
-        if ($declaredType !== $actualType) {
-            return false;
-        }
-
-        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
     }
 
     /** @return null|bool|int|float|string|array<array-key, mixed>|\stdClass */
@@ -402,10 +353,5 @@ final readonly class RequestValidator
         }
 
         return $value;
-    }
-
-    private function escape(string $value): string
-    {
-        return str_replace(['~', '/'], ['~0', '~1'], $value);
     }
 }
