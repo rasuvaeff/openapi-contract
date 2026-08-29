@@ -71,6 +71,7 @@ use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
 
 $result = $contract->validateRequest($request);
 $result = $contract->validateExchange($request, $response);
+$result = $contract->validateResponse('pets.get', $response);
 
 $result->assertValid(); // бросает ContractViolation при нарушениях
 $diagnostics = (new ValidationResultFormatter())->format($result);
@@ -88,6 +89,17 @@ OpenAPI-документ. Выбор ответа: точный статус, з
 нарушений. `readOnly`/`writeOnly` применяются направленно. Root `security`
 наследуется операциями, явный пустой список `security` делает операцию
 анонимной, а получение credentials остаётся в пакете генераторов.
+
+`validateResponse()` проверяет fixture ответа по identity операции без живого
+request. Неизвестный ключ операции даёт одно структурированное нарушение
+`response.operation.unknown`.
+
+Request body с `application/x-www-form-urlencoded` декодируется по тем же
+form-правилам, что и query-параметры. `multipart/form-data` поддерживает
+ограниченный разбор частей, JSON и binary parts, повторяющиеся части-массивы и
+`encoding` с content type/required headers для свойства. Неподдержанные styles,
+битые boundaries, повтор scalar parts и неверное содержимое parts отвергаются
+fail-closed как `request.body.decode`.
 
 При валидации body seekable PSR-7 stream читается с начала, после чего его
 исходная позиция восстанавливается, в том числе при ошибке чтения. Если body

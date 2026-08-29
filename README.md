@@ -73,6 +73,7 @@ use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
 
 $result = $contract->validateRequest($request);
 $result = $contract->validateExchange($request, $response);
+$result = $contract->validateResponse('pets.get', $response);
 
 $result->assertValid(); // throws ContractViolation when violations exist
 $diagnostics = (new ValidationResultFormatter())->format($result);
@@ -91,6 +92,17 @@ invented body or header violations. `readOnly`/`writeOnly` properties are
 applied directionally. Root-level `security` is inherited by operations, an
 explicit empty `security` list marks an operation anonymous, and credential
 acquisition stays in the generator package.
+
+`validateResponse()` validates a response fixture by operation identity without
+requiring a live request. Unknown operation keys produce a single structured
+`response.operation.unknown` violation.
+
+Request bodies with `application/x-www-form-urlencoded` are decoded using the
+same form parameter rules as query parameters. `multipart/form-data` bodies
+support bounded part parsing, JSON and binary parts, repeated array parts, and
+per-property `encoding` content types/required headers. Unsupported styles,
+malformed boundaries, duplicate scalar parts, and invalid part content fail
+closed as `request.body.decode`.
 
 Body validation reads seekable PSR-7 streams from the beginning and restores
 their original position, including when reading fails. A body that needs

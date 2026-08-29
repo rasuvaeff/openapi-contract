@@ -175,6 +175,30 @@ final readonly class Contract
         return new ValidationResult([...$requestResult->violations, ...$responseResult->violations]);
     }
 
+    public function validateResponse(string $operationKey, ResponseInterface $response): ValidationResult
+    {
+        try {
+            $operation = $this->operation($operationKey);
+        } catch (UnknownOperation) {
+            return new ValidationResult([new Violation(
+                code: 'response.operation.unknown',
+                operation: $operationKey,
+                location: 'response',
+                instancePath: '$',
+                specPointer: '/paths',
+                expected: 'declared operation',
+                actual: $operationKey,
+                message: sprintf('Operation "%s" is not present in the OpenAPI document', $operationKey),
+            )]);
+        }
+
+        return (new ResponseValidator())->validate(
+            new MatchedOperation($operation, []),
+            $response,
+            $this->dialect,
+        );
+    }
+
     private function unknownOperationResult(RequestInterface $request): ValidationResult
     {
         return new ValidationResult([new Violation(

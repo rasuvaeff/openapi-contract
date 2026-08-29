@@ -62,6 +62,14 @@ API reference:
 - `Contract::validateExchange(Request, Response): ValidationResult` — both
   sides: request violations plus response status selection, required
   headers, media types (`application/json` and `*+json`), body schema.
+- `Contract::validateResponse(string $operationKey, Response): ValidationResult`
+  — validates a response fixture without a request; unknown keys yield one
+  `response.operation.unknown` violation. Response selection remains exact,
+  then `NXX`, then `default`.
+- Request body media types: JSON, `application/x-www-form-urlencoded` using
+  form parameter semantics, and bounded `multipart/form-data` with JSON/binary
+  parts, arrays, and per-property encoding content types/required headers.
+  Malformed or unsupported body serialization fails as `request.body.decode`.
 - `ValidationResult` (readonly): `violations` (`list<Violation>`),
   `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
 - `ValidationResultFormatter::format(ValidationResult): string` renders every
