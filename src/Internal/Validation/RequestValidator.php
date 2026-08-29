@@ -25,6 +25,9 @@ final readonly class RequestValidator
     public function __construct(
         private SchemaValidator $schemas = new SchemaValidator(),
         private ParameterCodec $parameters = new ParameterCodec(),
+        private SchemaValueDecoder $values = new SchemaValueDecoder(),
+        private FormUrlencodedBodyDecoder $forms = new FormUrlencodedBodyDecoder(),
+        private MultipartBodyDecoder $multipart = new MultipartBodyDecoder(),
     ) {}
 
     public function validate(
@@ -61,7 +64,7 @@ final readonly class RequestValidator
                     kind: $this->kind($parameter['schema']),
                 );
                 /** @var mixed $value */
-                $value = $this->coerce($parsed, $parameter['schema']);
+                $value = $this->values->coerce($parsed, $parameter['schema']);
                 if (!$this->schemas->isValid($value, $parameter['schema'], $dialect)) {
                     $violations[] = new Violation(
                         code: 'request.parameter.schema',
@@ -208,49 +211,37 @@ final readonly class RequestValidator
         if ($definition === null) {
             return [$this->bodyViolation($matched, 'request.body.media_type', sprintf('Request media type "%s" is not declared', $mediaType))];
         }
-        if (!$this->isJsonMediaType($mediaType)) {
-            return [$this->bodyViolation($matched, 'request.body.media_type', sprintf('Request media type "%s" is not supported', $mediaType))];
-        }
 
         try {
-            $value = $this->decodeJson($body);
+            /** @var mixed $schemaValue */
+            $schemaValue = $definition['schema'] ?? null;
+            $schema = $this->values->schema($schemaValue) ?? [];
+            /** @var mixed $encodingValue */
+            $encodingValue = $definition['encoding'] ?? [];
+            $encoding = is_array($encodingValue) ? $encodingValue : [];
+            if ($this->isJsonMediaType($mediaType)) {
+                /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass $value */
+                $value = json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
+            } elseif ($mediaType === 'application/x-www-form-urlencoded') {
+                $value = $this->forms->decode($body, $schema, $encoding);
+            } elseif (str_starts_with($mediaType, 'multipart/')) {
+                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema, $encoding);
+            } else {
+                throw new BodyDecodingFailed(sprintf('Request media type "%s" is not supported', $mediaType));
+            }
         } catch (\JsonException) {
             return [$this->bodyViolation($matched, 'request.body.json', 'Request body is not valid JSON')];
+        } catch (BodyDecodingFailed $exception) {
+            return [$this->bodyViolation($matched, 'request.body.decode', $exception->getMessage())];
         }
         /** @var mixed $schemaValue */
         $schemaValue = $definition['schema'] ?? null;
-        $schema = $this->schema($schemaValue);
+        $schema = $this->values->schema($schemaValue);
         if ($schema !== null && !$this->schemas->isValid($value, $schema, $dialect)) {
             return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $value)];
         }
 
         return [];
-    }
-
-    /** @return null|bool|int|float|string|array<array-key, mixed>|\stdClass */
-    private function decodeJson(string $body): bool|int|float|string|array|\stdClass|null
-    {
-        /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass */
-        return json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
-    }
-
-    /** @return array<string, mixed>|null */
-    private function schema(mixed $value): ?array
-    {
-        if ($value === null) {
-            return null;
-        }
-        if (!is_array($value) || array_is_list($value)) {
-            throw new \InvalidArgumentException('Schema must be an object');
-        }
-        foreach (array_keys($value) as $key) {
-            if (!is_string($key)) {
-                throw new \InvalidArgumentException('Schema keys must be strings');
-            }
-        }
-
-        /** @var array<string, mixed> $value */
-        return $value;
     }
 
     private function bodyViolation(MatchedOperation $matched, string $code, string $message, mixed $actual = null): Violation
@@ -270,16 +261,7 @@ final readonly class RequestValidator
     /** @param array<string, mixed> $schema */
     private function kind(array $schema): ParameterKind
     {
-        /** @var mixed $type */
-        $type = $schema['type'] ?? 'string';
-        if ($type === 'array') {
-            return ParameterKind::List;
-        }
-        if ($type === 'object') {
-            return ParameterKind::Object;
-        }
-
-        return ParameterKind::Scalar;
+        return $this->values->kind($schema);
     }
 
     private function style(string $style): ParameterStyle
@@ -316,61 +298,4 @@ final readonly class RequestValidator
         return $names;
     }
 
-    /**
-     * @param string|list<string>|array<string, string> $value
-     * @param array<string, mixed> $schema
-     */
-    private function coerce(string|array $value, array $schema): string|int|float|bool|array|\stdClass|null
-    {
-        if (is_string($value)) {
-            return self::coerceScalar($value, $schema);
-        }
-        if (array_is_list($value)) {
-            /** @var mixed $itemsValue */
-            $itemsValue = $schema['items'] ?? null;
-            $items = $this->schema($itemsValue) ?? [];
-
-            return array_map(static fn(string $item): mixed => self::coerceScalar($item, $items), $value);
-        }
-        /** @var mixed $propertiesValue */
-        $propertiesValue = $schema['properties'] ?? null;
-        $properties = is_array($propertiesValue) ? $propertiesValue : [];
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (!is_string($item)) {
-                continue;
-            }
-            /** @var mixed $propertyValue */
-            $propertyValue = $properties[$key] ?? null;
-            $property = $this->schema($propertyValue) ?? [];
-            $result[$key] = self::coerceScalar($item, $property);
-        }
-
-        /** @var \stdClass $object */
-        $object = (object) $result;
-
-        return $object;
-    }
-
-    /** @param array<string, mixed> $schema */
-    private static function coerceScalar(string $value, array $schema): string|int|float|bool|null
-    {
-        /** @var mixed $type */
-        $type = $schema['type'] ?? 'string';
-        $types = is_array($type) ? $type : [$type];
-        if (in_array('null', $types, strict: true) && $value === 'null') {
-            return null;
-        }
-        if (in_array('integer', $types, strict: true) && preg_match('/^-?(?:0|[1-9][0-9]*)$/', $value) === 1) {
-            return (int) $value;
-        }
-        if (in_array('number', $types, strict: true) && is_numeric($value)) {
-            return (float) $value;
-        }
-        if (in_array('boolean', $types, strict: true) && ($value === 'true' || $value === 'false')) {
-            return $value === 'true';
-        }
-
-        return $value;
-    }
 }

@@ -495,6 +495,51 @@ final class RequestValidationTest
         Assert::same($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $deep(64)))->violations[0]->code, 'request.body.json');
     }
 
+    public function validatesFormUrlencodedBodiesUsingSchemaTypes(): void
+    {
+        $contract = $this->bodyContract(['application/x-www-form-urlencoded' => ['schema' => [
+            'type' => 'object',
+            'required' => ['name', 'age'],
+            'properties' => ['name' => ['type' => 'string'], 'age' => ['type' => 'integer']],
+        ]]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], 'name=Jane&age=37'))->isValid());
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], 'name=Jane&age=nope'))->violations[0]->code, 'request.body.schema');
+    }
+
+    public function validatesMultipartJsonAndBinaryParts(): void
+    {
+        $boundary = 'test-boundary';
+        $body = '--' . $boundary . "\r\n"
+            . "Content-Disposition: form-data; name=\"meta\"\r\n"
+            . "Content-Type: application/json\r\n\r\n"
+            . '{"id":7}' . "\r\n"
+            . '--' . $boundary . "\r\n"
+            . "Content-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n"
+            . "Content-Type: text/plain\r\n\r\n"
+            . 'hello' . "\r\n"
+            . '--' . $boundary . "--\r\n";
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => [
+            'type' => 'object',
+            'required' => ['meta', 'file'],
+            'properties' => [
+                'meta' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer']]],
+                'file' => ['type' => 'string'],
+            ],
+        ], 'encoding' => ['meta' => ['contentType' => 'application/json']]]]);
+
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary="' . $boundary . '"'], $body);
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    public function rejectsMalformedMultipartBodies(): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => ['type' => 'object']]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data'], 'body'));
+
+        Assert::same($result->violations[0]->code, 'request.body.decode');
+    }
+
     public function rejectsMalformedBodySchemas(): void
     {
         try {

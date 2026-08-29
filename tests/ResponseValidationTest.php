@@ -29,6 +29,14 @@ final class ResponseValidationTest
         Assert::same($response->getBody()->tell(), 3);
     }
 
+    public function validatesResponseByOperationWithoutARequest(): void
+    {
+        $response = new Response(200, ['Content-Type' => 'application/json', 'X-Request-Id' => 'abc'], '{"id":7}');
+
+        Assert::true($this->contract()->validateResponse('GET /pets/{id}', $response)->isValid());
+        Assert::true($this->contract()->validateResponse('missing', $response)->violations[0]->code === 'response.operation.unknown');
+    }
+
     public function refusesNonSeekableResponseBodiesWithoutReadingThem(): void
     {
         $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
