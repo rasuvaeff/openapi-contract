@@ -17,6 +17,8 @@ use Rasuvaeff\OpenApiContract\Violation;
  */
 final readonly class ResponseValidator
 {
+    use MessageReading;
+
     public function __construct(
         private ResponseSelector $selector = new ResponseSelector(),
         private SchemaValidator $schemas = new SchemaValidator(),
@@ -76,7 +78,7 @@ final readonly class ResponseValidator
         if (!is_array($content) || $content === [] || $body === '') {
             return new ValidationResult($violations);
         }
-        $mediaType = strtolower(trim(explode(';', $response->getHeaderLine('Content-Type'), 2)[0]));
+        $mediaType = $this->mediaTypeOf($response);
         $mediaDefinition = $this->mediaDefinition($content, $mediaType);
         if ($mediaDefinition === null) {
             $violations[] = new Violation(
@@ -149,57 +151,4 @@ final readonly class ResponseValidator
         return new ValidationResult($violations);
     }
 
-    private function bodyContents(ResponseInterface $response): string
-    {
-        $stream = $response->getBody();
-        if (!$stream->isSeekable()) {
-            return $stream->getContents();
-        }
-        $position = $stream->tell();
-        $stream->rewind();
-        $contents = $stream->getContents();
-        $stream->seek($position);
-
-        return $contents;
-    }
-
-    /** @param array<array-key, mixed> $content */
-    private function mediaDefinition(array $content, string $mediaType): ?array
-    {
-        foreach ($content as $declared => $definition) {
-            if (!is_string($declared) || !is_array($definition)) {
-                continue;
-            }
-            if ($this->mediaMatches($declared, $mediaType)) {
-                return $definition;
-            }
-        }
-
-        return null;
-    }
-
-    private function isJsonMediaType(string $mediaType): bool
-    {
-        return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
-    }
-
-    private function mediaMatches(string $declared, string $actual): bool
-    {
-        $declared = strtolower(trim(explode(';', $declared, 2)[0]));
-        if ($declared === $actual || $declared === '*/*') {
-            return true;
-        }
-        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
-        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
-        if ($declaredType !== $actualType) {
-            return false;
-        }
-
-        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
-    }
-
-    private function escape(string $value): string
-    {
-        return str_replace(['~', '/'], ['~0', '~1'], $value);
-    }
 }

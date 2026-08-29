@@ -257,7 +257,11 @@ jobs:
             exit 0
           fi
           CODE=0
-          OUTPUT="$(composer bc-check -- --from="$LATEST" --install-development-dependencies 2>&1)" || CODE=$?
+          # --install-development-dependencies is dropped in this package: the
+          # transitive respect/stringifier (via league/openapi-psr7-validator)
+          # ships a broken autoload-dev mapping that crashes roave's locator,
+          # and src/ references no dev-only types anyway.
+          OUTPUT="$(composer bc-check -- --from="$LATEST" 2>&1)" || CODE=$?
           printf '%s\n' "$OUTPUT"
           if [ "$CODE" -eq 0 ]; then
             exit 0
