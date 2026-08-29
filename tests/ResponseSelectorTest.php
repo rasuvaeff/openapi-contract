@@ -66,4 +66,13 @@ final class ResponseSelectorTest
 
         Assert::true(actual: false, message: 'Expected invalid status exception');
     }
+
+    public function acceptsBoundaryStatusesAndComputesExactRanges(): void
+    {
+        $selector = new ResponseSelector();
+
+        Assert::same($selector->select(['1XX' => ['description' => 'r']], 100)?->key, '1XX');
+        Assert::same($selector->select(['1XX' => ['description' => 'r']], 199)?->key, '1XX');
+        Assert::same($selector->select(['5XX' => ['description' => 'r']], 599)?->key, '5XX');
+    }
 }

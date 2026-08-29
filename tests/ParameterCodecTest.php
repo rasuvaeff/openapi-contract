@@ -141,6 +141,70 @@ final class ParameterCodecTest
         ];
     }
 
+    public function serializesExactWireFormats(): void
+    {
+        $codec = new ParameterCodec();
+
+        Assert::same($codec->serialize('u', ['role' => 'admin', 'name' => 'Ada'], ParameterStyle::Label, explode: true), '.role=admin.name=Ada');
+        Assert::same($codec->serialize('u', ['role' => 'admin', 'name' => 'Ada'], ParameterStyle::Matrix, explode: false), ';u=role,admin,name,Ada');
+        Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::Simple, explode: false), 'a%20b,c');
+        Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::Form, explode: false), 't=a%20b,c');
+        Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::SpaceDelimited, explode: false), 't=a%20b c');
+    }
+
+    #[DataProvider('invalidValueShapes')]
+    public function rejectsInvalidValueShapesWithExactMessages(string|array $value, ParameterStyle $style, string $message): void
+    {
+        try {
+            (new ParameterCodec())->serialize('u', $value, $style, explode: false);
+            Assert::true(actual: false, message: 'Expected invalid value shape exception');
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), $message);
+        }
+    }
+
+    /** @return iterable<string, array{string|array<array-key, string>, ParameterStyle, string}> */
+    public static function invalidValueShapes(): iterable
+    {
+        yield 'delimited assoc value' => [['k' => 'v'], ParameterStyle::SpaceDelimited, 'Parameter requires a list value'];
+        yield 'delimited non-string item' => [[1], ParameterStyle::PipeDelimited, 'Parameter values must be strings'];
+        yield 'deep object list value' => [['a', 'b'], ParameterStyle::DeepObject, 'Parameter requires an object value'];
+        yield 'deep object int key' => [[0 => 'a', 'k' => 'b'], ParameterStyle::DeepObject, 'Parameter object keys and values must be strings'];
+    }
+
+    public function parseToleratesRepeatedMatrixSeparators(): void
+    {
+        $parsed = (new ParameterCodec())->parse('u', ';role=admin;;name=Ada', ParameterStyle::Matrix, explode: true, kind: ParameterKind::Object);
+
+        Assert::same($parsed, ['role' => 'admin', 'name' => 'Ada']);
+    }
+
+    public function parseKeepsEqualsSignsInsideDeepObjectValues(): void
+    {
+        $parsed = (new ParameterCodec())->parse('u', 'u%5Brole%5D=x=y', ParameterStyle::DeepObject, explode: true, kind: ParameterKind::Object);
+
+        Assert::same($parsed, ['role' => 'x=y']);
+    }
+
+    public function parseRejectsMalformedObjectWires(): void
+    {
+        $codec = new ParameterCodec();
+
+        try {
+            $codec->parse('u', 'role,admin,extra', ParameterStyle::Simple, explode: false, kind: ParameterKind::Object);
+            Assert::true(actual: false, message: 'Expected incomplete pair exception');
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'Serialized object parameter contains an incomplete pair');
+        }
+
+        try {
+            $codec->parse('u', 'u%5Brole=admin', ParameterStyle::DeepObject, explode: true, kind: ParameterKind::Object);
+            Assert::true(actual: false, message: 'Expected invalid deepObject exception');
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'Invalid deepObject parameter');
+        }
+    }
+
     private static function case(
         string $label,
         ArbitraryInterface $value,

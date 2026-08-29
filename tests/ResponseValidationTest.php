@@ -91,6 +91,126 @@ final class ResponseValidationTest
         Assert::true($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $response)->isValid());
     }
 
+    public function reportsExactResponseViolationPointers(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/a~b' => ['get' => ['responses' => [
+            '200' => [
+                'headers' => ['X-A~B' => ['required' => true]],
+                'content' => ['application/json' => ['schema' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer']]]]],
+            ],
+        ]]]]]);
+        $request = new ServerRequest('GET', '/a~b');
+
+        $status = $contract->validateExchange($request, new Response(404));
+        Assert::same($status->violations[0]->specPointer, '/paths/~1a~0b/get/responses');
+        Assert::same($status->violations[0]->expected, [200]);
+        Assert::same($status->violations[0]->message, 'Response status 404 is not declared');
+
+        $header = $contract->validateExchange($request, new Response(200));
+        Assert::same($header->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/headers/X-A~0B');
+
+        $media = $contract->validateExchange($request, new Response(200, ['X-A~B' => 'v', 'Content-Type' => 'text/plain'], 'x'));
+        Assert::same($media->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/content');
+        Assert::same($media->violations[0]->expected, ['application/json']);
+        Assert::same($media->violations[0]->message, 'Response media type "text/plain" is not declared');
+
+        $json = $contract->validateExchange($request, new Response(200, ['X-A~B' => 'v', 'Content-Type' => 'application/json'], '{broken'));
+        Assert::same($json->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/content/application~1json');
+        Assert::same(count($json->violations), 1);
+
+        $schema = $contract->validateExchange($request, new Response(200, ['X-A~B' => 'v', 'Content-Type' => 'application/json'], '{"id":"bad"}'));
+        Assert::same($schema->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/content/application~1json/schema');
+    }
+
+    public function skipsMalformedAndOptionalHeaderDeclarations(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '204' => ['headers' => [0 => ['required' => true], 'X-Bad' => 'nonarray', 'X-Opt' => []]],
+        ]]]]]);
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(204))->isValid());
+    }
+
+    public function emptyContentMapsSkipBodyValidation(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => ['content' => []],
+        ]]]]]);
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, [], 'plain'))->isValid());
+    }
+
+    public function normalizesTheResponseMediaType(): void
+    {
+        $contract = $this->contentContract(['application/json' => ['schema' => ['type' => 'object']]]);
+        $response = new Response(200, ['Content-Type' => 'Application/JSON ; charset=utf-8'], '{}');
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), $response)->isValid());
+    }
+
+    public function honorsTheResponseJsonDepthBudget(): void
+    {
+        $contract = $this->contentContract(['application/json' => ['schema' => ['type' => 'array']]]);
+        $deep = static fn(int $count): string => str_repeat('[', $count) . '1' . str_repeat(']', $count);
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], $deep(63)))->isValid());
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], $deep(64)))->violations[0]->code, 'response.body.json');
+    }
+
+    public function toleratesMalformedMediaDefinitionsAndSchemas(): void
+    {
+        $entries = $this->contentContract([0 => ['schema' => ['type' => 'string']], 'application/json' => []]);
+        Assert::true($entries->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '{}'))->isValid());
+
+        $scalarSchema = $this->contentContract(['application/json' => ['schema' => 'invalid']]);
+        Assert::true($scalarSchema->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '{}'))->isValid());
+    }
+
+    public function matchesResponseWildcardAndSuffixDeclarations(): void
+    {
+        $exchange = fn(Contract $contract, Response $response) => $contract->validateExchange(new ServerRequest('GET', '/h'), $response);
+        $vnd = new Response(200, ['Content-Type' => 'application/vnd.pet+json'], '{}');
+        $json = new Response(200, ['Content-Type' => 'application/json'], '{}');
+        $object = ['schema' => ['type' => 'object']];
+
+        Assert::true($exchange($this->contentContract(['*/*' => $object]), $json)->isValid());
+        Assert::true($exchange($this->contentContract(['application/*+json' => $object]), $vnd)->isValid());
+        Assert::same($exchange($this->contentContract(['application/*+json' => $object]), $json)->violations[0]->code, 'response.body.media_type');
+        Assert::true($exchange($this->contentContract(['application/hal+json' => $object]), new Response(200, ['Content-Type' => 'application/hal+json'], '{}'))->isValid());
+        Assert::true($exchange($this->contentContract(['Application/JSON ; charset=utf-8' => $object]), $json)->isValid());
+        $unsupported = $exchange($this->contentContract(['text/plain' => []]), new Response(200, ['Content-Type' => 'text/plain'], 'hello'));
+        Assert::same($unsupported->violations[0]->message, 'Response media type "text/plain" is not supported');
+        Assert::same($unsupported->violations[0]->specPointer, '/paths/~1h/get/responses/200/content');
+        Assert::same(count($unsupported->violations), 1);
+    }
+
+    public function checksEveryHeaderDeclarationPastMalformedEntries(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '204' => ['headers' => [0 => ['required' => true], 'X-Req' => ['required' => true]]],
+        ]]]]]);
+
+        $result = $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(204));
+
+        Assert::same($result->violations[0]->code, 'response.header.missing');
+        Assert::same($result->violations[0]->instancePath, 'X-Req');
+    }
+
+    public function selectsTheDefinitionByExactTypeBeforeWildcards(): void
+    {
+        $contract = $this->contentContract(['text/*' => ['schema' => ['type' => 'string']], 'application/json' => ['schema' => ['type' => 'integer']]]);
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '7'))->isValid());
+    }
+
+    /** @param array<array-key, mixed> $content */
+    private function contentContract(array $content): Contract
+    {
+        return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => ['content' => $content],
+        ]]]]]);
+    }
+
     private function contract(): Contract
     {
         return Contract::fromArray([

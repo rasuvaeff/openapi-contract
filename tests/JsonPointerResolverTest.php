@@ -85,4 +85,31 @@ final class JsonPointerResolverTest
 
         Assert::true(actual: false, message: 'Expected reference-resolution budget exception');
     }
+
+    public function honorsExactBudgetBoundaries(): void
+    {
+        $flat = new JsonPointerResolver(document: [], maximumReferenceDepth: 1, maximumResolvedNodes: 1);
+        Assert::same($flat->resolve(['x' => 1]), ['x' => 1]);
+
+        $single = new JsonPointerResolver(document: ['a' => ['x' => 1]], maximumReferenceDepth: 1);
+        Assert::same($single->resolve(['$ref' => '#/a']), ['x' => 1]);
+    }
+
+    public function returnsEveryKeyOfResolvedNodes(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['t' => ['p' => 1, 'q' => 2]]);
+
+        Assert::same($resolver->resolve(['$ref' => '#/t']), ['p' => 1, 'q' => 2]);
+        Assert::same($resolver->resolve(['m' => 1, 'n' => 2]), ['m' => 1, 'n' => 2]);
+    }
+
+    public function reportsTheUnsupportedReferenceValue(): void
+    {
+        try {
+            (new JsonPointerResolver(document: ['a' => ['x' => 1]]))->resolve(['$ref' => 'a/x']);
+            Assert::true(actual: false, message: 'Expected unsupported reference exception');
+        } catch (UnsupportedReference $exception) {
+            Assert::same($exception->getMessage(), 'Only same-document JSON Pointer references are supported, got "a/x"');
+        }
+    }
 }

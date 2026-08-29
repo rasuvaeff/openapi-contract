@@ -126,6 +126,80 @@ final class SchemaValidatorTest
         Assert::true(actual: false, message: 'Expected unsupported schema exception');
     }
 
+    public function filtersDirectionalPropertiesInsideNestedStructures(): void
+    {
+        $validator = new SchemaValidator();
+        $object = [
+            'type' => 'object',
+            'properties' => ['id' => ['type' => 'integer', 'readOnly' => true], 'name' => ['type' => 'string']],
+            'required' => ['id'],
+        ];
+        $value = (object) ['name' => 'x'];
+
+        Assert::true($validator->isValid($value, $object, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid([$value], ['type' => 'array', 'items' => $object], SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid($value, ['allOf' => [$object]], SchemaDialect::OpenApi31));
+    }
+
+    public function normalizesNestedOas30SchemasInEveryContainer(): void
+    {
+        $validator = new SchemaValidator();
+        $nullable = ['type' => 'string', 'nullable' => true];
+
+        Assert::true($validator->isValid(null, ['allOf' => [$nullable]], SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(null, ['anyOf' => [$nullable]], SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid((object) ['a' => null], ['type' => 'object', 'properties' => ['a' => $nullable]], SchemaDialect::OpenApi30));
+    }
+
+    public function nullableInteractsWithTheDeclaredType(): void
+    {
+        $validator = new SchemaValidator();
+
+        Assert::false($validator->isValid(null, ['type' => 'string', 'nullable' => false], SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(null, ['type' => 'string', 'nullable' => true], SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid('x', ['nullable' => true], SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(null, ['nullable' => true], SchemaDialect::OpenApi30));
+    }
+
+    public function normalizesOas30ExclusiveBoundsAtTheBoundary(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['type' => 'integer', 'minimum' => 5, 'exclusiveMinimum' => true];
+
+        Assert::false($validator->isValid(5, $schema, SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(6, $schema, SchemaDialect::OpenApi30));
+
+        $float = ['type' => 'number', 'minimum' => 1.5, 'exclusiveMinimum' => true];
+        Assert::false($validator->isValid(1.5, $float, SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(1.6, $float, SchemaDialect::OpenApi30));
+    }
+
+    public function rejectsExclusiveFlagsWithoutNumericBounds(): void
+    {
+        $validator = new SchemaValidator();
+
+        try {
+            $validator->isValid(1, ['type' => 'integer', 'exclusiveMinimum' => true], SchemaDialect::OpenApi30);
+            Assert::true(actual: false, message: 'Expected unsupported schema exception');
+        } catch (UnsupportedSchema) {
+            Assert::true(actual: true);
+        }
+
+        try {
+            $validator->isValid(1, ['type' => 'integer', 'minimum' => '5', 'exclusiveMinimum' => true], SchemaDialect::OpenApi30);
+            Assert::true(actual: false, message: 'Expected unsupported schema exception');
+        } catch (UnsupportedSchema) {
+            Assert::true(actual: true);
+        }
+    }
+
+    public function ignoresSchemaDefaultsDuringValidation(): void
+    {
+        $schema = ['type' => 'object', 'required' => ['a'], 'properties' => ['a' => ['type' => 'integer', 'default' => 1]]];
+
+        Assert::false((new SchemaValidator())->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+    }
+
     public function rejectsUnknownDirection(): void
     {
         try {

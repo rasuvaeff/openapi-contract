@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Tests;
 
+use Nyholm\Psr7\Request;
+use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
 use Rasuvaeff\OpenApiContract\UnsupportedVersion;
+use Rasuvaeff\OpenApiContract\Violation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Expect;
@@ -349,5 +353,467 @@ final class ContractTest
 
         Expect::exception(InvalidContract::class);
         Contract::fromFile('/path/that/does/not/exist.json');
+    }
+
+    public function reportsTheRejectedVersionInTheMessage(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '2.0.0', 'paths' => ['/x' => []]]);
+            Assert::true(actual: false);
+        } catch (UnsupportedVersion $exception) {
+            Assert::same($exception->getMessage(), 'Unsupported OpenAPI version "2.0.0"; supported versions are 3.0.x and 3.1.x');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => 42, 'paths' => ['/x' => []]]);
+            Assert::true(actual: false);
+        } catch (UnsupportedVersion $exception) {
+            Assert::same($exception->getMessage(), 'Unsupported OpenAPI version "missing"; supported versions are 3.0.x and 3.1.x');
+        }
+    }
+
+    public function appliesTheDialectGateToTheDetectedVersion(): void
+    {
+        $document = [
+            'openapi' => '3.1.0',
+            'jsonSchemaDialect' => 'https://json-schema.org/draft/2020-12/schema',
+            'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]],
+        ];
+        Assert::same(Contract::fromArray($document)->operations()[0]->method, 'GET');
+
+        Expect::exception(UnsupportedDialect::class);
+        $document['openapi'] = '3.0.3';
+        Contract::fromArray($document);
+    }
+
+    public function rejectsANonArrayPathsValue(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => 'invalid']);
+    }
+
+    public function reportsExactMessagesForMalformedOperations(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/x' => ['get' => 'invalid']]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'Operation at GET /x must be an object');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/x' => ['get' => ['operationId' => 42, 'responses' => ['200' => []]]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'Operation at GET /x has an invalid operationId');
+        }
+    }
+
+    public function allowsTheSameTemplateShapeOnDifferentMethods(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/pets/{id}' => ['get' => ['responses' => ['200' => []]]],
+            '/pets/{petId}' => ['post' => ['responses' => ['200' => []]]],
+        ]]);
+
+        Assert::same(count($contract->operations()), 2);
+    }
+
+    public function reportsTheAmbiguousPathsWithTheUppercaseMethod(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+                '/pets/{id}' => ['get' => ['responses' => ['200' => []]]],
+                '/pets/{name}' => ['get' => ['responses' => ['200' => []]]],
+            ]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'Ambiguous OpenAPI paths "/pets/{id}" and "/pets/{name}" for method GET');
+        }
+    }
+
+    public function acceptsADocumentAtTheExactByteBudget(): void
+    {
+        $json = '{"openapi":"3.1.0","paths":{"/h":{"get":{"responses":{"200":{}}}}}}';
+        $json .= str_repeat(' ', Contract::MAX_DOCUMENT_BYTES - strlen($json));
+        Assert::same(strlen($json), Contract::MAX_DOCUMENT_BYTES);
+
+        Assert::same(Contract::fromJson($json)->operations()[0]->path, '/h');
+
+        $path = tempnam(sys_get_temp_dir(), 'openapi-');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to allocate temporary file');
+        }
+        file_put_contents($path, $json);
+
+        try {
+            Assert::same(Contract::fromFile($path)->operations()[0]->path, '/h');
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function honorsTheJsonDepthBudgetBoundary(): void
+    {
+        $nested = static fn(int $depth): string => sprintf(
+            '{"openapi":"3.1.0","x-deep":%s1%s,"paths":{"/h":{"get":{"responses":{"200":{}}}}}}',
+            str_repeat('[', $depth),
+            str_repeat(']', $depth),
+        );
+
+        Assert::same(Contract::fromJson($nested(62))->operations()[0]->path, '/h');
+
+        Expect::exception(InvalidContract::class);
+        Contract::fromJson($nested(63));
+    }
+
+    public function reportsExactLoaderMessages(): void
+    {
+        try {
+            Contract::fromJson('{broken');
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document "openapi.json" is not valid JSON');
+        }
+
+        try {
+            Contract::fromJson('[]');
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document must decode to an object');
+        }
+
+        try {
+            Contract::fromFile('/path/that/does/not/exist.json');
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document "/path/that/does/not/exist.json" is not readable');
+        }
+    }
+
+    public function rejectsAScalarJsonDocument(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromJson('42');
+    }
+
+    public function loadsYamlDocumentsRegardlessOfExtensionCase(): void
+    {
+        $yaml = "openapi: '3.1.0'\npaths:\n  /h:\n    get:\n      responses:\n        '200': {}\n";
+        foreach (['.yaml', '.YAML', '.yml', '.YML'] as $extension) {
+            $base = tempnam(sys_get_temp_dir(), 'openapi-');
+            if ($base === false) {
+                throw new \RuntimeException('Unable to allocate temporary file');
+            }
+            $path = $base . $extension;
+            file_put_contents($path, $yaml);
+
+            try {
+                Assert::same(Contract::fromFile($path)->operations()[0]->path, '/h');
+            } finally {
+                unlink($path);
+                unlink($base);
+            }
+        }
+    }
+
+    public function keepsJsonFilesOnTheJsonLoadingPath(): void
+    {
+        $base = tempnam(sys_get_temp_dir(), 'openapi-');
+        if ($base === false) {
+            throw new \RuntimeException('Unable to allocate temporary file');
+        }
+        $path = $base . '.json';
+        file_put_contents($path, '{"openapi":"3.1.0","x-a":1,"x-a":2,"paths":{"/h":{"get":{"responses":{"200":{}}}}}}');
+
+        try {
+            Assert::same(Contract::fromFile($path)->operations()[0]->path, '/h');
+        } finally {
+            unlink($path);
+            unlink($base);
+        }
+    }
+
+    public function matchesLowercaseRequestMethodsAndBareHosts(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/' => ['get' => ['responses' => ['200' => []]]],
+            '/h' => ['get' => ['responses' => ['200' => []]]],
+        ]]);
+
+        $matched = $contract->match(new Request('get', 'http://api.example.com/h'));
+        Assert::true($matched instanceof MatchedOperation && $matched->operation->path === '/h');
+
+        $root = $contract->match(new Request('GET', 'http://api.example.com'));
+        Assert::true($root instanceof MatchedOperation && $root->operation->path === '/');
+    }
+
+    public function scansPastOperationsWithOtherMethods(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/a' => ['get' => ['responses' => ['200' => []]]],
+            '/b' => ['post' => ['responses' => ['200' => []]]],
+        ]]);
+
+        $matched = $contract->match(new Request('POST', '/b'));
+        Assert::true($matched instanceof MatchedOperation && $matched->operation->path === '/b');
+    }
+
+    public function matchesEveryDeclaredServerBase(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'servers' => [['url' => 'https://api.example.com/v1'], ['url' => 'https://api.example.com/v2']],
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+
+        $matched = $contract->match(new Request('GET', 'https://api.example.com/v2/x'));
+        Assert::true($matched instanceof MatchedOperation && $matched->operation->path === '/x');
+    }
+
+    public function reportsTheUnknownOperationWithNormalizedMethod(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]]]);
+
+        $result = $contract->validateRequest(new Request('post', '/none'));
+
+        Assert::false($result->isValid());
+        Assert::same($result->violations[0]->actual, 'POST /none');
+        Assert::same($result->violations[0]->message, 'No operation matches POST /none');
+    }
+
+    public function exchangeKeepsRequestAndResponseViolations(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']]],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        $result = $contract->validateExchange(new Request('GET', '/h'), new Response(299));
+
+        Assert::same(
+            array_map(static fn(Violation $violation): string => $violation->code, $result->violations),
+            ['request.parameter.missing', 'response.status.mismatch'],
+        );
+    }
+
+    public function compilesParametersIntoAnExactList(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [
+                ['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 2]],
+                ['name' => 'q', 'in' => 'header', 'required' => true, 'allowReserved' => true, 'schema' => ['type' => 'string']],
+                ['name' => 'X-Trace', 'in' => 'header', 'schema' => ['type' => 'string']],
+                ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'schema' => ['type' => 'string']],
+            ],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        Assert::same($contract->operations()[0]->parameters, [
+            ['name' => 'q', 'in' => 'query', 'required' => false, 'style' => 'form', 'explode' => true, 'allowReserved' => false, 'schema' => ['type' => 'integer', 'minimum' => 2]],
+            ['name' => 'q', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => true, 'schema' => ['type' => 'string']],
+            ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => false, 'schema' => ['type' => 'string']],
+        ]);
+    }
+
+    public function pathLevelParametersApplyToEveryOperation(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => [
+            'parameters' => [
+                ['name' => 'a', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']],
+                ['name' => 'b', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']],
+            ],
+            'get' => ['responses' => ['200' => []]],
+        ]]]);
+
+        $result = $contract->validateRequest(new Request('GET', '/h'));
+
+        Assert::same(
+            array_map(static fn(Violation $violation): string => $violation->instancePath, $result->violations),
+            ['a', 'b'],
+        );
+    }
+
+    public function reportsExactParameterCompilationMessages(): void
+    {
+        $document = static fn(array $parameter): array => ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['parameters' => [$parameter], 'responses' => ['200' => []]]]]];
+
+        try {
+            Contract::fromArray($document(['name' => 'q', 'in' => 'body', 'schema' => ['type' => 'string']]));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI parameter must have a valid name and location');
+        }
+
+        try {
+            Contract::fromArray($document(['name' => 'q', 'in' => 'query', 'schema' => ['string']]));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI parameter schema must be an object');
+        }
+
+        try {
+            Contract::fromArray($document(['name' => 'q', 'in' => 'query', 'schema' => [0 => ['type' => 'string'], 'x' => 1]]));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema keys must be strings');
+        }
+    }
+
+    public function compilesCookieFormParameters(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => 'session', 'in' => 'cookie', 'schema' => ['type' => 'string']]],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        Assert::same($contract->operations()[0]->parameters[0]['style'], 'form');
+    }
+
+    public function acceptsEmptyComponentsAndEmptySchemeObjects(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'components' => [], 'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]]]);
+        Assert::same(count($contract->operations()), 1);
+
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['securitySchemes' => ['api' => []]],
+            'security' => [[]],
+            'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+        Assert::same($contract->operations()[0]->security, [[]]);
+    }
+
+    public function rejectsListShapedSecurityMetadata(): void
+    {
+        $document = static fn(array $overrides): array => ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]], ...$overrides];
+
+        foreach ([
+            ['components' => [['a']]],
+            ['components' => ['securitySchemes' => ['api' => 'invalid']]],
+            ['components' => ['securitySchemes' => ['' => ['type' => 'apiKey']]]],
+            ['components' => ['securitySchemes' => ['api' => ['x']]]],
+            ['components' => ['securitySchemes' => ['api' => []]], 'security' => [['api' => [1]]]],
+        ] as $overrides) {
+            try {
+                Contract::fromArray($document($overrides));
+                Assert::true(actual: false);
+            } catch (InvalidContract) {
+                Assert::true(actual: true);
+            }
+        }
+
+        try {
+            Contract::fromArray($document(['components' => ['securitySchemes' => ['api']]]));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI securitySchemes must be an object');
+        }
+
+        try {
+            Contract::fromArray($document(['components' => ['securitySchemes' => ['api' => []]], 'security' => [['x']]]));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI security requirement must be an object');
+        }
+    }
+
+    public function resolvesRequirementsAgainstEverySchemeAndKeepsAlternatives(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['securitySchemes' => ['first' => [], 'second' => []]],
+            'security' => [['second' => ['read']], ['first' => []]],
+            'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+
+        Assert::same($contract->operations()[0]->security, [['second' => ['read']], ['first' => []]]);
+    }
+
+    public function rootAndPartialTemplatesDoNotLeakAcrossPaths(): void
+    {
+        $only = static fn(string $path): Contract => Contract::fromArray(['openapi' => '3.1.0', 'paths' => [$path => ['get' => ['responses' => ['200' => []]]]]]);
+
+        Assert::null($only('/x')->match(new Request('GET', '/')));
+        Assert::null($only('/')->match(new Request('GET', '/x')));
+        Assert::null($only('/f/{id}.json')->match(new Request('GET', '/f/abc')));
+        Assert::null($only('/{a}/x')->match(new Request('GET', '/1/y')));
+    }
+
+    public function prefersConcreteRoutesAndLongerTemplates(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/pets/mine' => ['get' => ['operationId' => 'concrete', 'responses' => ['200' => []]]],
+            '/pets/{identifier}' => ['get' => ['operationId' => 'templated', 'responses' => ['200' => []]]],
+        ]]);
+        $matched = $contract->match(new Request('GET', '/pets/mine'));
+        Assert::true($matched instanceof MatchedOperation);
+        Assert::same($matched->operation->key, 'concrete');
+
+        $short = ['get' => ['operationId' => 'short', 'responses' => ['200' => []]]];
+        $long = ['get' => ['operationId' => 'long', 'responses' => ['200' => []]]];
+        foreach ([
+            ['/pets/{id}' => $short, '/{store}/mine' => $long],
+            ['/{store}/mine' => $long, '/pets/{id}' => $short],
+        ] as $paths) {
+            $matched = Contract::fromArray(['openapi' => '3.1.0', 'paths' => $paths])->match(new Request('GET', '/pets/mine'));
+            Assert::true($matched instanceof MatchedOperation);
+            Assert::same($matched->operation->key, 'long');
+        }
+    }
+
+    public function rejectsAScalarYamlDocument(): void
+    {
+        $base = tempnam(sys_get_temp_dir(), 'openapi-');
+        if ($base === false) {
+            throw new \RuntimeException('Unable to allocate temporary file');
+        }
+        $path = $base . '.yaml';
+        file_put_contents($path, '42');
+
+        try {
+            Expect::exception(InvalidContract::class);
+            Contract::fromFile($path);
+        } finally {
+            unlink($path);
+            unlink($base);
+        }
+    }
+
+    public function breaksBaseIndexTiesByOperationKey(): void
+    {
+        $first = ['get' => ['operationId' => 'aaa', 'servers' => [['url' => 'https://h/q'], ['url' => 'https://h/a']], 'responses' => ['200' => []]]];
+        $second = ['get' => ['operationId' => 'zzz', 'servers' => [['url' => 'https://h/q2'], ['url' => 'https://h']], 'responses' => ['200' => []]]];
+        foreach ([
+            ['/x' => $first, '/a/x' => $second],
+            ['/a/x' => $second, '/x' => $first],
+        ] as $paths) {
+            $matched = Contract::fromArray(['openapi' => '3.1.0', 'paths' => $paths])->match(new Request('GET', 'https://h/a/x'));
+            Assert::true($matched instanceof MatchedOperation);
+            Assert::same($matched->operation->key, 'aaa');
+        }
+    }
+
+    public function rejectsARequestPathLongerThanTheRoute(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/a' => ['get' => ['responses' => ['200' => []]]]]]);
+
+        Assert::null($contract->match(new Request('GET', '/a/b')));
+    }
+
+    public function lowerServerBaseIndexWinsTies(): void
+    {
+        $direct = ['get' => ['operationId' => 'direct', 'servers' => [['url' => 'https://h/a']], 'responses' => ['200' => []]]];
+        $fallback = ['get' => ['operationId' => 'fallback', 'servers' => [['url' => 'https://h/q'], ['url' => 'https://h']], 'responses' => ['200' => []]]];
+        foreach ([
+            ['/x' => $direct, '/a/x' => $fallback],
+            ['/a/x' => $fallback, '/x' => $direct],
+        ] as $paths) {
+            $matched = Contract::fromArray(['openapi' => '3.1.0', 'paths' => $paths])->match(new Request('GET', 'https://h/a/x'));
+            Assert::true($matched instanceof MatchedOperation);
+            Assert::same($matched->operation->key, 'direct');
+        }
     }
 }

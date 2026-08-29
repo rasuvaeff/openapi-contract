@@ -14,6 +14,7 @@ use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Expect;
 use Testo\Test;
 
@@ -196,6 +197,305 @@ final class RequestValidationTest
 
         $request = new ServerRequest('POST', '/items', ['Content-Type' => 'application/json'], '{"name":"ok"}');
         Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    public function reportsExactParameterViolationPointers(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/a~b' => ['get' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer']]],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        $missing = $contract->validateRequest(new ServerRequest('GET', '/a~b'));
+        Assert::same($missing->violations[0]->specPointer, '/paths/~1a~0b/get/parameters/0');
+
+        $mismatch = $contract->validateRequest(new ServerRequest('GET', '/a~b?q=x'));
+        Assert::same($mismatch->violations[0]->specPointer, '/paths/~1a~0b/get/parameters/0/schema');
+        Assert::same($mismatch->violations[0]->message, 'Query parameter "q" does not match its schema');
+    }
+
+    public function reportsExactBodyViolationPointer(): void
+    {
+        $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest(new ServerRequest('POST', '/b'));
+
+        Assert::same($result->violations[0]->specPointer, '/paths/~1b/post/requestBody');
+    }
+
+    public function validatesCookieParameters(): void
+    {
+        $contract = $this->paramContract(['name' => 'sid', 'in' => 'cookie', 'required' => true, 'schema' => ['type' => 'integer']]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => 'sid=7']))->isValid());
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q'))->violations[0]->code, 'request.parameter.missing');
+    }
+
+    public function missingQueryStringYieldsAMissingParameter(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'required' => ['kind'], 'properties' => ['kind' => ['type' => 'string']]],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q'))->violations[0]->code, 'request.parameter.missing');
+    }
+
+    public function nonExplodedObjectsIgnoreForeignQueryPairs(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'o', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => false,
+            'schema' => ['type' => 'object', 'required' => ['a'], 'properties' => ['a' => ['type' => 'integer']]],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?o=a,1&z=5'))->isValid());
+    }
+
+    public function explodedObjectsWithoutDeclaredExtrasKeepEveryPair(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'minProperties' => 2, 'properties' => ['a' => ['type' => 'string']]],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?a=x&b=y'))->isValid());
+    }
+
+    public function explodedObjectsWithForbiddenExtrasFilterUndeclaredPairs(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'minProperties' => 2, 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']], 'additionalProperties' => false],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?a=x&b=y&zzz=1'))->isValid());
+    }
+
+    public function scalarParametersIgnoreObjectQueryHandling(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'q', 'in' => 'query', 'required' => true,
+            'schema' => ['type' => 'string', 'additionalProperties' => false],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?q=x'))->isValid());
+    }
+
+    public function requiredDeepObjectsAcceptForeignPrefixedPairs(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'do', 'in' => 'query', 'required' => true, 'style' => 'deepObject', 'explode' => true,
+            'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?do%5Ba%5D=5&dob=7'))->isValid());
+    }
+
+    public function explodedCookieObjectsKeepEveryPair(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'cookie', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'minProperties' => 2, 'properties' => ['a' => ['type' => 'string']]],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => 'a=x; b=y']))->isValid());
+    }
+
+    public function explodedCookieObjectsWithForbiddenExtrasFilterUndeclaredPairs(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'cookie', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'minProperties' => 2, 'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'string']], 'additionalProperties' => false],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => 'a=x; b=y; zzz=1']))->isValid());
+    }
+
+    public function nonExplodedCookieObjectsBypassPairFiltering(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'o', 'in' => 'cookie', 'required' => true, 'style' => 'form', 'explode' => false,
+            'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']], 'additionalProperties' => false],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => 'o=a,1']))->isValid());
+    }
+
+    public function absentCookiesYieldAMissingParameter(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'f', 'in' => 'cookie', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q'))->violations[0]->code, 'request.parameter.missing');
+    }
+
+    public function coercedBooleansKeepTheirTruthValue(): void
+    {
+        $contract = $this->paramContract(['name' => 'q', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'boolean', 'const' => true]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?q=true'))->isValid());
+    }
+
+    #[DataProvider('coercionCases')]
+    public function coercesScalarWireValuesByType(array $schema, string $value, bool $valid): void
+    {
+        $contract = $this->paramContract(['name' => 'q', 'in' => 'query', 'required' => true, 'schema' => $schema]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q?q=' . rawurlencode($value)))->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, bool}> */
+    public static function coercionCases(): iterable
+    {
+        yield 'nullable rejects junk' => [['type' => ['null', 'integer']], 'x', false];
+        yield 'nullable accepts null literal' => [['type' => ['null', 'integer']], 'null', true];
+        yield 'string keeps literal null' => [['type' => 'string'], 'null', true];
+        yield 'integer rejects trailing junk' => [['type' => 'integer'], '5x', false];
+        yield 'integer rejects leading junk' => [['type' => 'integer'], 'x5', false];
+        yield 'string keeps numeric text' => [['type' => 'string'], '5', true];
+        yield 'number rejects text' => [['type' => 'number'], 'abc', false];
+        yield 'number accepts decimals' => [['type' => 'number'], '1.5', true];
+        yield 'string keeps boolean text' => [['type' => 'string'], 'true', true];
+        yield 'boolean accepts true' => [['type' => 'boolean'], 'true', true];
+        yield 'boolean rejects junk' => [['type' => 'boolean'], 'x', false];
+    }
+
+    public function coercesArrayItemsByTheItemSchema(): void
+    {
+        $contract = $this->paramContract(['name' => 'ids', 'in' => 'query', 'required' => true, 'explode' => false, 'schema' => ['type' => 'array', 'items' => ['type' => 'integer']]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?ids=1,2'))->isValid());
+    }
+
+    public function optionalBodyMayBeOmitted(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+            'requestBody' => ['content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('POST', '/b'))->isValid());
+    }
+
+    public function normalizesTheRequestMediaTypeBeforeMatching(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]]);
+
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'Application/JSON ; charset=utf-8'], '{}');
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    public function reportsExactUndeclaredMediaTypeMessages(): void
+    {
+        $undeclared = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'text/plain'], 'hello'));
+        Assert::same($undeclared->violations[0]->message, 'Request media type "text/plain" is not declared');
+
+        $unsupported = $this->bodyContract(['text/plain' => []])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'text/plain'], 'hello'));
+        Assert::same($unsupported->violations[0]->message, 'Request media type "text/plain" is not supported');
+    }
+
+    public function readsTheBodyFromTheStreamStart(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]]);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}');
+        $request->getBody()->getContents();
+
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    public function skipsMalformedContentEntriesWhenMatching(): void
+    {
+        $result = $this->bodyContract([0 => ['schema' => ['type' => 'string']], 'application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+
+        Assert::true($result->isValid());
+    }
+
+    public function matchesTypeWildcardAndSuffixDeclarations(): void
+    {
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/vnd.pet+json'], '{}');
+        $json = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}');
+
+        Assert::true($this->bodyContract(['application/*' => ['schema' => ['type' => 'object']]])->validateRequest($request)->isValid());
+        Assert::true($this->bodyContract(['application/*+json' => ['schema' => ['type' => 'object']]])->validateRequest($request)->isValid());
+        Assert::same($this->bodyContract(['application/*+json' => ['schema' => ['type' => 'object']]])->validateRequest($json)->violations[0]->code, 'request.body.media_type');
+        Assert::same($this->bodyContract(['text/*' => ['schema' => ['type' => 'object']]])->validateRequest($request)->violations[0]->code, 'request.body.media_type');
+        Assert::true($this->bodyContract(['application/json ; charset=utf-8' => ['schema' => ['type' => 'object']]])->validateRequest($json)->isValid());
+        Assert::true($this->bodyContract(['Application/JSON' => ['schema' => ['type' => 'object']]])->validateRequest($json)->isValid());
+    }
+
+    public function typeOnlyDeclarationsAndActualsFailClosed(): void
+    {
+        $contract = $this->bodyContract(['text' => [], 'application/json' => ['schema' => ['type' => 'object']]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'))->isValid());
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'weird'], 'x'))->violations[0]->code, 'request.body.media_type');
+    }
+
+    public function honorsTheBodyJsonDepthBudget(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => ['type' => 'array']]]);
+        $deep = static fn(int $count): string => str_repeat('[', $count) . '1' . str_repeat(']', $count);
+
+        Assert::true($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $deep(63)))->isValid());
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $deep(64)))->violations[0]->code, 'request.body.json');
+    }
+
+    public function rejectsMalformedBodySchemas(): void
+    {
+        try {
+            $this->bodyContract(['application/json' => ['schema' => [['type' => 'string']]]])
+                ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+            Assert::true(actual: false);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'Schema must be an object');
+        }
+
+        try {
+            $this->bodyContract(['application/json' => ['schema' => [0 => ['type' => 'string'], 'a' => 1]]])
+                ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+            Assert::true(actual: false);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'Schema keys must be strings');
+        }
+    }
+
+    public function validatesEverySupportedParameterStyle(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/s/{l}/{m}' => ['get' => [
+            'parameters' => [
+                ['name' => 'l', 'in' => 'path', 'style' => 'label', 'schema' => ['type' => 'integer']],
+                ['name' => 'm', 'in' => 'path', 'style' => 'matrix', 'schema' => ['type' => 'integer']],
+                ['name' => 'sd', 'in' => 'query', 'style' => 'spaceDelimited', 'explode' => false, 'schema' => ['type' => 'array', 'items' => ['type' => 'integer']]],
+                ['name' => 'pd', 'in' => 'query', 'style' => 'pipeDelimited', 'explode' => false, 'schema' => ['type' => 'array', 'items' => ['type' => 'integer']]],
+                ['name' => 'do', 'in' => 'query', 'style' => 'deepObject', 'explode' => true, 'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]]],
+            ],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        $request = new ServerRequest('GET', '/s/.7/;m=9?sd=1&pd=2&do%5Ba%5D=5');
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    /** @param array<string, mixed> $parameter */
+    private function paramContract(array $parameter): Contract
+    {
+        return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+            'parameters' => [$parameter],
+            'responses' => ['200' => []],
+        ]]]]);
+    }
+
+    /** @param array<array-key, mixed> $content */
+    private function bodyContract(array $content): Contract
+    {
+        return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+            'requestBody' => ['required' => true, 'content' => $content],
+            'responses' => ['204' => []],
+        ]]]]);
     }
 
     private function contract(): Contract
