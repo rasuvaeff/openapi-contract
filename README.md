@@ -41,6 +41,9 @@ Loading fails closed: unsupported OpenAPI versions throw
 ambiguous path templates, duplicate operation identities, and malformed
 document shapes throw `InvalidContract`, and parameter `content`
 serialization or unsupported styles throw `UnsupportedSerialization`.
+Every path-template placeholder must have an effective `in: path` parameter
+with the same name and explicit `required: true`; extra path parameters are
+rejected while compiling the contract.
 Documents are bounded: byte size, JSON depth, `$ref` depth, and a shared
 node budget.
 
@@ -66,10 +69,13 @@ once, and rejects decoded separators that would escape a template slot.
 ### Validating exchanges
 
 ```php
+use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
+
 $result = $contract->validateRequest($request);
 $result = $contract->validateExchange($request, $response);
 
 $result->assertValid(); // throws ContractViolation when violations exist
+$diagnostics = (new ValidationResultFormatter())->format($result);
 
 foreach ($result->violations as $violation) {
     // Violation: code, operation, location, instancePath, specPointer,
@@ -86,13 +92,24 @@ applied directionally. Root-level `security` is inherited by operations, an
 explicit empty `security` list marks an operation anonymous, and credential
 acquisition stays in the generator package.
 
+Body validation reads seekable PSR-7 streams from the beginning and restores
+their original position, including when reading fails. A body that needs
+validation but is non-seekable is not consumed: it produces
+`request.body.non_seekable` or `response.body.non_seekable` instead.
+Bodies larger than `Contract::MAX_MESSAGE_BODY_BYTES` (1 MiB) produce the
+corresponding `request.body.too_large` or `response.body.too_large` violation.
+`ValidationResultFormatter` renders every violation in stable order with
+bounded fields, depth, item counts, and expected/actual values. It redacts
+header, cookie, query, and recognizably sensitive actual values;
+`ContractViolation` uses the same complete rendering.
+
 ## Security
 
 Unsupported contract semantics are never ignored: versions, dialects,
 references, serialization styles, and schema assertions outside the support
 matrix fail closed. User-supplied documents and message bodies are read with
-byte and depth budgets, and diagnostics render expected/actual values in
-bounded form.
+byte and JSON-depth budgets, and diagnostics render expected/actual values
+in bounded form without exposing credential parameters.
 
 ## Examples
 

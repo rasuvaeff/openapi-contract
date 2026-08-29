@@ -19,6 +19,7 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 final readonly class Contract
 {
     public const int MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+    public const int MAX_MESSAGE_BODY_BYTES = 1024 * 1024;
 
     /**
      * @param list<Operation> $operations

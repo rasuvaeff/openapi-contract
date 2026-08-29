@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\Stream;
+use Psr\Http\Message\StreamInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\ContractViolation;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
@@ -12,11 +14,15 @@ use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
+use Rasuvaeff\Understudy\Understudy;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
 use Testo\Expect;
 use Testo\Test;
+
+use function Rasuvaeff\Understudy\expect;
+use function Rasuvaeff\Understudy\when;
 
 #[Test]
 #[Covers(Contract::class)]
@@ -71,29 +77,74 @@ final class RequestValidationTest
         Assert::same($request->getBody()->tell(), 5);
     }
 
+    public function refusesNonSeekableRequestBodiesWithoutReadingThem(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($pair === false) {
+            throw new \RuntimeException('Unable to create a socket pair');
+        }
+        fwrite($pair[0], '{}');
+        fclose($pair[0]);
+        $stream = Stream::create($pair[1]);
+        $request = (new ServerRequest('POST', '/b', ['Content-Type' => 'application/json']))->withBody($stream);
+
+        $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest($request);
+
+        Assert::same($result->violations[0]->code, 'request.body.non_seekable');
+        Assert::same($stream->getContents(), '{}');
+    }
+
+    public function restoresSeekableRequestBodyPositionWhenReadingThrows(): void
+    {
+        $stream = Understudy::for(StreamInterface::class);
+        when(static fn(): bool => $stream->isSeekable())->returns(true);
+        when(static fn(): int => $stream->tell())->returns(5);
+        when(static fn(): bool => $stream->eof())->returns(false);
+        when(static fn(): string => $stream->read(8192))->throws(new \RuntimeException('read failed'));
+        expect(static fn() => $stream->seek(5));
+        $request = (new ServerRequest('POST', '/b', ['Content-Type' => 'application/json']))->withBody($stream);
+
+        try {
+            $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+                ->validateRequest($request);
+            Assert::true(actual: false, message: 'Expected body read failure');
+        } catch (\RuntimeException $exception) {
+            Assert::same($exception->getMessage(), 'read failed');
+        }
+    }
+
+    public function enforcesTheRequestBodyByteBudgetAndRestoresPosition(): void
+    {
+        $body = str_repeat(' ', Contract::MAX_MESSAGE_BODY_BYTES + 1);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+        $request->getBody()->seek(7);
+
+        $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest($request);
+
+        Assert::same($result->violations[0]->code, 'request.body.too_large');
+        Assert::same($request->getBody()->tell(), 7);
+    }
+
+    public function acceptsARequestBodyAtTheExactByteBudget(): void
+    {
+        $body = '{"x":"' . str_repeat('a', Contract::MAX_MESSAGE_BODY_BYTES - 8) . '"}';
+        Assert::same(strlen($body), Contract::MAX_MESSAGE_BODY_BYTES);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateRequest($request);
+
+        Assert::true($result->isValid());
+    }
+
     public function reportsUnknownOperationWithoutCascadingErrors(): void
     {
         $result = $this->contract()->validateRequest(new ServerRequest('GET', '/missing'));
 
         Assert::same(count($result->violations), 1);
         Assert::same($result->violations[0]->code, 'request.operation.unknown');
-    }
-
-    public function contractViolationSummarizesFirstViolationAndHandlesEmptyResult(): void
-    {
-        $violation = new Violation(
-            code: 'request.invalid',
-            operation: 'pets.get',
-            location: 'query',
-            instancePath: 'q',
-            specPointer: '/paths/pets',
-            expected: 'string',
-            actual: 1,
-            message: 'bad query',
-        );
-        $exception = ContractViolation::fromResult(new ValidationResult([$violation]));
-        Assert::same($exception->getMessage(), 'OpenAPI contract validation failed with 1 violation(s): [request.invalid] bad query');
-        Assert::same(ContractViolation::fromResult(new ValidationResult())->getMessage(), 'OpenAPI contract validation failed');
     }
 
     public function acceptsExplodedAdditionalPropertiesObject(): void
@@ -467,8 +518,8 @@ final class RequestValidationTest
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/s/{l}/{m}' => ['get' => [
             'parameters' => [
-                ['name' => 'l', 'in' => 'path', 'style' => 'label', 'schema' => ['type' => 'integer']],
-                ['name' => 'm', 'in' => 'path', 'style' => 'matrix', 'schema' => ['type' => 'integer']],
+                ['name' => 'l', 'in' => 'path', 'required' => true, 'style' => 'label', 'schema' => ['type' => 'integer']],
+                ['name' => 'm', 'in' => 'path', 'required' => true, 'style' => 'matrix', 'schema' => ['type' => 'integer']],
                 ['name' => 'sd', 'in' => 'query', 'style' => 'spaceDelimited', 'explode' => false, 'schema' => ['type' => 'array', 'items' => ['type' => 'integer']]],
                 ['name' => 'pd', 'in' => 'query', 'style' => 'pipeDelimited', 'explode' => false, 'schema' => ['type' => 'array', 'items' => ['type' => 'integer']]],
                 ['name' => 'do', 'in' => 'query', 'style' => 'deepObject', 'explode' => true, 'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]]],

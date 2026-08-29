@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\Stream;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Testo\Assert;
@@ -26,6 +27,41 @@ final class ResponseValidationTest
 
         Assert::true($result->isValid());
         Assert::same($response->getBody()->tell(), 3);
+    }
+
+    public function refusesNonSeekableResponseBodiesWithoutReadingThem(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($pair === false) {
+            throw new \RuntimeException('Unable to create a socket pair');
+        }
+        fwrite($pair[0], '{}');
+        fclose($pair[0]);
+        $stream = Stream::create($pair[1]);
+        $response = (new Response(200, ['Content-Type' => 'application/json']))->withBody($stream);
+
+        $result = $this->contentContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateExchange(new ServerRequest('GET', '/h'), $response);
+
+        Assert::same($result->violations[0]->code, 'response.body.non_seekable');
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/content');
+        Assert::same(count($result->violations), 1);
+        Assert::same($stream->getContents(), '{}');
+    }
+
+    public function enforcesTheResponseBodyByteBudgetAndRestoresPosition(): void
+    {
+        $body = str_repeat(' ', Contract::MAX_MESSAGE_BODY_BYTES + 1);
+        $response = new Response(200, ['Content-Type' => 'application/json'], $body);
+        $response->getBody()->seek(11);
+
+        $result = $this->contentContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateExchange(new ServerRequest('GET', '/h'), $response);
+
+        Assert::same($result->violations[0]->code, 'response.body.too_large');
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/content');
+        Assert::same(count($result->violations), 1);
+        Assert::same($response->getBody()->tell(), 11);
     }
 
     public function reportsStatusHeaderMediaAndSchemaViolations(): void
@@ -216,7 +252,7 @@ final class ResponseValidationTest
         return Contract::fromArray([
             'openapi' => '3.1.0',
             'paths' => ['/pets/{id}' => ['get' => [
-                'parameters' => [['name' => 'id', 'in' => 'path', 'schema' => ['type' => 'integer']]],
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer']]],
                 'responses' => [
                     '200' => [
                         'headers' => ['X-Request-Id' => ['required' => true]],

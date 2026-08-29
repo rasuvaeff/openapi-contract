@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\MessageInterface;
+use Rasuvaeff\OpenApiContract\Contract;
 
 /**
  * Message-reading helpers shared by the request and response validators:
@@ -15,18 +16,37 @@ use Psr\Http\Message\MessageInterface;
  */
 trait MessageReading
 {
-    private function bodyContents(MessageInterface $message): string
+    private function bodyContents(MessageInterface $message): ?string
     {
         $stream = $message->getBody();
         if (!$stream->isSeekable()) {
-            return $stream->getContents();
+            return null;
         }
         $position = $stream->tell();
-        $stream->rewind();
-        $contents = $stream->getContents();
-        $stream->seek($position);
 
-        return $contents;
+        try {
+            $stream->rewind();
+            $contents = '';
+            while (!$stream->eof()) {
+                $remaining = Contract::MAX_MESSAGE_BODY_BYTES - strlen($contents);
+                $chunk = $stream->read(min(8192, $remaining + 1));
+                if ($chunk === '') {
+                    if ($stream->eof()) {
+                        break;
+                    }
+
+                    throw new \RuntimeException('Body stream did not make progress while reading');
+                }
+                $contents .= $chunk;
+                if (strlen($contents) > Contract::MAX_MESSAGE_BODY_BYTES) {
+                    throw new MessageBodyTooLarge();
+                }
+            }
+
+            return $contents;
+        } finally {
+            $stream->seek($position);
+        }
     }
 
     /** @param array<array-key, mixed> $content

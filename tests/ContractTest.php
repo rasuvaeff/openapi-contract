@@ -37,7 +37,10 @@ final class ContractTest
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
             'paths' => [
-                '/pets/{id}' => ['get' => ['operationId' => 'byId', 'responses' => ['200' => []]]],
+                '/pets/{id}' => [
+                    'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                    'get' => ['operationId' => 'byId', 'responses' => ['200' => []]],
+                ],
                 '/pets/mine' => ['get' => ['operationId' => 'mine', 'responses' => ['200' => []]]],
             ],
         ]);
@@ -52,7 +55,10 @@ final class ContractTest
     {
         $contract = Contract::fromArray([
             'openapi' => '3.0.3',
-            'paths' => ['/pets/{id}' => ['get' => ['operationId' => 'byId', 'responses' => ['200' => []]]]],
+            'paths' => ['/pets/{id}' => [
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                'get' => ['operationId' => 'byId', 'responses' => ['200' => []]],
+            ]],
         ]);
 
         $matched = $contract->requireMatch(new ServerRequest('GET', '/pets/a%20b'));
@@ -116,8 +122,14 @@ final class ContractTest
         Contract::fromArray([
             'openapi' => '3.1.0',
             'paths' => [
-                '/pets/{id}' => ['get' => ['responses' => ['200' => []]]],
-                '/pets/{name}' => ['get' => ['responses' => ['200' => []]]],
+                '/pets/{id}' => [
+                    'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                    'get' => ['responses' => ['200' => []]],
+                ],
+                '/pets/{name}' => [
+                    'parameters' => [['name' => 'name', 'in' => 'path', 'required' => true]],
+                    'get' => ['responses' => ['200' => []]],
+                ],
             ],
         ]);
     }
@@ -145,7 +157,10 @@ final class ContractTest
     {
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
-            'paths' => ['/pets/{id}' => ['get' => ['responses' => ['200' => []]]]],
+            'paths' => ['/pets/{id}' => [
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                'get' => ['responses' => ['200' => []]],
+            ]],
         ]);
 
         Assert::null($contract->match(new ServerRequest('GET', '/pets/%5C')));
@@ -417,8 +432,14 @@ final class ContractTest
     public function allowsTheSameTemplateShapeOnDifferentMethods(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
-            '/pets/{id}' => ['get' => ['responses' => ['200' => []]]],
-            '/pets/{petId}' => ['post' => ['responses' => ['200' => []]]],
+            '/pets/{id}' => [
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                'get' => ['responses' => ['200' => []]],
+            ],
+            '/pets/{petId}' => [
+                'parameters' => [['name' => 'petId', 'in' => 'path', 'required' => true]],
+                'post' => ['responses' => ['200' => []]],
+            ],
         ]]);
 
         Assert::same(count($contract->operations()), 2);
@@ -428,8 +449,14 @@ final class ContractTest
     {
         try {
             Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
-                '/pets/{id}' => ['get' => ['responses' => ['200' => []]]],
-                '/pets/{name}' => ['get' => ['responses' => ['200' => []]]],
+                '/pets/{id}' => [
+                    'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                    'get' => ['responses' => ['200' => []]],
+                ],
+                '/pets/{name}' => [
+                    'parameters' => [['name' => 'name', 'in' => 'path', 'required' => true]],
+                    'get' => ['responses' => ['200' => []]],
+                ],
             ]]);
             Assert::true(actual: false);
         } catch (InvalidContract $exception) {
@@ -666,6 +693,89 @@ final class ContractTest
         }
     }
 
+    public function rejectsPathParametersOutsideTheTemplate(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/api/league/standings' => ['get' => [
+                'parameters' => [[
+                    'name' => 'division',
+                    'in' => 'path',
+                    'required' => true,
+                    'schema' => ['type' => 'string'],
+                ]],
+                'responses' => ['200' => []],
+            ]]]]);
+            Assert::true(actual: false, message: 'Expected invalid path parameter exception');
+        } catch (InvalidContract $exception) {
+            Assert::same(
+                $exception->getMessage(),
+                'Path parameter "division" is not present in template "/api/league/standings"',
+            );
+        }
+    }
+
+    public function requiresPathParametersToExplicitlyBeRequired(): void
+    {
+        foreach ([[], ['required' => false]] as $required) {
+            try {
+                Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/pets/{id}' => ['get' => [
+                    'parameters' => [
+                        ['name' => 'expand', 'in' => 'query', 'schema' => ['type' => 'string']],
+                        [
+                            'name' => 'id',
+                            'in' => 'path',
+                            ...$required,
+                            'schema' => ['type' => 'string'],
+                        ],
+                    ],
+                    'responses' => ['200' => []],
+                ]]]]);
+                Assert::true(actual: false, message: 'Expected required path parameter exception');
+            } catch (InvalidContract $exception) {
+                Assert::same(
+                    $exception->getMessage(),
+                    'Path parameter "id" in template "/pets/{id}" must declare required: true',
+                );
+            }
+        }
+    }
+
+    public function requiresEveryTemplatePlaceholderToHaveAPathParameter(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/pets/{id}/{version}' => ['get' => [
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+                'responses' => ['200' => []],
+            ]]]]);
+            Assert::true(actual: false, message: 'Expected missing path parameter exception');
+        } catch (InvalidContract $exception) {
+            Assert::same(
+                $exception->getMessage(),
+                'Path template "/pets/{id}/{version}" has no path parameter named "version"',
+            );
+        }
+    }
+
+    public function validatesTheEffectiveReferencedPathParameter(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'components' => ['parameters' => ['PetId' => [
+                'name' => 'id',
+                'in' => 'path',
+                'required' => true,
+                'schema' => ['type' => 'integer'],
+            ]]],
+            'paths' => ['/pets/{id}' => [
+                'parameters' => [['$ref' => '#/components/parameters/PetId']],
+                'get' => ['responses' => ['200' => []]],
+            ]],
+        ]);
+
+        Assert::same($contract->operations()[0]->parameters[0]['name'], 'id');
+        Assert::true($contract->operations()[0]->parameters[0]['required']);
+    }
+
     public function compilesCookieFormParameters(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
@@ -738,7 +848,18 @@ final class ContractTest
 
     public function rootAndPartialTemplatesDoNotLeakAcrossPaths(): void
     {
-        $only = static fn(string $path): Contract => Contract::fromArray(['openapi' => '3.1.0', 'paths' => [$path => ['get' => ['responses' => ['200' => []]]]]]);
+        $only = static function (string $path): Contract {
+            preg_match_all('/\{([^{}]+)\}/', $path, $matches);
+            $parameters = array_map(
+                static fn(string $name): array => ['name' => $name, 'in' => 'path', 'required' => true],
+                $matches[1] ?? [],
+            );
+
+            return Contract::fromArray(['openapi' => '3.1.0', 'paths' => [$path => [
+                'parameters' => $parameters,
+                'get' => ['responses' => ['200' => []]],
+            ]]]);
+        };
 
         Assert::null($only('/x')->match(new Request('GET', '/')));
         Assert::null($only('/')->match(new Request('GET', '/x')));
@@ -750,14 +871,23 @@ final class ContractTest
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
             '/pets/mine' => ['get' => ['operationId' => 'concrete', 'responses' => ['200' => []]]],
-            '/pets/{identifier}' => ['get' => ['operationId' => 'templated', 'responses' => ['200' => []]]],
+            '/pets/{identifier}' => [
+                'parameters' => [['name' => 'identifier', 'in' => 'path', 'required' => true]],
+                'get' => ['operationId' => 'templated', 'responses' => ['200' => []]],
+            ],
         ]]);
         $matched = $contract->match(new Request('GET', '/pets/mine'));
         Assert::true($matched instanceof MatchedOperation);
         Assert::same($matched->operation->key, 'concrete');
 
-        $short = ['get' => ['operationId' => 'short', 'responses' => ['200' => []]]];
-        $long = ['get' => ['operationId' => 'long', 'responses' => ['200' => []]]];
+        $short = [
+            'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
+            'get' => ['operationId' => 'short', 'responses' => ['200' => []]],
+        ];
+        $long = [
+            'parameters' => [['name' => 'store', 'in' => 'path', 'required' => true]],
+            'get' => ['operationId' => 'long', 'responses' => ['200' => []]],
+        ];
         foreach ([
             ['/pets/{id}' => $short, '/{store}/mine' => $long],
             ['/{store}/mine' => $long, '/pets/{id}' => $short],
