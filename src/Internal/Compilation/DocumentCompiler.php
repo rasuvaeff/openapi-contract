@@ -100,12 +100,14 @@ final readonly class DocumentCompiler
                     ));
                 }
                 $templates[$templateKey] = $pathString;
+                $parameters = $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver);
+                $this->assertPathParameters($pathString, $parameters);
                 $operations[$key] = new Operation(
                     key: $key,
                     operationId: $operationId,
                     method: strtoupper($method),
                     path: $pathString,
-                    parameters: $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver),
+                    parameters: $parameters,
                     requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
                     serverBases: $this->serverBases($raw['servers'] ?? null, $pathServers),
@@ -194,7 +196,7 @@ final readonly class DocumentCompiler
             $result[$key] = [
                 'name' => $name,
                 'in' => $in,
-                'required' => $in === 'path' || (($raw['required'] ?? false) === true),
+                'required' => ($raw['required'] ?? false) === true,
                 'style' => $style,
                 'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
                 'allowReserved' => ($raw['allowReserved'] ?? false) === true,
@@ -203,6 +205,49 @@ final readonly class DocumentCompiler
         }
 
         return array_values($result);
+    }
+
+    /**
+     * @param list<array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>}> $parameters
+     */
+    private function assertPathParameters(string $template, array $parameters): void
+    {
+        $matched = preg_match_all('/\{([^{}]+)\}/', $template, $matches);
+        if ($matched === false) {
+            throw new \LogicException('Path template parsing failed');
+        }
+        /** @var list<string> $placeholders */
+        $placeholders = $matches[1] ?? [];
+        $declared = [];
+        foreach ($parameters as $parameter) {
+            if ($parameter['in'] !== 'path') {
+                continue;
+            }
+            if (!in_array($parameter['name'], $placeholders, strict: true)) {
+                throw new InvalidContract(sprintf(
+                    'Path parameter "%s" is not present in template "%s"',
+                    $parameter['name'],
+                    $template,
+                ));
+            }
+            if (!$parameter['required']) {
+                throw new InvalidContract(sprintf(
+                    'Path parameter "%s" in template "%s" must declare required: true',
+                    $parameter['name'],
+                    $template,
+                ));
+            }
+            $declared[] = $parameter['name'];
+        }
+        foreach ($placeholders as $placeholder) {
+            if (!in_array($placeholder, $declared, strict: true)) {
+                throw new InvalidContract(sprintf(
+                    'Path template "%s" has no path parameter named "%s"',
+                    $template,
+                    $placeholder,
+                ));
+            }
+        }
     }
 
     /** @param array<array-key, mixed> $parameter */

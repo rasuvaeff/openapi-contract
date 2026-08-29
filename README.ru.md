@@ -40,8 +40,10 @@ $contract = Contract::fromFile('openapi.yaml'); // нужен symfony/yaml
 `UnsupportedVersion`; неизвестный JSON Schema dialect, нелокальные ссылки,
 неоднозначные path templates, дубли operation identity и малформенные формы
 документа — `InvalidContract`; parameter `content` и неподдержанные styles —
-`UnsupportedSerialization`. Документы ограничены бюджетами: размер в байтах,
-JSON depth, глубина `$ref` и общий node budget.
+`UnsupportedSerialization`. Каждый placeholder в path template обязан иметь
+effective-параметр `in: path` с тем же именем и явным `required: true`; лишние
+path-параметры отвергаются при компиляции контракта. Документы ограничены
+бюджетами: размер в байтах, JSON depth, глубина `$ref` и общий node budget.
 
 ### Операции и matching
 
@@ -65,10 +67,13 @@ URI. Matching учитывает server base paths, предпочитает к�
 ### Валидация exchanges
 
 ```php
+use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
+
 $result = $contract->validateRequest($request);
 $result = $contract->validateExchange($request, $response);
 
 $result->assertValid(); // бросает ContractViolation при нарушениях
+$diagnostics = (new ValidationResultFormatter())->format($result);
 
 foreach ($result->violations as $violation) {
     // Violation: code, operation, location, instancePath, specPointer,
@@ -84,13 +89,24 @@ OpenAPI-документ. Выбор ответа: точный статус, з
 наследуется операциями, явный пустой список `security` делает операцию
 анонимной, а получение credentials остаётся в пакете генераторов.
 
+При валидации body seekable PSR-7 stream читается с начала, после чего его
+исходная позиция восстанавливается, в том числе при ошибке чтения. Если body
+нужно проверить, но stream не поддерживает seek, validator не читает его и
+возвращает `request.body.non_seekable` или `response.body.non_seekable`.
+Body больше `Contract::MAX_MESSAGE_BODY_BYTES` (1 MiB) даёт соответствующее
+нарушение `request.body.too_large` или `response.body.too_large`.
+`ValidationResultFormatter` выводит все нарушения в стабильном порядке и
+ограничивает поля, глубину, число элементов и expected/actual. Actual values
+из header, cookie, query и полей с чувствительными именами редактируются;
+`ContractViolation` использует тот же полный вывод.
+
 ## Безопасность
 
 Неподдерживаемая семантика контракта никогда не игнорируется: версии,
 диалекты, ссылки, стили сериализации и schema assertions вне support matrix
 отвергаются fail-closed. Пользовательские документы и тела сообщений
-читаются с byte/depth-бюджетами; expected/actual в диагностике рендерятся в
-ограниченной форме.
+читаются с byte- и JSON-depth-бюджетами; expected/actual в диагностике
+рендерятся в ограниченной форме без раскрытия credential-параметров.
 
 ## Примеры
 

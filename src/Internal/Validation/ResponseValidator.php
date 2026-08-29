@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\ResponseInterface;
+use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
@@ -74,8 +75,41 @@ final readonly class ResponseValidator
         }
 
         $content = $definition['content'] ?? null;
-        $body = $this->bodyContents($response);
-        if (!is_array($content) || $content === [] || $body === '') {
+        if (!is_array($content) || $content === []) {
+            return new ValidationResult($violations);
+        }
+
+        try {
+            $body = $this->bodyContents($response);
+        } catch (MessageBodyTooLarge) {
+            $violations[] = new Violation(
+                code: 'response.body.too_large',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content',
+                expected: sprintf('body up to %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+                actual: 'body exceeds validation byte budget',
+                message: sprintf('Response body exceeds %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+            );
+
+            return new ValidationResult($violations);
+        }
+        if ($body === null) {
+            $violations[] = new Violation(
+                code: 'response.body.non_seekable',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content',
+                expected: 'seekable body stream',
+                actual: 'non-seekable body stream',
+                message: 'Response body stream must be seekable for validation',
+            );
+
+            return new ValidationResult($violations);
+        }
+        if ($body === '') {
             return new ValidationResult($violations);
         }
         $mediaType = $this->mediaTypeOf($response);

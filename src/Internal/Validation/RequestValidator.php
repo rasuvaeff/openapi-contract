@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\RequestInterface;
+use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
@@ -180,7 +181,25 @@ final readonly class RequestValidator
         if (!is_array($content)) {
             return [$this->bodyViolation($matched, 'request.body.media_type', 'Request body has no supported content definition')];
         }
-        $body = $this->bodyContents($request);
+
+        try {
+            $body = $this->bodyContents($request);
+        } catch (MessageBodyTooLarge) {
+            return [$this->bodyViolation(
+                $matched,
+                'request.body.too_large',
+                sprintf('Request body exceeds %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+                'body exceeds validation byte budget',
+            )];
+        }
+        if ($body === null) {
+            return [$this->bodyViolation(
+                $matched,
+                'request.body.non_seekable',
+                'Request body stream must be seekable for validation',
+                'non-seekable body stream',
+            )];
+        }
         if ($body === '') {
             return $required ? [$this->bodyViolation($matched, 'request.body.missing', 'Required request body is missing')] : [];
         }
