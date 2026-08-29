@@ -125,4 +125,18 @@ final class SchemaValidatorTest
 
         Assert::true(actual: false, message: 'Expected unsupported schema exception');
     }
+
+    public function rejectsUnknownDirection(): void
+    {
+        try {
+            (new SchemaValidator())->isValid(1, [], SchemaDialect::OpenApi31, direction: 'other');
+        } catch (\InvalidArgumentException $exception) {
+            Assert::string($exception->getMessage())->contains('Unknown schema direction');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected invalid direction exception');
+    }
+
 }

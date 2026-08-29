@@ -69,7 +69,7 @@ final class ParameterCodecTest
         ];
     }
 
-    #[Property(runs: 400)]
+    #[Property(runs: 1000)]
     public function everySupportedStyleAndExplodeCombinationRoundTrips(array $case): void
     {
         $codec = new ParameterCodec();

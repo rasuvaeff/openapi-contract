@@ -64,6 +64,33 @@ final class ResponseValidationTest
         Assert::true($contract->validateExchange(new ServerRequest('GET', '/wild'), $response)->isValid());
     }
 
+    public function reportsUndeclaredStatusAndInvalidJson(): void
+    {
+        $contract = $this->contract();
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/pets/7'), new Response(404))->violations[0]->code, 'response.status.mismatch');
+
+        $response = new Response(200, ['Content-Type' => 'application/json', 'X-Request-Id' => 'abc'], '{broken');
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $response)->violations[0]->code, 'response.body.json');
+    }
+
+    public function reportsUnsupportedAndSchemaInvalidResponseBodies(): void
+    {
+        $contract = $this->contract();
+        $plain = new Response(200, ['Content-Type' => 'text/plain', 'X-Request-Id' => 'abc'], '{}');
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $plain)->violations[0]->code, 'response.body.media_type');
+
+        $invalid = new Response(200, ['Content-Type' => 'application/json', 'X-Request-Id' => 'abc'], '{"id":"bad"}');
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $invalid)->violations[0]->code, 'response.body.schema');
+    }
+
+    public function acceptsEmptyBodyWhenResponseContentIsDeclared(): void
+    {
+        $contract = $this->contract();
+        $response = new Response(200, ['X-Request-Id' => 'abc']);
+
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $response)->isValid());
+    }
+
     private function contract(): Contract
     {
         return Contract::fromArray([

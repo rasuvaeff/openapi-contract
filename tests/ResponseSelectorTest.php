@@ -51,6 +51,7 @@ final class ResponseSelectorTest
             'default',
         ];
         yield 'missing response is explicit' => [[], 404, null];
+        yield 'exact numeric key beats string range' => [['200' => ['description' => 'exact'], '2XX' => ['description' => 'range']], 200, '200'];
     }
 
     public function rejectsInvalidStatus(): void

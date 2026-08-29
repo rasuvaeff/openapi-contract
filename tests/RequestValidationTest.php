@@ -78,6 +78,23 @@ final class RequestValidationTest
         Assert::same($result->violations[0]->code, 'request.operation.unknown');
     }
 
+    public function contractViolationSummarizesFirstViolationAndHandlesEmptyResult(): void
+    {
+        $violation = new Violation(
+            code: 'request.invalid',
+            operation: 'pets.get',
+            location: 'query',
+            instancePath: 'q',
+            specPointer: '/paths/pets',
+            expected: 'string',
+            actual: 1,
+            message: 'bad query',
+        );
+        $exception = ContractViolation::fromResult(new ValidationResult([$violation]));
+        Assert::same($exception->getMessage(), 'OpenAPI contract validation failed with 1 violation(s): [request.invalid] bad query');
+        Assert::same(ContractViolation::fromResult(new ValidationResult())->getMessage(), 'OpenAPI contract validation failed');
+    }
+
     public function acceptsExplodedAdditionalPropertiesObject(): void
     {
         $contract = Contract::fromArray([
@@ -110,6 +127,74 @@ final class RequestValidationTest
         ]);
 
         $request = new ServerRequest('POST', '/wild', ['Content-Type' => 'application/json'], '{}');
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    public function reportsMissingRequiredBodyAndMediaType(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/body' => ['post' => [
+                'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+                'responses' => ['204' => []],
+            ]]],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/body'))->violations[0]->code, 'request.body.missing');
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/body', ['Content-Type' => 'text/plain'], '{}'))->violations[0]->code, 'request.body.media_type');
+    }
+
+    public function reportsMalformedAndSchemaInvalidJsonBodies(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/body' => ['post' => [
+                'requestBody' => ['required' => false, 'content' => ['application/problem+json' => ['schema' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer']]]]]],
+                'responses' => ['204' => []],
+            ]]],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/body', ['Content-Type' => 'application/problem+json'], '{broken'))->violations[0]->code, 'request.body.json');
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/body', ['Content-Type' => 'application/problem+json'], '{"id":"wrong"}'))->violations[0]->code, 'request.body.schema');
+    }
+
+    public function reportsOptionalMissingParameterAndSerializationErrors(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/items' => ['get' => [
+                'parameters' => [
+                    ['name' => 'required', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer']],
+                    ['name' => 'tags', 'in' => 'query', 'schema' => ['type' => 'array', 'items' => ['type' => 'string']]],
+                ],
+                'responses' => ['200' => []],
+            ]]],
+        ]);
+
+        $missing = $contract->validateRequest(new ServerRequest('GET', '/items'));
+        Assert::same(array_map(static fn(Violation $v): string => $v->code, $missing->violations), ['request.parameter.missing']);
+        $invalid = $contract->validateRequest(new ServerRequest('GET', '/items?required=x&tags=a%2Fb%2Cc'));
+        Assert::false($invalid->isValid());
+    }
+
+    public function readOnlyAndWriteOnlyPropertiesFollowRequestDirection(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/items' => ['post' => [
+                'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => [
+                    'type' => 'object',
+                    'required' => ['id', 'name'],
+                    'properties' => [
+                        'id' => ['type' => 'integer', 'readOnly' => true],
+                        'name' => ['type' => 'string', 'writeOnly' => true],
+                    ],
+                ]]]],
+                'responses' => ['204' => []],
+            ]]],
+        ]);
+
+        $request = new ServerRequest('POST', '/items', ['Content-Type' => 'application/json'], '{"name":"ok"}');
         Assert::true($contract->validateRequest($request)->isValid());
     }
 

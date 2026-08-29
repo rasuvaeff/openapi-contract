@@ -233,8 +233,7 @@ final readonly class Contract
                 ?: ($a[5] <=> $b[5])
                 ?: ($b[3] <=> $a[3])
                 ?: strcmp($aRoute, $bRoute)
-                ?: strcmp($aOperation->key, $bOperation->key)
-                ?: 0;
+                ?: strcmp($aOperation->key, $bOperation->key);
         });
         if ($candidates === []) {
             return null;

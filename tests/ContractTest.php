@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Nyholm\Psr7\ServerRequest;
 use Rasuvaeff\OpenApiContract\Contract;
+use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
@@ -71,6 +72,20 @@ final class ContractTest
         Expect::exception(UnsupportedVersion::class);
 
         Contract::fromArray(['openapi' => '3.2.0', 'paths' => ['/x' => []]]);
+    }
+
+    public function rejectsVersionWithTrailingData(): void
+    {
+        Expect::exception(UnsupportedVersion::class);
+
+        Contract::fromArray(['openapi' => '3.1.0-beta', 'paths' => ['/x' => []]]);
+    }
+
+    public function rejectsVersionWithLeadingData(): void
+    {
+        Expect::exception(UnsupportedVersion::class);
+
+        Contract::fromArray(['openapi' => 'v3.1.0', 'paths' => ['/x' => []]]);
     }
 
     public function rejectsDuplicateOperationId(): void
@@ -224,5 +239,115 @@ final class ContractTest
             'components' => ['securitySchemes' => null],
             'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
         ]);
+    }
+
+    public function rejectsMissingAndEmptyPaths(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => []]);
+    }
+
+    public function rejectsInvalidPathAndOperationShapes(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['health' => []]]);
+    }
+
+    public function rejectsNonObjectOperation(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/health' => ['get' => 'invalid']]]);
+    }
+
+    public function rejectsInvalidOperationId(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/health' => ['get' => ['operationId' => 42, 'responses' => ['200' => []]]]]]);
+    }
+
+    public function rejectsInvalidServerDefinitions(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'servers' => [['url' => 42]], 'paths' => ['/health' => ['get' => ['responses' => ['200' => []]]]]]);
+    }
+
+    public function rejectsInvalidComponentsAndSchemes(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'components' => ['securitySchemes' => ['api']], 'paths' => ['/health' => ['get' => ['responses' => ['200' => []]]]]]);
+    }
+
+    public function rejectsMalformedResponseDefinitions(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/health' => ['get' => ['responses' => ['200' => 'invalid']]]]]);
+    }
+
+    public function rejectsMalformedParametersAndSchemas(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/health' => ['get' => [
+            'parameters' => [['name' => '', 'in' => 'query', 'schema' => ['type' => 'string']]],
+            'responses' => ['200' => []],
+        ]]]]);
+    }
+
+    public function rejectsParameterContentSerialization(): void
+    {
+        Expect::exception(UnsupportedSerialization::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/health' => ['get' => [
+            'parameters' => [['name' => 'filter', 'in' => 'query', 'content' => ['application/json' => []]]],
+            'responses' => ['200' => []],
+        ]]]]);
+    }
+
+    public function rejectsUnsupportedJsonSchemaDialect(): void
+    {
+        Expect::exception(UnsupportedDialect::class);
+
+        Contract::fromArray(['openapi' => '3.1.0', 'jsonSchemaDialect' => 'https://example.test/dialect', 'paths' => ['/health' => ['get' => ['responses' => ['200' => []]]]]]);
+    }
+
+    public function loadsJsonAndRejectsNonObjectDocuments(): void
+    {
+        $contract = Contract::fromJson('{"openapi":"3.1.0","paths":{"/health":{"get":{"responses":{"200":{}}}}}}');
+        Assert::same($contract->operations()[0]->method, 'GET');
+
+        Expect::exception(InvalidContract::class);
+        Contract::fromJson('[]');
+    }
+
+    public function rejectsInvalidJsonDocument(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        Contract::fromJson('{broken');
+    }
+
+    public function loadsJsonFromFileAndRejectsUnreadableFile(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'openapi-');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to allocate temporary file');
+        }
+        file_put_contents($path, '{"openapi":"3.1.0","paths":{"/health":{"get":{"responses":{"200":{}}}}}}');
+
+        try {
+            Assert::same(Contract::fromFile($path)->operations()[0]->path, '/health');
+        } finally {
+            unlink($path);
+        }
+
+        Expect::exception(InvalidContract::class);
+        Contract::fromFile('/path/that/does/not/exist.json');
     }
 }
