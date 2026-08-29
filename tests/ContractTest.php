@@ -8,6 +8,8 @@ use Nyholm\Psr7\Request;
 use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
 use Rasuvaeff\OpenApiContract\Contract;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\CompiledDocument;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
@@ -22,6 +24,8 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Contract::class)]
+#[Covers(CompiledDocument::class)]
+#[Covers(DocumentCompiler::class)]
 #[Covers(InvalidContract::class)]
 #[Covers(UnknownOperation::class)]
 #[Covers(UnsupportedSerialization::class)]
