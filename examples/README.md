@@ -1,5 +1,11 @@
 # Examples
 
-Executable consumer examples will be added when feasibility milestone 0 fixes
-the first public API. Internal backend experiments are tests, not examples,
-because applications must not depend on their shape.
+| Script | Shows | Needs server? |
+|---|---|---|
+| `validate-exchange.php` | Loading a document, operation matching, exchange validation, violations, `assertValid()` | No |
+
+Run from the package root after `make install`:
+
+```bash
+docker run --rm -v "$PWD":/app -w /app composer:2 php examples/validate-exchange.php
+```

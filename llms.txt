@@ -1,24 +1,75 @@
 # openapi-contract
 
-Status: pre-release implementation; initial public API available.
+Validate complete PSR-7 request/response exchanges against OpenAPI 3.0/3.1
+contracts. Framework-neutral; fail-closed on anything outside the support
+matrix.
 
-Purpose: validate complete PSR-7 request/response exchanges against OpenAPI
-3.0 and 3.1 contracts.
+Install:
 
-Contract rules:
-- unsupported OpenAPI versions, JSON Schema dialects, references, and
-  serialization styles fail closed;
-- OpenAPI 3.0 and 3.1 use separate schema compilation paths;
+```bash
+composer require rasuvaeff/openapi-contract
+```
+
+Rules:
+- unsupported OpenAPI versions (`UnsupportedVersion`), dialects, non-local
+  references, ambiguous templates, malformed shapes (`InvalidContract`), and
+  parameter `content`/unsupported styles (`UnsupportedSerialization`) fail
+  closed at load time;
+- OpenAPI 3.0 and 3.1 use separate schema compilation paths (3.0 `nullable`
+  and boolean exclusive bounds are normalized; 3.1 rides the 2020-12 base
+  dialect);
+- documents are bounded: byte size, JSON depth, `$ref` depth, node budget;
 - response selection order is exact status, then `NXX` range, then `default`;
-- remote and file references are not supported in v0.1;
-- `Contract::fromArray/fromJson/fromFile` build an immutable contract;
-- `validateRequest` checks matched parameters and JSON request bodies;
-- `validateExchange` additionally selects exact, `NXX`, or `default` response
-  and validates required headers and JSON response bodies.
-- Root `security` is inherited by operations; explicit operation `security: []`
-  means anonymous. Security scheme references and requirement shapes are
-  validated, but credentials are supplied by the generator package.
+  an unknown status never cascades into invented body/header violations;
+- `readOnly`/`writeOnly` properties apply directionally to request/response
+  effective schemas;
+- root `security` is inherited by operations; explicit `security: []` marks
+  an operation anonymous; credentials live in the generator package;
+- `format: date-time` (and the other supported formats) are asserted, not
+  treated as annotations — a pinned divergence from
+  league/openapi-psr7-validator.
 
-Test strategy:
-- property-testing-testo: laws, round-trips, generated-value postconditions;
-- real backend objects: backend feasibility and differential fixtures.
+API reference:
+- `Contract::fromArray(array $document): Contract` /
+  `fromJson(string $json, string $source = 'openapi.json')` /
+  `fromFile(string $path)` (YAML via suggested symfony/yaml) build the
+  immutable compiled contract.
+- `Contract::operations(): list<Operation>`;
+  `Contract::operation(string $key): Operation` throws `UnknownOperation`.
+- `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
+  `operationId`, `method`, `path`, `parameters` (compiled list with name/in/
+  required/style/explode/allowReserved/schema), `requestBody`, `responses`,
+  `serverBases`, `security`.
+- `Contract::match(RequestInterface): ?MatchedOperation` — method, server
+  base paths, concrete-before-templated precedence, single percent-decode,
+  no separator escape from a template slot; `requireMatch()` throws
+  `UnknownOperation`.
+- `MatchedOperation` (readonly): `operation`, `pathParameters`
+  (raw, undecoded).
+- `Contract::validateRequest(RequestInterface): ValidationResult` —
+  parameters per location (style/explode deserialization, schema), JSON
+  request bodies (syntax separately from schema).
+- `Contract::validateExchange(Request, Response): ValidationResult` — both
+  sides: request violations plus response status selection, required
+  headers, media types (`application/json` and `*+json`), body schema.
+- `ValidationResult` (readonly): `violations` (`list<Violation>`),
+  `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
+- `Violation` (readonly): `code` (stable, e.g. `request.parameter.missing`,
+  `response.body.schema`), `operation`, `location`, `instancePath`,
+  `specPointer` (JSON Pointer into the document), `expected`, `actual`
+  (bounded), `message`.
+- `ContractViolation::fromResult(ValidationResult)` renders the first
+  violation into the exception message.
+- Exceptions: `InvalidContract` (base, extends
+  `\InvalidArgumentException`), `UnsupportedVersion`,
+  `UnsupportedSerialization`, `UnknownOperation`.
+
+Example:
+
+```php
+use Rasuvaeff\OpenApiContract\Contract;
+
+$contract = Contract::fromFile(__DIR__ . '/openapi.json');
+$result = $contract->validateExchange($request, $response);
+$result->assertValid();
+```
