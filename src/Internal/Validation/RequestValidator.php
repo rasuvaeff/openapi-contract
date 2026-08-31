@@ -16,6 +16,8 @@ use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
 
 /**
+ * @psalm-import-type CompiledParameter from \Rasuvaeff\OpenApiContract\Operation
+ *
  * @internal
  */
 final readonly class RequestValidator
@@ -95,7 +97,7 @@ final readonly class RequestValidator
     }
 
     /**
-     * @param array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>} $parameter
+     * @param CompiledParameter $parameter
      */
     private function parameterWire(array $parameter, MatchedOperation $matched, RequestInterface $request): ?string
     {
@@ -108,7 +110,7 @@ final readonly class RequestValidator
     }
 
     /**
-     * @param array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>} $parameter
+     * @param CompiledParameter $parameter
      */
     private function queryWire(array $parameter, string $query): ?string
     {
@@ -132,7 +134,7 @@ final readonly class RequestValidator
     }
 
     /**
-     * @param array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>} $parameter
+     * @param CompiledParameter $parameter
      */
     private function cookieWire(array $parameter, string $cookie): ?string
     {

@@ -16,6 +16,8 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
 /**
  * Compiles a raw OpenAPI document array into the operation list a Contract runs on.
  *
+ * @psalm-import-type CompiledParameter from Operation
+ *
  * @internal
  */
 final readonly class DocumentCompiler
@@ -250,7 +252,7 @@ final readonly class DocumentCompiler
     /**
      * @param array<array-key, mixed> $path
      * @param array<array-key, mixed> $operation
-     * @return list<array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>}>
+     * @return list<CompiledParameter>
      */
     private function parameters(array $path, array $operation, JsonPointerResolver $resolver): array
     {
@@ -275,7 +277,8 @@ final readonly class DocumentCompiler
             $explodeValue = $raw['explode'] ?? null;
             $style = is_string($styleValue) ? $styleValue : ($in === 'query' || $in === 'cookie' ? 'form' : 'simple');
             $this->assertSupportedStyle($name, $in, $style, $raw);
-            $result[$key] = [
+            /** @var CompiledParameter $parameter */
+            $parameter = [
                 'name' => $name,
                 'in' => $in,
                 'required' => ($raw['required'] ?? false) === true,
@@ -283,14 +286,35 @@ final readonly class DocumentCompiler
                 'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
                 'allowReserved' => ($raw['allowReserved'] ?? false) === true,
                 'schema' => $schema,
+                ...array_key_exists('example', $raw) ? ['example' => $raw['example']] : [],
+                ...array_key_exists('examples', $raw) ? ['examples' => $this->namedExamples($name, $raw['examples'])] : [],
             ];
+            $result[$key] = $parameter;
         }
 
         return array_values($result);
     }
 
     /**
-     * @param list<array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>}> $parameters
+     * @return array<string, mixed>
+     */
+    private function namedExamples(string $name, mixed $examples): array
+    {
+        if (!is_array($examples)) {
+            throw new InvalidContract(sprintf('OpenAPI parameter "%s" examples must be a map of named examples', $name));
+        }
+        foreach (array_keys($examples) as $exampleName) {
+            if (!is_string($exampleName)) {
+                throw new InvalidContract(sprintf('OpenAPI parameter "%s" examples must be a map of named examples', $name));
+            }
+        }
+
+        /** @var array<string, mixed> $examples */
+        return $examples;
+    }
+
+    /**
+     * @param list<CompiledParameter> $parameters
      */
     private function assertPathParameters(string $template, array $parameters): void
     {

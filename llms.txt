@@ -57,7 +57,10 @@ API reference:
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
 - `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
   `operationId`, `method`, `path`, `parameters` (compiled list with name/in/
-  required/style/explode/allowReserved/schema), `requestBody`, `responses`,
+  required/style/explode/allowReserved/schema, plus `example`/`examples` keys
+  present exactly when the document declares them — annotations for
+  validation, inputs for the generator's example phase), `requestBody`,
+  `responses`,
   `serverBases` (v0.1 base-path projection), `security`, `servers` (full
   model: scheme/host/port/base, operation > path > root precedence, variable
   defaults substituted; undeclared variables, non-enum defaults, unsupported
