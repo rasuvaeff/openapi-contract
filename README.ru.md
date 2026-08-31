@@ -73,6 +73,19 @@ URI. Matching учитывает server base paths, предпочитает к�
 шаблонным, декодирует каждый сегмент ровно один раз и отвергает
 декодированные разделители, выводящие значение из template slot.
 
+Servers компилируются в полную модель (`Operation::$servers`): scheme, host,
+port и base path с precedence operation > path > root и подстановкой
+defaults у server variables. Absolute server ограничивает каждый компонент
+URI, который запрос реально несёт, — нормализованные scheme, host и
+effective port (`443` для `https`, `80` для `http`), поэтому одинаковый path
+на двух hosts выбирает только правильную операцию; relative server и
+path-only request URI остаются host-agnostic. Необъявленные переменные,
+отсутствующий или вне-enum default, неподдержанные схемы и userinfo/query/
+fragment в server URL отвергаются fail-closed при компиляции.
+`Operation::$serverBases` остаётся v0.1-проекцией base paths того же списка.
+Когда path объявлен, но ни один server authority не совпал, валидация
+возвращает `request.server.mismatch`, а не `request.operation.unknown`.
+
 ### Валидация exchanges
 
 ```php

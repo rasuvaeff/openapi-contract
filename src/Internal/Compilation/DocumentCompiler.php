@@ -34,7 +34,7 @@ final readonly class DocumentCompiler
         }
 
         $resolver = new JsonPointerResolver($document, graph: $graph);
-        $rootServers = $this->serverBases($document['servers'] ?? null);
+        $rootServers = $this->servers($document['servers'] ?? null);
         $securitySchemes = $this->securitySchemes($document['components'] ?? null);
         $rootSecurity = array_key_exists('security', $document)
             ? $this->securityRequirements($document['security'], $securitySchemes)
@@ -59,7 +59,7 @@ final readonly class DocumentCompiler
             }
             /** @var array<array-key, mixed> $pathItem */
             $pathItem = $resolver->resolve($pathItem);
-            $pathServers = $this->serverBases($pathItem['servers'] ?? null, $rootServers);
+            $pathServers = $this->servers($pathItem['servers'] ?? null, $rootServers);
             /** @var mixed $pathParametersValue */
             $pathParametersValue = $pathItem['parameters'] ?? null;
             $pathParameters = is_array($pathParametersValue) ? $pathParametersValue : [];
@@ -103,6 +103,7 @@ final readonly class DocumentCompiler
                 $templates[$templateKey] = $pathString;
                 $parameters = $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver);
                 $this->assertPathParameters($pathString, $parameters);
+                $servers = $this->servers($raw['servers'] ?? null, $pathServers);
                 $operations[$key] = new Operation(
                     key: $key,
                     operationId: $operationId,
@@ -111,10 +112,11 @@ final readonly class DocumentCompiler
                     parameters: $parameters,
                     requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
-                    serverBases: $this->serverBases($raw['servers'] ?? null, $pathServers),
+                    serverBases: array_map(static fn(array $server): string => $server['base'], $servers),
                     security: array_key_exists('security', $raw)
                         ? $this->securityRequirements($raw['security'], $securitySchemes)
                         : $rootSecurity,
+                    servers: $servers,
                 );
             }
         }
@@ -141,29 +143,108 @@ final readonly class DocumentCompiler
     }
 
     /**
-     * @param list<string> $fallback
-     * @return list<string>
+     * @param list<array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}> $fallback
+     * @return list<array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}>
      */
-    private function serverBases(mixed $servers, array $fallback = ['/']): array
+    private function servers(mixed $servers, array $fallback = [['scheme' => null, 'host' => null, 'port' => null, 'base' => '/']]): array
     {
         if (!is_array($servers) || $servers === []) {
             return $fallback;
         }
-        $bases = [];
+        $compiled = [];
         /** @var mixed $server */
         foreach ($servers as $server) {
             if (!is_array($server)) {
                 throw new InvalidContract('OpenAPI server must contain a URL');
             }
             $url = $server['url'] ?? null;
-            if (!is_string($url)) {
+            if (!is_string($url) || $url === '') {
                 throw new InvalidContract('OpenAPI server must contain a URL');
             }
-            $parsed = parse_url($url, PHP_URL_PATH);
-            $bases[] = is_string($parsed) && $parsed !== '' ? rtrim($parsed, '/') : '/';
+            $compiled[] = $this->compileServerUrl($this->substituteServerVariables($url, $server['variables'] ?? null), $url);
         }
 
-        return $bases;
+        return $compiled;
+    }
+
+    private function substituteServerVariables(string $url, mixed $variables): string
+    {
+        if (preg_match_all('/\{([^{}]+)\}/', $url, $matches) === false) {
+            throw new \LogicException('Server URL template parsing failed');
+        }
+        /** @var list<string> $placeholders */
+        $placeholders = $matches[1];
+        if ($placeholders === []) {
+            return $url;
+        }
+        if (!is_array($variables) || array_is_list($variables)) {
+            throw new InvalidContract(sprintf('OpenAPI server URL "%s" uses variables but declares no variables object', $url));
+        }
+        foreach ($placeholders as $name) {
+            $variable = $variables[$name] ?? null;
+            if (!is_array($variable)) {
+                throw new InvalidContract(sprintf('OpenAPI server URL "%s" uses undeclared variable "%s"', $url, $name));
+            }
+            $default = $variable['default'] ?? null;
+            if (!is_string($default)) {
+                throw new InvalidContract(sprintf('OpenAPI server variable "%s" must declare a string default', $name));
+            }
+            if (array_key_exists('enum', $variable)) {
+                $enum = $variable['enum'];
+                if (!is_array($enum) || $enum === [] || !array_is_list($enum)) {
+                    throw new InvalidContract(sprintf('OpenAPI server variable "%s" enum must be a non-empty list', $name));
+                }
+                if (!in_array($default, $enum, strict: true)) {
+                    throw new InvalidContract(sprintf('OpenAPI server variable "%s" default must be one of its enum values', $name));
+                }
+            }
+            $url = str_replace('{' . $name . '}', $default, $url);
+        }
+
+        return $url;
+    }
+
+    /**
+     * @return array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}
+     */
+    private function compileServerUrl(string $url, string $original): array
+    {
+        if (preg_match('~^[A-Za-z][A-Za-z0-9+.\-]*+://~', $url) === 1) {
+            $parts = parse_url($url);
+            if ($parts === false || isset($parts['query']) || isset($parts['fragment']) || isset($parts['user']) || isset($parts['pass'])) {
+                throw new InvalidContract(sprintf('OpenAPI server URL "%s" has an unsupported form', $original));
+            }
+            $scheme = strtolower($parts['scheme'] ?? '');
+            if (!in_array($scheme, ['http', 'https'], strict: true)) {
+                throw new InvalidContract(sprintf('OpenAPI server URL "%s" uses unsupported scheme "%s"', $original, $scheme));
+            }
+            $host = strtolower($parts['host'] ?? '');
+            if ($host === '') {
+                throw new InvalidContract(sprintf('OpenAPI server URL "%s" must contain a host', $original));
+            }
+
+            return [
+                'scheme' => $scheme,
+                'host' => $host,
+                'port' => $parts['port'] ?? null,
+                'base' => $this->serverBase($parts['path'] ?? ''),
+            ];
+        }
+        if (!str_starts_with($url, '/') || str_starts_with($url, '//') || str_contains($url, '?') || str_contains($url, '#')) {
+            throw new InvalidContract(sprintf('OpenAPI server URL "%s" has an unsupported form', $original));
+        }
+
+        return ['scheme' => null, 'host' => null, 'port' => null, 'base' => $this->serverBase($url)];
+    }
+
+    /**
+     * @return non-empty-string
+     */
+    private function serverBase(string $path): string
+    {
+        $base = rtrim($path, '/');
+
+        return $base === '' ? '/' : $base;
     }
 
     /**

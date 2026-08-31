@@ -58,11 +58,18 @@ API reference:
 - `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
   `operationId`, `method`, `path`, `parameters` (compiled list with name/in/
   required/style/explode/allowReserved/schema), `requestBody`, `responses`,
-  `serverBases`, `security`.
+  `serverBases` (v0.1 base-path projection), `security`, `servers` (full
+  model: scheme/host/port/base, operation > path > root precedence, variable
+  defaults substituted; undeclared variables, non-enum defaults, unsupported
+  schemes, and userinfo/query/fragment fail closed at compile time).
 - `Contract::match(RequestInterface): ?MatchedOperation` — method, server
   base paths, concrete-before-templated precedence, single percent-decode,
-  no separator escape from a template slot; `requireMatch()` throws
-  `UnknownOperation`.
+  no separator escape from a template slot; an absolute server additionally
+  requires the normalized scheme/host/effective-port the request URI carries
+  (path-only requests and relative servers stay host-agnostic); a declared
+  path whose server authority disagrees validates as
+  `request.server.mismatch`, not `request.operation.unknown`;
+  `requireMatch()` throws `UnknownOperation`.
 - `MatchedOperation` (readonly): `operation`, `pathParameters`
   (raw, undecoded).
 - `Contract::validateRequest(RequestInterface): ValidationResult` —

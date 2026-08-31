@@ -89,23 +89,44 @@ final readonly class Contract
 
     public function match(RequestInterface $request): ?MatchedOperation
     {
+        return $this->matchWithDiagnostics($request)[0];
+    }
+
+    /**
+     * @return array{0: ?MatchedOperation, 1: bool} the match, and whether some
+     *         operation path matched only under a server whose authority the
+     *         request URI contradicts
+     */
+    private function matchWithDiagnostics(RequestInterface $request): array
+    {
         $method = strtoupper($request->getMethod());
         $path = parse_url((string) $request->getUri(), PHP_URL_PATH);
         if (!is_string($path) || $path === '') {
             $path = '/';
         }
+        $scheme = strtolower($request->getUri()->getScheme());
+        $host = strtolower($request->getUri()->getHost());
+        $port = $request->getUri()->getPort() ?? $this->defaultPort($scheme);
+        $serverMismatch = false;
         $candidates = [];
         foreach ($this->operations as $operation) {
             if ($operation->method !== $method) {
                 continue;
             }
-            foreach ($operation->serverBases as $baseIndex => $base) {
-                // Bases from serverBases() are already '/'-canonical: rtrimmed or the bare '/'.
+            foreach ($operation->servers as $baseIndex => $server) {
+                $base = $server['base'];
+                // Bases are '/'-canonical at compile time: rtrimmed or the bare '/'.
                 $route = $base === '/' ? $operation->path : $base . $operation->path;
                 $matched = $this->matchPath($route, $path);
-                if ($matched !== null) {
-                    $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
+                if ($matched === null) {
+                    continue;
                 }
+                if (!$this->authorityMatches($server, $scheme, $host, $port)) {
+                    $serverMismatch = true;
+
+                    continue;
+                }
+                $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
             }
         }
         /** @var list<array{0: Operation, 1: array<string, string>, 2: int, 3: int, 4: string, 5: int}> $candidates */
@@ -125,10 +146,44 @@ final readonly class Contract
                 ?: strcmp($aOperation->key, $bOperation->key);
         });
         if ($candidates === []) {
-            return null;
+            return [null, $serverMismatch];
         }
 
-        return new MatchedOperation($candidates[0][0], $candidates[0][1]);
+        return [new MatchedOperation($candidates[0][0], $candidates[0][1]), $serverMismatch];
+    }
+
+    /**
+     * An absolute server constrains only the URI components the request
+     * actually carries: a relative request URI stays host-agnostic, while a
+     * request with an authority must agree on normalized scheme, host, and
+     * effective port.
+     *
+     * @param array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string} $server
+     */
+    private function authorityMatches(array $server, string $scheme, string $host, ?int $port): bool
+    {
+        if ($server['host'] === null) {
+            return true;
+        }
+        if ($host !== '' && $host !== $server['host']) {
+            return false;
+        }
+        // A compiled absolute server always carries a scheme with its host.
+        if ($scheme !== '' && $scheme !== $server['scheme']) {
+            return false;
+        }
+        $serverPort = $server['port'] ?? $this->defaultPort($server['scheme'] ?? '');
+
+        return $port === null || $serverPort === null || $port === $serverPort;
+    }
+
+    private function defaultPort(string $scheme): ?int
+    {
+        return match ($scheme) {
+            'http' => 80,
+            'https' => 443,
+            default => null,
+        };
     }
 
     public function requireMatch(RequestInterface $request): MatchedOperation
@@ -138,9 +193,9 @@ final readonly class Contract
 
     public function validateRequest(RequestInterface $request): ValidationResult
     {
-        $matched = $this->match($request);
+        [$matched, $serverMismatch] = $this->matchWithDiagnostics($request);
         if (!$matched instanceof MatchedOperation) {
-            return $this->unknownOperationResult($request);
+            return $this->unmatchedResult($request, $serverMismatch);
         }
 
         return (new RequestValidator())->validate($matched, $request, $this->dialect);
@@ -148,9 +203,9 @@ final readonly class Contract
 
     public function validateExchange(RequestInterface $request, ResponseInterface $response): ValidationResult
     {
-        $matched = $this->match($request);
+        [$matched, $serverMismatch] = $this->matchWithDiagnostics($request);
         if (!$matched instanceof MatchedOperation) {
-            return $this->unknownOperationResult($request);
+            return $this->unmatchedResult($request, $serverMismatch);
         }
 
         $requestResult = (new RequestValidator())->validate($matched, $request, $this->dialect);
@@ -183,8 +238,27 @@ final readonly class Contract
         );
     }
 
-    private function unknownOperationResult(RequestInterface $request): ValidationResult
+    private function unmatchedResult(RequestInterface $request, bool $serverMismatch): ValidationResult
     {
+        if ($serverMismatch) {
+            $authority = $request->getUri()->getScheme() . '://' . $request->getUri()->getAuthority();
+
+            return new ValidationResult([new Violation(
+                code: 'request.server.mismatch',
+                operation: 'unknown',
+                location: 'request',
+                instancePath: (string) $request->getUri(),
+                specPointer: '/servers',
+                expected: 'declared server',
+                actual: $authority,
+                message: sprintf(
+                    'Path %s is declared, but no server of its operations matches %s',
+                    $request->getUri()->getPath(),
+                    $authority,
+                ),
+            )]);
+        }
+
         return new ValidationResult([new Violation(
             code: 'request.operation.unknown',
             operation: 'unknown',

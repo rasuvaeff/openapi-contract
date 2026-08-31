@@ -74,6 +74,20 @@ path parameters extracted from the URI. Matching honours server base paths,
 prefers concrete paths over templated ones, decodes each segment exactly
 once, and rejects decoded separators that would escape a template slot.
 
+Servers are compiled as a full model (`Operation::$servers`): scheme, host,
+port, and base path, with operation > path > root precedence and server
+variables substituted with their declared defaults. An absolute server
+constrains every URI component the request actually carries — normalized
+scheme, host, and effective port (`443` for `https`, `80` for `http`) — so
+the same path on two hosts selects only the right operation; a relative
+server and a path-only request URI stay host-agnostic. Undeclared variables,
+missing or non-enum defaults, unsupported schemes, and userinfo/query/
+fragment parts of a server URL fail closed at compile time.
+`Operation::$serverBases` remains the v0.1 base-path projection of the same
+list. When the request path is declared but no server authority agrees,
+validation reports `request.server.mismatch` instead of
+`request.operation.unknown`.
+
 ### Validating exchanges
 
 ```php
