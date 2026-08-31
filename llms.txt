@@ -42,7 +42,10 @@ Rules:
   an operation anonymous; credentials live in the generator package;
 - `format: date-time` (and the other supported formats) are asserted, not
   treated as annotations — a pinned divergence from
-  league/openapi-psr7-validator.
+  league/openapi-psr7-validator;
+- multi-file resolution is differentially tested against cebe/php-openapi
+  (dev-only oracle, OAS 3.0): pinned divergences are the depth budget on
+  deep `$ref` chains and fast rejection of cross-file cycles.
 
 API reference:
 - `Contract::fromArray(array $document): Contract` /

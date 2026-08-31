@@ -1,0 +1,1 @@
+{"openapi":"3.0.3","info":{"title":"d","version":"1"},"paths":{"/items":{"get":{"operationId":"items.list","parameters":[{"name":"a","in":"query","schema":{"$ref":"schemas.json#/Id"}},{"name":"b","in":"query","schema":{"$ref":"schemas.json#/Wrapped"}}],"responses":{"200":{"description":"ok"}}}}}}
