@@ -143,8 +143,12 @@ make release-check
 
 Тесты используют property-based проверки законов и round-trip'ов
 сериализации, а differential-корпус закрепляет согласие вердиктов с
-`league/openapi-psr7-validator`. Решение по backend и статус executable
-corpus записаны в [FEASIBILITY.md](FEASIBILITY.md).
+`league/openapi-psr7-validator`. Второй закоммиченный корпус прогоняет те же
+многофайловые деревья документов через `cebe/php-openapi` (dev-only oracle
+для OAS 3.0) и закрепляет осознанные дивергенции: наш бюджет глубины
+отвергает длинные цепочки, которые oracle инлайнит, а cross-file цикл,
+подвешивающий oracle, у нас — быстрая стабильная ошибка. Решение по backend
+и статус executable corpus записаны в [FEASIBILITY.md](FEASIBILITY.md).
 
 ## Лицензия
 

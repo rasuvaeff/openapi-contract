@@ -1,0 +1,1 @@
+{"openapi":"3.0.3","info":{"title":"d","version":"1"},"paths":{"/items":{"get":{"operationId":"items.list","parameters":[{"$ref":"sub/param.json#/P"}],"responses":{"200":{"description":"ok"}}}}}}

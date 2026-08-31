@@ -145,8 +145,12 @@ make release-check
 
 Tests use property-based checks for laws and serialization round-trips, and a
 differential corpus pins verdict agreement with
-`league/openapi-psr7-validator`. The backend decision and executable corpus
-status are recorded in [FEASIBILITY.md](FEASIBILITY.md).
+`league/openapi-psr7-validator`. A second committed corpus resolves the same
+multi-file document trees through `cebe/php-openapi` (dev-only OAS 3.0 oracle)
+and pins the deliberate divergences: our depth budget rejects deep chains the
+oracle inlines, and the cross-file cycle that hangs the oracle is a fast,
+stable error here. The backend decision and executable corpus status are
+recorded in [FEASIBILITY.md](FEASIBILITY.md).
 
 ## License
 
