@@ -37,13 +37,22 @@ $contract = Contract::fromFile('openapi.yaml'); // нужен symfony/yaml
 ```
 
 Загрузка fail-closed: неподдерживаемая версия OpenAPI бросает
-`UnsupportedVersion`; неизвестный JSON Schema dialect, нелокальные ссылки,
+`UnsupportedVersion`; неизвестный JSON Schema dialect, remote-ссылки,
 неоднозначные path templates, дубли operation identity и малформенные формы
 документа — `InvalidContract`; parameter `content` и неподдержанные styles —
 `UnsupportedSerialization`. Каждый placeholder в path template обязан иметь
 effective-параметр `in: path` с тем же именем и явным `required: true`; лишние
-path-параметры отвергаются при компиляции контракта. Документы ограничены
-бюджетами: размер в байтах, JSON depth, глубина `$ref` и общий node budget.
+path-параметры отвергаются при компиляции контракта.
+
+`fromFile()` дополнительно разрешает относительные `$ref` на соседние
+JSON/YAML файлы. Каждый referenced-файл обязан оставаться внутри дерева
+каталога entry-файла: абсолютные пути, URI-схемы, percent-encoded пути,
+traversal и symlink escape отклоняются до какого-либо чтения, а ошибки
+резолюции показывают пути относительно document root. У `fromArray()` и
+`fromJson()` нет доверенного filesystem root — они принимают только
+same-document ссылки. Документы ограничены бюджетами: размер в байтах, JSON
+depth, глубина `$ref`, общий node budget, а для многофайловых документов —
+общие на весь граф бюджеты числа файлов и байтов.
 
 ### Операции и matching
 

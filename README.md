@@ -37,15 +37,23 @@ $contract = Contract::fromFile('openapi.yaml'); // needs symfony/yaml
 ```
 
 Loading fails closed: unsupported OpenAPI versions throw
-`UnsupportedVersion`, unknown JSON Schema dialects, non-local references,
+`UnsupportedVersion`, unknown JSON Schema dialects, remote references,
 ambiguous path templates, duplicate operation identities, and malformed
 document shapes throw `InvalidContract`, and parameter `content`
 serialization or unsupported styles throw `UnsupportedSerialization`.
 Every path-template placeholder must have an effective `in: path` parameter
 with the same name and explicit `required: true`; extra path parameters are
 rejected while compiling the contract.
-Documents are bounded: byte size, JSON depth, `$ref` depth, and a shared
-node budget.
+
+`fromFile()` also resolves relative `$ref`s to sibling JSON/YAML files.
+Every referenced file must stay inside the entry file's directory tree:
+absolute paths, URI schemes, percent-encoded paths, traversal, and symlink
+escapes are rejected before any read, and resolution errors report paths
+relative to the document root. `fromArray()` and `fromJson()` have no
+trusted filesystem root and accept same-document references only.
+Documents are bounded: byte size, JSON depth, `$ref` depth, a shared node
+budget, and — for multi-file documents — file-count and byte budgets shared
+across the whole reference graph.
 
 ### Operations and matching
 
