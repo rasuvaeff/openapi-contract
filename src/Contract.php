@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
+use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
@@ -56,34 +57,17 @@ final readonly class Contract
         return self::fromArray($document);
     }
 
+    /**
+     * Unlike {@see fromArray()} and {@see fromJson()}, a file-loaded document
+     * may reference sibling files with relative $refs; every referenced file
+     * must stay inside the entry file's directory tree.
+     */
     public static function fromFile(string $path): self
     {
-        $size = @filesize($path);
-        if (is_int($size) && $size > self::MAX_DOCUMENT_BYTES) {
-            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $path, self::MAX_DOCUMENT_BYTES));
-        }
-        $contents = @file_get_contents($path);
-        if ($contents === false) {
-            throw new InvalidContract(sprintf('OpenAPI document "%s" is not readable', $path));
-        }
-        if (strlen($contents) > self::MAX_DOCUMENT_BYTES) {
-            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $path, self::MAX_DOCUMENT_BYTES));
-        }
-        if (str_ends_with(strtolower($path), '.yaml') || str_ends_with(strtolower($path), '.yml')) {
-            $yamlClass = 'Symfony\\Component\\Yaml\\' . 'Yaml';
-            if (!class_exists($yamlClass)) {
-                throw new InvalidContract('YAML loading requires symfony/yaml');
-            }
-            $document = call_user_func([$yamlClass, 'parse'], $contents);
-            if (!is_array($document) || array_is_list($document)) {
-                throw new InvalidContract('OpenAPI YAML document must decode to an object');
-            }
+        $graph = DocumentGraph::open($path);
+        $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph);
 
-            /** @var array<string, mixed> $document */
-            return self::fromArray($document);
-        }
-
-        return self::fromJson($contents, $path);
+        return new self($compiled->dialect, $compiled->operations);
     }
 
     /** @return list<Operation> */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Compilation;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
+use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
@@ -20,7 +21,7 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
 final readonly class DocumentCompiler
 {
     /** @param array<string, mixed> $document */
-    public function compile(array $document): CompiledDocument
+    public function compile(array $document, ?DocumentGraph $graph = null): CompiledDocument
     {
         $version = $document['openapi'] ?? null;
         if (!is_string($version) || !preg_match('/^3\.(0|1)\.[0-9]+$/', $version)) {
@@ -32,7 +33,7 @@ final readonly class DocumentCompiler
             throw new InvalidContract('OpenAPI document must contain a non-empty paths object');
         }
 
-        $resolver = new JsonPointerResolver($document);
+        $resolver = new JsonPointerResolver($document, graph: $graph);
         $rootServers = $this->serverBases($document['servers'] ?? null);
         $securitySchemes = $this->securitySchemes($document['components'] ?? null);
         $rootSecurity = array_key_exists('security', $document)

@@ -11,17 +11,22 @@ composer require rasuvaeff/openapi-contract
 ```
 
 Rules:
-- unsupported OpenAPI versions (`UnsupportedVersion`), dialects, non-local
+- unsupported OpenAPI versions (`UnsupportedVersion`), dialects, remote
   references, ambiguous templates, malformed shapes (`InvalidContract`), and
   parameter `content`/unsupported styles (`UnsupportedSerialization`) fail
   closed at load time;
+- `fromFile()` resolves relative `$ref`s to sibling JSON/YAML files inside
+  the entry file's directory tree; absolute paths, URI schemes,
+  percent-encoded paths, traversal, and symlink escapes are rejected before
+  reading, while `fromArray()`/`fromJson()` accept same-document refs only;
 - each path-template placeholder requires an effective same-named `in: path`
   parameter with explicit `required: true`; extra path parameters fail at
   contract compilation;
 - OpenAPI 3.0 and 3.1 use separate schema compilation paths (3.0 `nullable`
   and boolean exclusive bounds are normalized; 3.1 rides the 2020-12 base
   dialect);
-- documents are bounded: byte size, JSON depth, `$ref` depth, node budget;
+- documents are bounded: byte size, JSON depth, `$ref` depth, node budget,
+  plus graph-wide file-count and byte budgets for multi-file documents;
 - response selection order is exact status, then `NXX` range, then `default`;
   an unknown status never cascades into invented body/header violations;
 - body validation reads seekable streams from the beginning and restores the
@@ -42,8 +47,9 @@ Rules:
 API reference:
 - `Contract::fromArray(array $document): Contract` /
   `fromJson(string $json, string $source = 'openapi.json')` /
-  `fromFile(string $path)` (YAML via suggested symfony/yaml) build the
-  immutable compiled contract.
+  `fromFile(string $path)` (YAML via suggested symfony/yaml; multi-file
+  relative `$ref`s under the entry directory) build the immutable compiled
+  contract.
 - `Contract::operations(): list<Operation>`;
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
 - `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
