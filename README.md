@@ -69,8 +69,11 @@ $operation = $contract->operation('pets.get'); // throws UnknownOperation
 ```
 
 `Operation` identity is the `operationId` when present, otherwise the stable
-`METHOD /path` fallback. `MatchedOperation` carries the operation and the raw
-path parameters extracted from the URI. Matching honours server base paths,
+`METHOD /path` fallback. Compiled parameters keep declared `example`/
+`examples` values (with `$ref`s resolved) as annotations: validation ignores
+them, while the generator package feeds them into its deterministic example
+phase. `MatchedOperation` carries the operation and the raw path parameters
+extracted from the URI. Matching honours server base paths,
 prefers concrete paths over templated ones, decodes each segment exactly
 once, and rejects decoded separators that would escape a template slot.
 

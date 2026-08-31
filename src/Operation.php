@@ -7,12 +7,28 @@ namespace Rasuvaeff\OpenApiContract;
 /**
  * Immutable compiled OpenAPI operation.
  *
+ * The optional `example`/`examples` parameter keys are present exactly when
+ * the document declares them; they stay annotations for validation and feed
+ * the deterministic example phase of the generator package.
+ *
+ * @psalm-type CompiledParameter = array{
+ *     name: non-empty-string,
+ *     in: 'path'|'query'|'header'|'cookie',
+ *     required: bool,
+ *     style: string,
+ *     explode: bool,
+ *     allowReserved: bool,
+ *     schema: array<string, mixed>,
+ *     example?: mixed,
+ *     examples?: array<string, mixed>,
+ * }
+ *
  * @api
  */
 final readonly class Operation
 {
     /**
-     * @param list<array{name: non-empty-string, in: 'path'|'query'|'header'|'cookie', required: bool, style: string, explode: bool, allowReserved: bool, schema: array<string, mixed>}> $parameters
+     * @param list<CompiledParameter> $parameters
      * @param array<array-key, mixed> $requestBody
      * @param array<array-key, mixed> $responses
      * @param list<string> $serverBases
