@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standalone response validation keyed by operation identity, using the same
   exact → `NXX` → `default` selection and the same violations as
   `validateExchange()`; an unknown key yields `response.operation.unknown`.
+- Add `Operation::responseFor(int $status)`: the Response Object a concrete
+  status resolves to (`key` and `definition`) through the same exact →
+  `NXX` → `default` selection, or `null` when the status is not declared —
+  for response generators that must not copy the selector.
 - Resolve relative `$ref`s to sibling JSON/YAML files through
   `Contract::fromFile()` (`fromArray()`/`fromJson()` stay same-document only).
   The entry file's directory is the trusted root; absolute paths, URI schemes,
