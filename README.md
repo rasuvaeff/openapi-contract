@@ -125,7 +125,10 @@ requiring a live request. Unknown operation keys produce a single structured
 Request bodies with `application/x-www-form-urlencoded` are decoded using the
 same form parameter rules as query parameters. `multipart/form-data` bodies
 support bounded part parsing, JSON and binary parts, repeated array parts, and
-per-property `encoding` content types/required headers. Unsupported styles,
+per-property `encoding` content types/required headers. Without an `encoding`
+content type a part defaults to `text/plain` for primitives,
+`application/octet-stream` for binary strings, `application/json` for objects,
+and for arrays to the default of the item type. Unsupported styles,
 malformed boundaries, duplicate scalar parts, and invalid part content fail
 closed as `request.body.decode`.
 

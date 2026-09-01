@@ -32,8 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quoted/unquoted boundaries, per-part headers, JSON/text/binary parts,
   repeated parts for arrays, per-property `contentType`/Encoding Object;
   budgets of 128 parts and 16 KiB of headers per part on top of the shared
-  body budget. Malformed framing, a part whose content type disagrees with
-  the declared/default one, and budget overflow fail closed with stable
+  body budget. The default part Content-Type follows OAS 3: `text/plain` for
+  primitives, `application/octet-stream` for binary strings,
+  `application/json` for objects, and for arrays the default of the item
+  type. Malformed framing, a part whose content type disagrees with the
+  declared/default one, and budget overflow fail closed with stable
   `request.body.*` codes.
 - Add `Contract::validateResponse(string $operationKey, ResponseInterface $response)`:
   standalone response validation keyed by operation identity, using the same
