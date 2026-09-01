@@ -1,14 +1,18 @@
 # rasuvaeff/openapi-contract
 
+[![Latest Stable Version](https://poser.pugx.org/rasuvaeff/openapi-contract/v)](https://packagist.org/packages/rasuvaeff/openapi-contract)
+[![Total Downloads](https://poser.pugx.org/rasuvaeff/openapi-contract/downloads)](https://packagist.org/packages/rasuvaeff/openapi-contract)
+[![Build](https://github.com/rasuvaeff/openapi-contract/actions/workflows/build.yml/badge.svg)](https://github.com/rasuvaeff/openapi-contract/actions/workflows/build.yml)
+[![Static analysis](https://github.com/rasuvaeff/openapi-contract/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/rasuvaeff/openapi-contract/actions/workflows/static-analysis.yml)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
+
+[Русская версия](README.ru.md)
+
 Framework-neutral validation of PSR-7 request/response exchanges against
 OpenAPI 3.0 and 3.1 contracts.
 
 > Using an AI coding assistant? [llms.txt](llms.txt) is a compact,
 > self-contained API reference for this package.
-
-> Status: pre-release. The public contract API below is stable enough for
-> dogfooding; the first tagged release follows the property-testing-openapi
-> release train.
 
 ## Requirements
 

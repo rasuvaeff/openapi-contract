@@ -1,14 +1,18 @@
 # rasuvaeff/openapi-contract
 
+[![Latest Stable Version](https://poser.pugx.org/rasuvaeff/openapi-contract/v)](https://packagist.org/packages/rasuvaeff/openapi-contract)
+[![Total Downloads](https://poser.pugx.org/rasuvaeff/openapi-contract/downloads)](https://packagist.org/packages/rasuvaeff/openapi-contract)
+[![Build](https://github.com/rasuvaeff/openapi-contract/actions/workflows/build.yml/badge.svg)](https://github.com/rasuvaeff/openapi-contract/actions/workflows/build.yml)
+[![Static analysis](https://github.com/rasuvaeff/openapi-contract/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/rasuvaeff/openapi-contract/actions/workflows/static-analysis.yml)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE.md)
+
+[English version](README.md)
+
 Framework-neutral валидация PSR-7 request/response exchanges по контрактам
 OpenAPI 3.0 и 3.1.
 
 > Используете AI-ассистента? [llms.txt](llms.txt) — компактный
 > самодостаточный API-справочник пакета.
-
-> Статус: pre-release. Публичный API ниже достаточно стабилен для
-> dogfooding; первый тег выйдет релизным поездом вместе с
-> property-testing-openapi.
 
 ## Требования
 
