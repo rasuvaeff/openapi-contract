@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract;
 
+use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
+use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
+
 /**
  * Immutable compiled OpenAPI operation.
  *
@@ -51,4 +54,18 @@ final readonly class Operation
         public array $security = [],
         public array $servers = [],
     ) {}
+
+    /**
+     * The Response Object a concrete status resolves to — exact code, then
+     * the `NXX` range, then `default` — as the same selection response
+     * validation applies; `null` when the status is not declared.
+     *
+     * @return null|array{key: non-empty-string, definition: array<string, mixed>}
+     */
+    public function responseFor(int $status): ?array
+    {
+        $selected = (new ResponseSelector())->select($this->responses, $status);
+
+        return $selected instanceof SelectedResponse ? ['key' => $selected->key, 'definition' => $selected->definition] : null;
+    }
 }
