@@ -539,8 +539,8 @@ final class RequestValidationTest
             'type' => 'object',
             'required' => ['ids', 'rows'],
             'properties' => [
-                'ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
-                'rows' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'integer']]],
+                'ids' => ['type' => 'array', 'minItems' => 2, 'uniqueItems' => true, 'items' => ['type' => 'integer']],
+                'rows' => ['type' => 'array', 'minItems' => 2, 'items' => ['type' => 'array', 'items' => ['type' => 'integer']]],
             ],
         ]]]);
         $part = static fn(string $name, string $type, string $value): string => '--' . $boundary . "\r\n"
@@ -549,7 +549,9 @@ final class RequestValidationTest
             . $value . "\r\n";
         $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary="' . $boundary . '"'], $body . '--' . $boundary . "--\r\n");
 
-        Assert::true($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('ids', 'text/plain', '2') . $part('rows', 'application/json', '[1,2]') . $part('rows', 'application/json', '[]')))->isValid());
+        Assert::true($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('ids', 'text/plain', '2') . $part('rows', 'application/json', '[[1,2],[]]')))->isValid());
+        Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('ids', 'text/plain', '1') . $part('rows', 'application/json', '[[1],[2]]')))->violations[0]->code, 'request.body.schema');
+        Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('rows', 'application/json', '[[1],[2]]')))->violations[0]->code, 'request.body.schema');
         Assert::same($contract->validateRequest($request($part('ids', 'application/json', '[1,2]') . $part('rows', 'application/json', '[1]')))->violations[0]->message, 'Multipart property "ids" has content type "application/json", expected "text/plain"');
         Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('rows', 'text/plain', '1')))->violations[0]->message, 'Multipart property "rows" has content type "text/plain", expected "application/json"');
     }

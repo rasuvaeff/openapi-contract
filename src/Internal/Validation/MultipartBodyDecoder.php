@@ -42,7 +42,8 @@ final readonly class MultipartBodyDecoder
                 $itemsValue = $property['items'] ?? null;
                 $items = $this->values->schema($itemsValue) ?? [];
                 $values = is_array($value) && array_is_list($value) ? $value : [$value];
-                $list = [];
+                /** @var list<mixed> $list */
+                $list = is_array($result[$name] ?? null) ? $result[$name] : [];
                 foreach (array_keys($values) as $index) {
                     $list[] = $this->partItem($values[$index] ?? null, $items);
                 }
