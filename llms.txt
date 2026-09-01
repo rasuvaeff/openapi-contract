@@ -88,7 +88,10 @@ API reference:
 - Request body media types: JSON, `application/x-www-form-urlencoded` using
   form parameter semantics, and bounded `multipart/form-data` with JSON/binary
   parts, arrays, and per-property encoding content types/required headers.
-  Malformed or unsupported body serialization fails as `request.body.decode`.
+  Default part content type: `text/plain` (primitives),
+  `application/octet-stream` (binary), `application/json` (objects), and for
+  arrays the item type's default. Malformed or unsupported body serialization
+  fails as `request.body.decode`.
 - `ValidationResult` (readonly): `violations` (`list<Violation>`),
   `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
 - `ValidationResultFormatter::format(ValidationResult): string` renders every

@@ -180,9 +180,20 @@ final readonly class MultipartBodyDecoder
         return $body;
     }
 
-    /** @param array<string, mixed> $schema */
+    /**
+     * OAS 3 default part Content-Type: `text/plain` for primitives,
+     * `application/octet-stream` for binary strings, `application/json` for
+     * objects, and for arrays the default of the item type.
+     *
+     * @param array<string, mixed> $schema
+     */
     private function defaultContentType(array $schema): string
     {
+        if ($this->values->kind($schema) === ParameterKind::List) {
+            /** @var mixed $itemsValue */
+            $itemsValue = $schema['items'] ?? null;
+            $schema = $this->values->schema($itemsValue) ?? [];
+        }
         if ($this->values->kind($schema) !== ParameterKind::Scalar) {
             return 'application/json';
         }

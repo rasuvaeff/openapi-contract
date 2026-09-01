@@ -532,6 +532,28 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($request)->isValid());
     }
 
+    public function defaultsAnArrayPartContentTypeToItsItemType(): void
+    {
+        $boundary = 'test-boundary';
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => [
+            'type' => 'object',
+            'required' => ['ids', 'rows'],
+            'properties' => [
+                'ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                'rows' => ['type' => 'array', 'items' => ['type' => 'array', 'items' => ['type' => 'integer']]],
+            ],
+        ]]]);
+        $part = static fn(string $name, string $type, string $value): string => '--' . $boundary . "\r\n"
+            . "Content-Disposition: form-data; name=\"" . $name . "\"\r\n"
+            . 'Content-Type: ' . $type . "\r\n\r\n"
+            . $value . "\r\n";
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary="' . $boundary . '"'], $body . '--' . $boundary . "--\r\n");
+
+        Assert::true($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('ids', 'text/plain', '2') . $part('rows', 'application/json', '[1,2]') . $part('rows', 'application/json', '[]')))->isValid());
+        Assert::same($contract->validateRequest($request($part('ids', 'application/json', '[1,2]') . $part('rows', 'application/json', '[1]')))->violations[0]->message, 'Multipart property "ids" has content type "application/json", expected "text/plain"');
+        Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('rows', 'text/plain', '1')))->violations[0]->message, 'Multipart property "rows" has content type "text/plain", expected "application/json"');
+    }
+
     public function rejectsMalformedMultipartBodies(): void
     {
         $contract = $this->bodyContract(['multipart/form-data' => ['schema' => ['type' => 'object']]]);

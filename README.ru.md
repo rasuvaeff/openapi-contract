@@ -122,7 +122,10 @@ request. Неизвестный ключ операции даёт одно ст
 Request body с `application/x-www-form-urlencoded` декодируется по тем же
 form-правилам, что и query-параметры. `multipart/form-data` поддерживает
 ограниченный разбор частей, JSON и binary parts, повторяющиеся части-массивы и
-`encoding` с content type/required headers для свойства. Неподдержанные styles,
+`encoding` с content type/required headers для свойства. Без content type в
+`encoding` часть по умолчанию — `text/plain` для примитивов,
+`application/octet-stream` для binary-строк, `application/json` для объектов,
+а для массивов — умолчание типа элементов. Неподдержанные styles,
 битые boundaries, повтор scalar parts и неверное содержимое parts отвергаются
 fail-closed как `request.body.decode`.
 
