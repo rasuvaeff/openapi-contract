@@ -285,6 +285,135 @@ final class ResponseValidationTest
         Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '7'))->isValid());
     }
 
+    public function validatesPresentHeaderValuesAgainstTheirSchema(): void
+    {
+        $contract = $this->headerContract([
+            'X-RateLimit-Remaining' => ['required' => true, 'schema' => ['type' => 'integer', 'minimum' => 0]],
+            'X-Mode' => ['schema' => ['type' => 'string', 'enum' => ['fast', 'slow']]],
+        ]);
+
+        Assert::true($this->validate($contract, ['X-RateLimit-Remaining' => '12', 'X-Mode' => 'fast'])->isValid());
+        Assert::true($this->validate($contract, ['X-RateLimit-Remaining' => '0'])->isValid());
+
+        $result = $this->validate($contract, ['X-RateLimit-Remaining' => 'banana', 'X-Mode' => 'medium']);
+        Assert::same(
+            array_map(static fn($violation): string => $violation->code, $result->violations),
+            ['response.header.schema', 'response.header.schema'],
+        );
+        Assert::same($result->violations[0]->location, 'header');
+        Assert::same($result->violations[0]->instancePath, 'X-RateLimit-Remaining');
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/headers/X-RateLimit-Remaining/schema');
+        Assert::same($result->violations[0]->expected, ['type' => 'integer', 'minimum' => 0]);
+        Assert::same($result->violations[0]->actual, 'banana');
+        Assert::same($result->violations[0]->message, 'Response header "X-RateLimit-Remaining" does not match its schema');
+        Assert::same($result->violations[1]->actual, 'medium');
+
+        Assert::same($this->validate($contract, ['X-RateLimit-Remaining' => '-1'])->violations[0]->actual, -1);
+
+        $result = $this->validate($contract, ['X-Mode' => 'medium']);
+        Assert::same(
+            array_map(static fn($violation): string => $violation->code, $result->violations),
+            ['response.header.missing', 'response.header.schema'],
+        );
+    }
+
+    public function decodesArrayAndObjectHeadersWithTheSimpleStyle(): void
+    {
+        $contract = $this->headerContract([
+            'X-Ids' => ['schema' => ['type' => 'array', 'items' => ['type' => 'integer'], 'minItems' => 2]],
+            'X-Point' => ['schema' => ['type' => 'object', 'required' => ['x', 'y'], 'properties' => ['x' => ['type' => 'integer'], 'y' => ['type' => 'integer']]]],
+            'X-Exploded' => ['explode' => true, 'schema' => ['type' => 'object', 'required' => ['x'], 'properties' => ['x' => ['type' => 'integer']]]],
+        ]);
+
+        Assert::true($this->validate($contract, ['X-Ids' => '1,2', 'X-Point' => 'x,1,y,2', 'X-Exploded' => 'x=1'])->isValid());
+        Assert::true($this->validate($contract, ['X-Ids' => ['3', '4'], 'X-Point' => 'x , 1 ,y, 2'])->isValid());
+
+        $result = $this->validate($contract, ['X-Ids' => '1', 'X-Point' => 'x,1', 'X-Exploded' => 'y=1']);
+        Assert::same(
+            array_map(static fn($violation): string => $violation->code, $result->violations),
+            ['response.header.schema', 'response.header.schema', 'response.header.schema'],
+        );
+        Assert::same($result->violations[0]->actual, [1]);
+        Assert::same((array) $result->violations[1]->actual, ['x' => 1]);
+        Assert::same((array) $result->violations[2]->actual, ['y' => '1']);
+    }
+
+    public function reportsHeadersThatCannotBeDeserialized(): void
+    {
+        $contract = $this->headerContract(['X-Point' => ['schema' => ['type' => 'object']]]);
+
+        $result = $this->validate($contract, ['X-Point' => 'x,1,y']);
+
+        Assert::same($result->violations[0]->code, 'response.header.serialization');
+        Assert::same($result->violations[0]->location, 'header');
+        Assert::same($result->violations[0]->instancePath, 'X-Point');
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/headers/X-Point');
+        Assert::same($result->violations[0]->expected, 'simple');
+        Assert::same($result->violations[0]->actual, 'x,1,y');
+        Assert::same($result->violations[0]->message, 'Response header "X-Point" cannot be deserialized');
+        Assert::same(count($result->violations), 1);
+    }
+
+    public function failsClosedOnContentFormAndNonSimpleHeaderDeclarations(): void
+    {
+        $contract = $this->headerContract([
+            'X-Json' => ['content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+            'X-Label' => ['style' => 'label', 'schema' => ['type' => 'string']],
+            'X-Simple' => ['style' => 'simple', 'schema' => ['type' => 'string']],
+        ]);
+
+        Assert::true($this->validate($contract, [])->isValid());
+        Assert::true($this->validate($contract, ['X-Simple' => 'ok'])->isValid());
+
+        $result = $this->validate($contract, ['X-Json' => '{}', 'X-Label' => '.a']);
+        Assert::same(
+            array_map(static fn($violation): string => $violation->code, $result->violations),
+            ['response.header.unsupported', 'response.header.unsupported'],
+        );
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/headers/X-Json');
+        Assert::same($result->violations[0]->expected, 'simple-style Header Object with a schema');
+        Assert::same($result->violations[0]->actual, 'content');
+        Assert::same($result->violations[0]->message, 'Response header "X-Json" cannot be validated against its declaration');
+        Assert::same($result->violations[1]->actual, 'label');
+    }
+
+    public function assertsOnlyPresenceForSchemaLessHeadersAndIgnoresContentType(): void
+    {
+        $contract = $this->headerContract([
+            'X-Any' => ['required' => true, 'description' => 'no schema'],
+            'Content-Type' => ['required' => true, 'schema' => ['type' => 'integer']],
+            'X-Bad' => ['schema' => ['type' => 'integer', 0 => 'malformed']],
+        ]);
+
+        Assert::true($this->validate($contract, ['X-Any' => 'anything, at all', 'X-Bad' => 'not an integer'])->isValid());
+        Assert::same($this->validate($contract, [])->violations[0]->code, 'response.header.missing');
+        Assert::same(count($this->validate($contract, [])->violations), 1);
+    }
+
+    public function validatesHeadersUnderTheOpenApi30Dialect(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.0.3', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => ['description' => 'ok', 'headers' => ['X-Count' => ['schema' => ['type' => 'integer', 'nullable' => true]]]],
+        ]]]]]);
+
+        Assert::true($contract->validateResponse('GET /h', new Response(200, ['X-Count' => '5']))->isValid());
+        Assert::same($contract->validateResponse('GET /h', new Response(200, ['X-Count' => 'x']))->violations[0]->code, 'response.header.schema');
+    }
+
+    /** @param array<string, array<array-key, mixed>> $headers */
+    private function headerContract(array $headers): Contract
+    {
+        return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => ['headers' => $headers],
+        ]]]]]);
+    }
+
+    /** @param array<string, string|list<string>> $headers */
+    private function validate(Contract $contract, array $headers): \Rasuvaeff\OpenApiContract\ValidationResult
+    {
+        return $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, $headers));
+    }
+
     /** @param array<array-key, mixed> $content */
     private function contentContract(array $content): Contract
     {

@@ -40,6 +40,13 @@ Rules:
   effective schemas;
 - root `security` is inherited by operations; explicit `security: []` marks
   an operation anonymous; credentials live in the generator package;
+- `components.securitySchemes` compile into a typed map: a scheme without a
+  supported `type` (`apiKey`, `http`, `mutualTLS` on 3.1 only, `oauth2`,
+  `openIdConnect`) or missing a field its type requires fails closed;
+- a present response header with a `schema` is decoded `simple`-style and
+  validated (`response.header.schema` / `response.header.serialization`);
+  `content`-form or non-`simple` declarations fail closed as
+  `response.header.unsupported`; a `Content-Type` declaration is ignored;
 - `format: date-time` (and the other supported formats) are asserted, not
   treated as annotations — a pinned divergence from
   league/openapi-psr7-validator;
@@ -55,6 +62,13 @@ API reference:
   contract.
 - `Contract::operations(): list<Operation>`;
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
+- `Contract::securitySchemes(): array<string, CompiledSecurityScheme>` —
+  `components.securitySchemes` keyed by the names `Operation::$security`
+  refers to; each entry is `type` plus exactly the fields its type defines
+  (`apiKey`: `name`, `in`; `http`: `scheme`, `bearerFormat?`; `oauth2`:
+  `flows` → per declared flow `authorizationUrl?`/`tokenUrl?`/`refreshUrl?`
+  and `scopes`; `openIdConnect`: `openIdConnectUrl`; `mutualTLS`: nothing);
+  descriptions and extensions are dropped.
 - `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
   `operationId`, `method`, `path`, `parameters` (compiled list with name/in/
   required/style/explode/allowReserved/schema, plus `example`/`examples` keys
@@ -79,8 +93,10 @@ API reference:
   parameters per location (style/explode deserialization, schema), JSON
   request bodies (syntax separately from schema).
 - `Contract::validateExchange(Request, Response): ValidationResult` — both
-  sides: request violations plus response status selection, required
-  headers, media types (`application/json` and `*+json`), body schema.
+  sides: request violations plus response status selection, response
+  headers (required presence, `simple`-style value decoding and schema in
+  the response direction), media types (`application/json` and `*+json`),
+  body schema.
 - `Contract::validateResponse(string $operationKey, Response): ValidationResult`
   — validates a response fixture without a request; unknown keys yield one
   `response.operation.unknown` violation. Response selection remains exact,

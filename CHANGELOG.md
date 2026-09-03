@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- `Contract::securitySchemes()` exposes `components.securitySchemes` as an
+  immutable typed map keyed by the names `Operation::$security` refers to
+  (#26): `type` plus exactly the fields the type defines (`apiKey`: `name`,
+  `in`; `http`: `scheme`, optional `bearerFormat`; `oauth2`: `flows` with
+  per-flow URLs and `scopes`; `openIdConnect`: `openIdConnectUrl`;
+  `mutualTLS`, OpenAPI 3.1 only). Descriptions and extensions are dropped and
+  `$ref`s inside a scheme are resolved. **Breaking:** a scheme without a
+  supported `type`, or missing a field its type requires, now fails closed as
+  `InvalidContract` at compile time — previously any named object was
+  accepted and only the name was kept.
+- Present response headers are validated against their Header Object
+  `schema` (#27): the value is decoded with the `simple` style (`explode` as
+  declared), coerced like request header parameters, and validated in the
+  response direction. New codes: `response.header.schema`,
+  `response.header.serialization`, and `response.header.unsupported` for a
+  `content`-form Header Object or a non-`simple` style. A `Content-Type`
+  header declaration is ignored as the specification requires. Previously
+  only the presence of `required` headers was checked, so
+  `X-RateLimit-Remaining: banana` passed a `type: integer` declaration.
+- Dev dependencies follow their current lines: `rasuvaeff/property-testing-testo`
+  `^0.7`, `rasuvaeff/understudy` `^0.5`, `rasuvaeff/understudy-testo` `^0.2`,
+  `infection/infection` `^0.35`.
+
 ## 0.2.1 — 2026-09-03
 
 - Validate declared non-JSON media types as far as their schema allows
