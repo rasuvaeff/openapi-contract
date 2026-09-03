@@ -37,9 +37,10 @@ final readonly class DocumentCompiler
 
         $resolver = new JsonPointerResolver($document, graph: $graph);
         $rootServers = $this->servers($document['servers'] ?? null);
-        $securitySchemes = $this->securitySchemes($document['components'] ?? null);
+        $securitySchemes = (new SecuritySchemeCompiler())->compile($document['components'] ?? null, $dialect, $resolver);
+        $schemeNames = array_keys($securitySchemes);
         $rootSecurity = array_key_exists('security', $document)
-            ? $this->securityRequirements($document['security'], $securitySchemes)
+            ? $this->securityRequirements($document['security'], $schemeNames)
             : [];
         $operations = [];
         $templates = [];
@@ -116,14 +117,14 @@ final readonly class DocumentCompiler
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
                     serverBases: array_map(static fn(array $server): string => $server['base'], $servers),
                     security: array_key_exists('security', $raw)
-                        ? $this->securityRequirements($raw['security'], $securitySchemes)
+                        ? $this->securityRequirements($raw['security'], $schemeNames)
                         : $rootSecurity,
                     servers: $servers,
                 );
             }
         }
 
-        return new CompiledDocument(dialect: $dialect, operations: array_values($operations));
+        return new CompiledDocument(dialect: $dialect, operations: array_values($operations), securitySchemes: $securitySchemes);
     }
 
     /** @param array<string, mixed> $document */
@@ -416,41 +417,6 @@ final readonly class DocumentCompiler
         }
 
         return $result;
-    }
-
-    /** @return list<string> */
-    private function securitySchemes(mixed $components): array
-    {
-        if ($components === null) {
-            return [];
-        }
-        if (!is_array($components)) {
-            throw new InvalidContract('OpenAPI components must be an object');
-        }
-        if ($components !== [] && array_is_list($components)) {
-            throw new InvalidContract('OpenAPI components must be an object');
-        }
-        /** @var mixed $schemesValue */
-        $schemesValue = array_key_exists('securitySchemes', $components) ? $components['securitySchemes'] : [];
-        if (!is_array($schemesValue) || ($schemesValue !== [] && array_is_list($schemesValue))) {
-            throw new InvalidContract('OpenAPI securitySchemes must be an object');
-        }
-        /** @var array<array-key, mixed> $schemes */
-        $schemes = $schemesValue;
-        foreach (array_keys($schemes) as $name) {
-            if (!is_string($name) || $name === '' || !is_array($schemes[$name]) || ($schemes[$name] !== [] && array_is_list($schemes[$name]))) {
-                throw new InvalidContract('OpenAPI security scheme must be a named object');
-            }
-        }
-        $names = [];
-        foreach (array_keys($schemes) as $name) {
-            if (!is_string($name)) {
-                throw new InvalidContract('OpenAPI security scheme names must be strings');
-            }
-            $names[] = $name;
-        }
-
-        return $names;
     }
 
     /**

@@ -64,7 +64,7 @@ across the whole reference graph.
 ```php
 foreach ($contract->operations() as $operation) {
     // Operation: key, operationId, method, path, parameters, requestBody,
-    // responses, serverBases, security
+    // responses, serverBases, security, servers
 }
 
 $matched = $contract->match($request);        // MatchedOperation|null
@@ -95,6 +95,28 @@ list. When the request path is declared but no server authority agrees,
 validation reports `request.server.mismatch` instead of
 `request.operation.unknown`.
 
+### Security schemes
+
+```php
+foreach ($contract->securitySchemes() as $name => $scheme) {
+    // $scheme['type']: apiKey | http | mutualTLS | oauth2 | openIdConnect
+    // apiKey: name, in — http: scheme, bearerFormat? — oauth2: flows —
+    // openIdConnect: openIdConnectUrl
+}
+```
+
+`components.securitySchemes` is compiled into an immutable typed map keyed by
+the names that `Operation::$security` requirements refer to, so a consumer
+never re-reads the raw document to learn that `apiKey` lives in the
+`X-Api-Key` header. Each scheme carries `type` plus exactly the fields its
+type defines: `apiKey` — `name`, `in` (`query`/`header`/`cookie`); `http` —
+`scheme`, optional `bearerFormat`; `oauth2` — `flows` with the declared
+`implicit`/`password`/`clientCredentials`/`authorizationCode` flows, each
+with its URLs and `scopes`; `openIdConnect` — `openIdConnectUrl`;
+`mutualTLS` (OpenAPI 3.1 only) — nothing else. Descriptions and extensions
+are dropped. A scheme without a supported `type`, or missing a field its type
+requires, fails closed as `InvalidContract` at compile time.
+
 ### Validating exchanges
 
 ```php
@@ -117,8 +139,16 @@ foreach ($result->violations as $violation) {
 codes (`request.parameter.missing`, `response.body.schema`, ...) and JSON
 Pointers into the OpenAPI document. Response selection follows exact status,
 then the `NXX` range, then `default`; an unknown status never cascades into
-invented body or header violations. `readOnly`/`writeOnly` properties are
-applied directionally. Root-level `security` is inherited by operations, an
+invented body or header violations. A declared response header is checked
+for presence when `required`, and a present header with a `schema` is decoded
+with the `simple` style (`explode` as declared, optional whitespace around
+the commas of a multi-valued array or object header dropped) and validated in
+the response direction (`response.header.schema`,
+`response.header.serialization`); a
+`content`-form Header Object or a non-`simple` style fails closed as
+`response.header.unsupported`, a `Content-Type` header declaration is ignored
+as the specification requires, and a schema-less declaration asserts presence
+only. `readOnly`/`writeOnly` properties are applied directionally. Root-level `security` is inherited by operations, an
 explicit empty `security` list marks an operation anonymous, and credential
 acquisition stays in the generator package.
 

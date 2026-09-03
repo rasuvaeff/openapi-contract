@@ -7,8 +7,12 @@ namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
+use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
+use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
+use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
+use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
@@ -23,6 +27,8 @@ final readonly class ResponseValidator
     public function __construct(
         private ResponseSelector $selector = new ResponseSelector(),
         private SchemaValidator $schemas = new SchemaValidator(),
+        private ParameterCodec $parameters = new ParameterCodec(),
+        private SchemaValueDecoder $values = new SchemaValueDecoder(),
     ) {}
 
     public function validate(
@@ -31,7 +37,7 @@ final readonly class ResponseValidator
         SchemaDialect $dialect,
     ): ValidationResult {
         $selected = $this->selector->select($matched->operation->responses, $response->getStatusCode());
-        if (!$selected instanceof \Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse) {
+        if (!$selected instanceof SelectedResponse) {
             return new ValidationResult([new Violation(
                 code: 'response.status.mismatch',
                 operation: $matched->operation->key,
@@ -57,21 +63,27 @@ final readonly class ResponseValidator
         $headersValue = $definition['headers'] ?? [];
         $headers = is_array($headersValue) ? $headersValue : [];
         foreach ($headers as $name => $header) {
-            if (!is_string($name) || !is_array($header) || ($header['required'] ?? false) !== true) {
+            if (!is_string($name) || !is_array($header) || strcasecmp($name, 'content-type') === 0) {
                 continue;
             }
+            $pointer = $basePointer . '/headers/' . $this->escape($name);
             if (!$response->hasHeader($name)) {
-                $violations[] = new Violation(
-                    code: 'response.header.missing',
-                    operation: $matched->operation->key,
-                    location: 'header',
-                    instancePath: $name,
-                    specPointer: $basePointer . '/headers/' . $this->escape($name),
-                    expected: 'required response header',
-                    actual: null,
-                    message: sprintf('Required response header "%s" is missing', $name),
-                );
+                if (($header['required'] ?? false) === true) {
+                    $violations[] = new Violation(
+                        code: 'response.header.missing',
+                        operation: $matched->operation->key,
+                        location: 'header',
+                        instancePath: $name,
+                        specPointer: $pointer,
+                        expected: 'required response header',
+                        actual: null,
+                        message: sprintf('Required response header "%s" is missing', $name),
+                    );
+                }
+
+                continue;
             }
+            $violations = [...$violations, ...$this->validateHeader($matched, $name, $header, $response->getHeaderLine($name), $dialect, $pointer)];
         }
 
         $content = $definition['content'] ?? null;
@@ -220,6 +232,87 @@ final readonly class ResponseValidator
             expected: $schema,
             actual: $body,
             message: 'Response body does not match its schema',
+        )];
+    }
+
+    /**
+     * A present Header Object is decoded with the `simple` style and
+     * validated against its schema, as request header parameters are; for
+     * array and object schemas the optional whitespace HTTP allows around
+     * the comma separators of a multi-valued header is dropped first. A
+     * schema-less declaration only asserts presence; the `content` form and
+     * any style other than `simple` cannot be evaluated and fail closed.
+     *
+     * @param array<array-key, mixed> $header
+     * @return list<Violation>
+     */
+    private function validateHeader(
+        MatchedOperation $matched,
+        string $name,
+        array $header,
+        string $wire,
+        SchemaDialect $dialect,
+        string $pointer,
+    ): array {
+        $schema = $this->declaredSchema($header);
+        $style = $header['style'] ?? 'simple';
+        if ($schema === null || $style !== 'simple') {
+            if ($schema === null && !array_key_exists('content', $header)) {
+                return [];
+            }
+
+            return [new Violation(
+                code: 'response.header.unsupported',
+                operation: $matched->operation->key,
+                location: 'header',
+                instancePath: $name,
+                specPointer: $pointer,
+                expected: 'simple-style Header Object with a schema',
+                actual: $schema === null ? 'content' : $style,
+                message: sprintf('Response header "%s" cannot be validated against its declaration', $name),
+            )];
+        }
+
+        $kind = $this->values->kind($schema);
+        if ($kind !== ParameterKind::Scalar) {
+            $wire = implode(',', array_map(trim(...), explode(',', $wire)));
+        }
+
+        try {
+            $parsed = $this->parameters->parse(
+                name: $name,
+                wire: $wire,
+                style: ParameterStyle::Simple,
+                explode: ($header['explode'] ?? false) === true,
+                kind: $kind,
+            );
+            /** @var mixed $value */
+            $value = $this->values->coerce($parsed, $schema);
+        } catch (\InvalidArgumentException) {
+            return [new Violation(
+                code: 'response.header.serialization',
+                operation: $matched->operation->key,
+                location: 'header',
+                instancePath: $name,
+                specPointer: $pointer,
+                expected: 'simple',
+                actual: $wire,
+                message: sprintf('Response header "%s" cannot be deserialized', $name),
+            )];
+        }
+        if ($this->schemas->isValid($value, $schema, $dialect, direction: 'response')) {
+            return [];
+        }
+
+        return [new Violation(
+            code: 'response.header.schema',
+            operation: $matched->operation->key,
+            location: 'header',
+            instancePath: $name,
+            specPointer: $pointer . '/schema',
+            expected: $schema,
+            actual: $value,
+            message: sprintf('Response header "%s" does not match its schema', $name),
         )];
     }
 }

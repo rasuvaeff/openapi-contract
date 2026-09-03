@@ -63,7 +63,7 @@ depth, глубина `$ref`, общий node budget, а для многофай
 ```php
 foreach ($contract->operations() as $operation) {
     // Operation: key, operationId, method, path, parameters, requestBody,
-    // responses, serverBases, security
+    // responses, serverBases, security, servers
 }
 
 $matched = $contract->match($request);        // MatchedOperation|null
@@ -93,6 +93,29 @@ fragment в server URL отвергаются fail-closed при компиля�
 Когда path объявлен, но ни один server authority не совпал, валидация
 возвращает `request.server.mismatch`, а не `request.operation.unknown`.
 
+### Схемы безопасности
+
+```php
+foreach ($contract->securitySchemes() as $name => $scheme) {
+    // $scheme['type']: apiKey | http | mutualTLS | oauth2 | openIdConnect
+    // apiKey: name, in — http: scheme, bearerFormat? — oauth2: flows —
+    // openIdConnect: openIdConnectUrl
+}
+```
+
+`components.securitySchemes` компилируется в immutable типизированную карту,
+ключи которой — имена, на которые ссылаются требования `Operation::$security`;
+потребителю не нужно перечитывать сырой документ, чтобы узнать, что `apiKey`
+живёт в заголовке `X-Api-Key`. Каждая схема несёт `type` и ровно те поля,
+которые определяет её тип: `apiKey` — `name`, `in` (`query`/`header`/`cookie`);
+`http` — `scheme`, опционально `bearerFormat`; `oauth2` — `flows` с
+объявленными потоками `implicit`/`password`/`clientCredentials`/
+`authorizationCode`, у каждого свои URL и `scopes`; `openIdConnect` —
+`openIdConnectUrl`; `mutualTLS` (только OpenAPI 3.1) — ничего больше.
+Описания и расширения отбрасываются. Схема без поддерживаемого `type` или без
+обязательного для типа поля fail-closed падает `InvalidContract` при
+компиляции.
+
 ### Валидация exchanges
 
 ```php
@@ -115,7 +138,16 @@ foreach ($result->violations as $violation) {
 (`request.parameter.missing`, `response.body.schema`, ...) и JSON Pointer в
 OpenAPI-документ. Выбор ответа: точный статус, затем `NXX`-диапазон, затем
 `default`; неизвестный статус не порождает вымышленных body/header
-нарушений. `readOnly`/`writeOnly` применяются направленно. Root `security`
+нарушений. Объявленный response-заголовок проверяется на присутствие, если он
+`required`, а присутствующий заголовок со `schema` декодируется стилем
+`simple` (`explode` как объявлено; у многозначных array/object-заголовков
+необязательные пробелы вокруг запятых отбрасываются) и валидируется в
+направлении ответа
+(`response.header.schema`, `response.header.serialization`); Header Object в
+форме `content` или с не-`simple` стилем fail-closed даёт
+`response.header.unsupported`, объявление заголовка `Content-Type`
+игнорируется, как требует спецификация, а объявление без схемы проверяет
+только присутствие. `readOnly`/`writeOnly` применяются направленно. Root `security`
 наследуется операциями, явный пустой список `security` делает операцию
 анонимной, а получение credentials остаётся в пакете генераторов.
 

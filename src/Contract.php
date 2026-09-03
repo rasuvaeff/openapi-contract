@@ -15,6 +15,27 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 /**
  * Compiled OpenAPI 3.0/3.1 contract.
  *
+ * Security Scheme Objects are compiled into the typed map returned by
+ * {@see securitySchemes()}: the keys present besides `type` are exactly the
+ * ones the scheme type defines, descriptions and extensions are dropped, and
+ * a scheme missing a required field fails closed at compile time.
+ *
+ * @psalm-type CompiledOAuthFlow = array{
+ *     authorizationUrl?: non-empty-string,
+ *     tokenUrl?: non-empty-string,
+ *     refreshUrl?: non-empty-string,
+ *     scopes: array<string, string>,
+ * }
+ * @psalm-type CompiledSecurityScheme = array{
+ *     type: 'apiKey'|'http'|'mutualTLS'|'oauth2'|'openIdConnect',
+ *     name?: non-empty-string,
+ *     in?: 'query'|'header'|'cookie',
+ *     scheme?: non-empty-string,
+ *     bearerFormat?: string,
+ *     flows?: array<'authorizationCode'|'clientCredentials'|'implicit'|'password', CompiledOAuthFlow>,
+ *     openIdConnectUrl?: non-empty-string,
+ * }
+ *
  * @api
  */
 final readonly class Contract
@@ -24,10 +45,12 @@ final readonly class Contract
 
     /**
      * @param list<Operation> $operations
+     * @param array<string, CompiledSecurityScheme> $securitySchemes
      */
     private function __construct(
         private SchemaDialect $dialect,
         private array $operations,
+        private array $securitySchemes,
     ) {}
 
     /** @param array<string, mixed> $document */
@@ -35,7 +58,7 @@ final readonly class Contract
     {
         $compiled = (new DocumentCompiler())->compile($document);
 
-        return new self($compiled->dialect, $compiled->operations);
+        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes);
     }
 
     public static function fromJson(string $json, string $source = 'openapi.json'): self
@@ -67,13 +90,24 @@ final readonly class Contract
         $graph = DocumentGraph::open($path);
         $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph);
 
-        return new self($compiled->dialect, $compiled->operations);
+        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes);
     }
 
     /** @return list<Operation> */
     public function operations(): array
     {
         return $this->operations;
+    }
+
+    /**
+     * The compiled `components.securitySchemes`, keyed by the name that
+     * `Operation::$security` requirements refer to.
+     *
+     * @return array<string, CompiledSecurityScheme>
+     */
+    public function securitySchemes(): array
+    {
+        return $this->securitySchemes;
     }
 
     public function operation(string $key): Operation

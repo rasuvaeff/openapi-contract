@@ -205,7 +205,7 @@ final class ContractTest
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
             'components' => ['securitySchemes' => [
-                'oauth' => ['type' => 'oauth2'],
+                'oauth' => ['type' => 'oauth2', 'flows' => ['implicit' => ['authorizationUrl' => 'https://id.example.test/auth', 'scopes' => ['read' => 'Read']]]],
                 'apiKey' => ['type' => 'apiKey', 'in' => 'header', 'name' => 'X-Api-Key'],
             ]],
             'security' => [['oauth' => ['read']]],
@@ -236,7 +236,7 @@ final class ContractTest
 
         Contract::fromArray([
             'openapi' => '3.1.0',
-            'components' => ['securitySchemes' => ['apiKey' => ['type' => 'apiKey']]],
+            'components' => ['securitySchemes' => ['apiKey' => ['type' => 'apiKey', 'name' => 'k', 'in' => 'query']]],
             'security' => [['apiKey' => 'read']],
             'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
         ]);
@@ -786,18 +786,20 @@ final class ContractTest
         Assert::same($contract->operations()[0]->parameters[0]['style'], 'form');
     }
 
-    public function acceptsEmptyComponentsAndEmptySchemeObjects(): void
+    public function acceptsEmptyComponentsAndEmptyRequirementObjects(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'components' => [], 'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]]]);
         Assert::same(count($contract->operations()), 1);
+        Assert::same($contract->securitySchemes(), []);
 
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
-            'components' => ['securitySchemes' => ['api' => []]],
+            'components' => ['securitySchemes' => ['api' => ['type' => 'mutualTLS']]],
             'security' => [[]],
             'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]],
         ]);
         Assert::same($contract->operations()[0]->security, [[]]);
+        Assert::same($contract->securitySchemes(), ['api' => ['type' => 'mutualTLS']]);
     }
 
     public function rejectsListShapedSecurityMetadata(): void
@@ -809,7 +811,7 @@ final class ContractTest
             ['components' => ['securitySchemes' => ['api' => 'invalid']]],
             ['components' => ['securitySchemes' => ['' => ['type' => 'apiKey']]]],
             ['components' => ['securitySchemes' => ['api' => ['x']]]],
-            ['components' => ['securitySchemes' => ['api' => []]], 'security' => [['api' => [1]]]],
+            ['components' => ['securitySchemes' => ['api' => ['type' => 'mutualTLS']]], 'security' => [['api' => [1]]]],
         ] as $overrides) {
             try {
                 Contract::fromArray($document($overrides));
@@ -827,7 +829,7 @@ final class ContractTest
         }
 
         try {
-            Contract::fromArray($document(['components' => ['securitySchemes' => ['api' => []]], 'security' => [['x']]]));
+            Contract::fromArray($document(['components' => ['securitySchemes' => ['api' => ['type' => 'mutualTLS']]], 'security' => [['x']]]));
             Assert::true(actual: false);
         } catch (InvalidContract $exception) {
             Assert::same($exception->getMessage(), 'OpenAPI security requirement must be an object');
@@ -838,7 +840,7 @@ final class ContractTest
     {
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
-            'components' => ['securitySchemes' => ['first' => [], 'second' => []]],
+            'components' => ['securitySchemes' => ['first' => ['type' => 'mutualTLS'], 'second' => ['type' => 'http', 'scheme' => 'basic']]],
             'security' => [['second' => ['read']], ['first' => []]],
             'paths' => ['/h' => ['get' => ['responses' => ['200' => []]]]],
         ]);
