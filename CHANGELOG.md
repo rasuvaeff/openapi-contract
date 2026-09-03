@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 — 2026-09-03
+
+- Validate declared non-JSON media types as far as their schema allows
+  instead of reporting every such exchange as a violation (#25). Without a
+  schema the body is opaque and passes; with a string-typed schema the raw
+  payload is validated as that string value (`request.body.schema` /
+  `response.body.schema`); any other schema fails closed under the new codes
+  `request.body.unsupported` / `response.body.unsupported`. Previously a
+  declared `text/plain` or `application/octet-stream` body was always
+  reported as `response.body.media_type` "not supported" (or
+  `request.body.decode` on the request side), making such operations
+  impossible to contract-test.
+
 ## 0.2.0 — 2026-09-01
 
 - Reject inconsistent path parameters at compile time: every `in: path`

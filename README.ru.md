@@ -133,6 +133,16 @@ form-правилам, что и query-параметры. `multipart/form-data`
 битые boundaries, повтор scalar parts и неверное содержимое parts отвергаются
 fail-closed как `request.body.decode`.
 
+Объявленный не-JSON media type с любой стороны (`text/plain`, `text/csv`,
+`application/octet-stream`, ...) проверяется настолько, насколько позволяет
+схема: без схемы body непрозрачно и проходит; со строковой схемой
+(`type: string`, любой `format`, `minLength`/`maxLength`/`pattern`) сырое тело
+проверяется как это строковое значение (`request.body.schema` /
+`response.body.schema`); любая другая схема (например, XML-объект) не может
+быть проверена по недекодированному телу и отвергается fail-closed как
+`request.body.unsupported` / `response.body.unsupported`. Необъявленный media
+type по-прежнему даёт `request.body.media_type` / `response.body.media_type`.
+
 При валидации body seekable PSR-7 stream читается с начала, после чего его
 исходная позиция восстанавливается, в том числе при ошибке чтения. Если body
 нужно проверить, но stream не поддерживает seek, validator не читает его и

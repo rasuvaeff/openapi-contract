@@ -222,10 +222,48 @@ final class ResponseValidationTest
         Assert::same($exchange($this->contentContract(['application/*+json' => $object]), $json)->violations[0]->code, 'response.body.media_type');
         Assert::true($exchange($this->contentContract(['application/hal+json' => $object]), new Response(200, ['Content-Type' => 'application/hal+json'], '{}'))->isValid());
         Assert::true($exchange($this->contentContract(['Application/JSON ; charset=utf-8' => $object]), $json)->isValid());
-        $unsupported = $exchange($this->contentContract(['text/plain' => []]), new Response(200, ['Content-Type' => 'text/plain'], 'hello'));
-        Assert::same($unsupported->violations[0]->message, 'Response media type "text/plain" is not supported');
-        Assert::same($unsupported->violations[0]->specPointer, '/paths/~1h/get/responses/200/content');
+        Assert::true($exchange($this->contentContract(['text/plain' => []]), new Response(200, ['Content-Type' => 'text/plain'], 'hello'))->isValid());
+    }
+
+    public function keepsHeaderViolationsNextToANonJsonBodyViolation(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => [
+                'headers' => ['X-Request-Id' => ['required' => true, 'schema' => ['type' => 'string']]],
+                'content' => ['text/plain' => ['schema' => ['type' => 'string', 'maxLength' => 3]]],
+            ],
+        ]]]]]);
+
+        $result = $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'text/plain'], 'hello'));
+
+        Assert::same(
+            array_map(static fn($violation): string => $violation->code, $result->violations),
+            ['response.header.missing', 'response.body.schema'],
+        );
+    }
+
+    public function validatesDeclaredNonJsonBodiesAsFarAsTheSchemaAllows(): void
+    {
+        $exchange = fn(Contract $contract, Response $response) => $contract->validateExchange(new ServerRequest('GET', '/h'), $response);
+        $plain = fn(string $body): Response => new Response(200, ['Content-Type' => 'text/plain; charset=utf-8'], $body);
+
+        Assert::true($exchange($this->contentContract(['text/plain' => ['schema' => []]]), $plain('hello'))->isValid());
+        Assert::true($exchange($this->contentContract(['application/octet-stream' => ['schema' => ['type' => 'string', 'format' => 'binary']]]), new Response(200, ['Content-Type' => 'application/octet-stream'], "\x00\xff"))->isValid());
+        Assert::true($exchange($this->contentContract(['text/plain' => ['schema' => ['type' => 'string', 'maxLength' => 5]]]), $plain('hello'))->isValid());
+
+        $tooLong = $exchange($this->contentContract(['text/plain' => ['schema' => ['type' => 'string', 'maxLength' => 3]]]), $plain('hello'));
+        Assert::same($tooLong->violations[0]->code, 'response.body.schema');
+        Assert::same($tooLong->violations[0]->specPointer, '/paths/~1h/get/responses/200/content/text~1plain/schema');
+        Assert::same($tooLong->violations[0]->actual, 'hello');
+        Assert::same(count($tooLong->violations), 1);
+
+        $unsupported = $exchange($this->contentContract(['application/xml' => ['schema' => ['type' => 'object']]]), new Response(200, ['Content-Type' => 'application/xml'], '<a/>'));
+        Assert::same($unsupported->violations[0]->code, 'response.body.unsupported');
+        Assert::same($unsupported->violations[0]->message, 'Response media type "application/xml" cannot be validated against a non-string schema');
+        Assert::same($unsupported->violations[0]->specPointer, '/paths/~1h/get/responses/200/content/application~1xml/schema');
+        Assert::same($unsupported->violations[0]->actual, 'application/xml');
         Assert::same(count($unsupported->violations), 1);
+        Assert::same($exchange($this->contentContract(['text/plain' => ['schema' => ['type' => ['string', 'integer']]]]), $plain('1'))->violations[0]->code, 'response.body.unsupported');
     }
 
     public function checksEveryHeaderDeclarationPastMalformedEntries(): void

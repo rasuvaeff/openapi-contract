@@ -213,6 +213,9 @@ final readonly class RequestValidator
         if ($definition === null) {
             return [$this->bodyViolation($matched, 'request.body.media_type', sprintf('Request media type "%s" is not declared', $mediaType))];
         }
+        if (!$this->isJsonMediaType($mediaType) && $mediaType !== 'application/x-www-form-urlencoded' && !str_starts_with($mediaType, 'multipart/')) {
+            return $this->validateOpaqueBody($matched, $mediaType, $body, $definition, $dialect);
+        }
 
         try {
             /** @var mixed $schemaValue */
@@ -226,10 +229,8 @@ final readonly class RequestValidator
                 $value = json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
             } elseif ($mediaType === 'application/x-www-form-urlencoded') {
                 $value = $this->forms->decode($body, $schema, $encoding);
-            } elseif (str_starts_with($mediaType, 'multipart/')) {
-                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema, $encoding);
             } else {
-                throw new BodyDecodingFailed(sprintf('Request media type "%s" is not supported', $mediaType));
+                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema, $encoding);
             }
         } catch (\JsonException) {
             return [$this->bodyViolation($matched, 'request.body.json', 'Request body is not valid JSON')];
@@ -244,6 +245,31 @@ final readonly class RequestValidator
         }
 
         return [];
+    }
+
+    /**
+     * A declared non-JSON, non-form media type is validated as far as its
+     * schema allows: the body is opaque without a schema, the raw payload is
+     * the string value of a string-typed schema, and any other schema cannot
+     * be evaluated against an undecoded payload.
+     *
+     * @param array<array-key, mixed> $definition
+     * @return list<Violation>
+     */
+    private function validateOpaqueBody(MatchedOperation $matched, string $mediaType, string $body, array $definition, SchemaDialect $dialect): array
+    {
+        $schema = $this->declaredSchema($definition);
+        if ($schema === null || $schema === []) {
+            return [];
+        }
+        if (!$this->isStringSchema($schema)) {
+            return [$this->bodyViolation($matched, 'request.body.unsupported', sprintf('Request media type "%s" cannot be validated against a non-string schema', $mediaType), $mediaType)];
+        }
+        if ($this->schemas->isValid($body, $schema, $dialect)) {
+            return [];
+        }
+
+        return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $body)];
     }
 
     private function bodyViolation(MatchedOperation $matched, string $code, string $message, mixed $actual = null): Violation

@@ -129,18 +129,7 @@ final readonly class ResponseValidator
             return new ValidationResult($violations);
         }
         if (!$this->isJsonMediaType($mediaType)) {
-            $violations[] = new Violation(
-                code: 'response.body.media_type',
-                operation: $matched->operation->key,
-                location: 'body',
-                instancePath: '$',
-                specPointer: $basePointer . '/content',
-                expected: 'JSON media type',
-                actual: $mediaType,
-                message: sprintf('Response media type "%s" is not supported', $mediaType),
-            );
-
-            return new ValidationResult($violations);
+            return new ValidationResult([...$violations, ...$this->validateOpaqueBody($matched, $mediaType, $body, $mediaDefinition, $dialect, $basePointer)]);
         }
 
         try {
@@ -185,4 +174,52 @@ final readonly class ResponseValidator
         return new ValidationResult($violations);
     }
 
+    /**
+     * A declared non-JSON media type is validated as far as its schema
+     * allows: the body is opaque without a schema, the raw payload is the
+     * string value of a string-typed schema, and any other schema cannot be
+     * evaluated against an undecoded payload.
+     *
+     * @param array<array-key, mixed> $mediaDefinition
+     * @return list<Violation>
+     */
+    private function validateOpaqueBody(
+        MatchedOperation $matched,
+        string $mediaType,
+        string $body,
+        array $mediaDefinition,
+        SchemaDialect $dialect,
+        string $basePointer,
+    ): array {
+        $schema = $this->declaredSchema($mediaDefinition);
+        if ($schema === null || $schema === []) {
+            return [];
+        }
+        if (!$this->isStringSchema($schema)) {
+            return [new Violation(
+                code: 'response.body.unsupported',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                expected: 'JSON media type or string-typed schema',
+                actual: $mediaType,
+                message: sprintf('Response media type "%s" cannot be validated against a non-string schema', $mediaType),
+            )];
+        }
+        if ($this->schemas->isValid($body, $schema, $dialect, direction: 'response')) {
+            return [];
+        }
+
+        return [new Violation(
+            code: 'response.body.schema',
+            operation: $matched->operation->key,
+            location: 'body',
+            instancePath: '$',
+            specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+            expected: $schema,
+            actual: $body,
+            message: 'Response body does not match its schema',
+        )];
+    }
 }
