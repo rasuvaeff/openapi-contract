@@ -90,8 +90,12 @@ API reference:
   parts, arrays, and per-property encoding content types/required headers.
   Default part content type: `text/plain` (primitives),
   `application/octet-stream` (binary), `application/json` (objects), and for
-  arrays the item type's default. Malformed or unsupported body serialization
-  fails as `request.body.decode`.
+  arrays the item type's default. Malformed body serialization fails as
+  `request.body.decode`.
+- Declared non-JSON media types (request or response): no schema → opaque,
+  valid; string-typed schema → the raw payload is validated as that string
+  (`*.body.schema`); any other schema → `request.body.unsupported` /
+  `response.body.unsupported`. Undeclared media types → `*.body.media_type`.
 - `ValidationResult` (readonly): `violations` (`list<Violation>`),
   `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
 - `ValidationResultFormatter::format(ValidationResult): string` renders every

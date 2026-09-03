@@ -95,4 +95,52 @@ trait MessageReading
     {
         return str_replace(['~', '/'], ['~0', '~1'], $value);
     }
+
+    /**
+     * The Schema Object a Media Type Object declares, or `null` when it
+     * declares none.
+     *
+     * @param array<array-key, mixed> $definition
+     * @return array<string, mixed>|null
+     */
+    private function declaredSchema(array $definition): ?array
+    {
+        $schema = $definition['schema'] ?? null;
+        if (!is_array($schema) || array_is_list($schema)) {
+            return null;
+        }
+        foreach (array_keys($schema) as $key) {
+            if (!is_string($key)) {
+                return null;
+            }
+        }
+
+        /** @var array<string, mixed> $schema */
+        return $schema;
+    }
+
+    /**
+     * Whether a raw non-JSON payload can be validated as the string value the
+     * schema describes: `type: string`, or a type list of `string` (and
+     * `null`) only.
+     *
+     * @param array<string, mixed> $schema
+     */
+    private function isStringSchema(array $schema): bool
+    {
+        $type = $schema['type'] ?? null;
+        if ($type === 'string') {
+            return true;
+        }
+        if (!is_array($type) || !array_is_list($type) || !in_array('string', $type, strict: true)) {
+            return false;
+        }
+        foreach ($type as $candidate) {
+            if ($candidate !== 'string' && $candidate !== 'null') {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

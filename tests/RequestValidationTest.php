@@ -443,9 +443,32 @@ final class RequestValidationTest
             ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'text/plain'], 'hello'));
         Assert::same($undeclared->violations[0]->message, 'Request media type "text/plain" is not declared');
 
-        $unsupported = $this->bodyContract(['text/plain' => []])
-            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'text/plain'], 'hello'));
-        Assert::same($unsupported->violations[0]->message, 'Request media type "text/plain" is not supported');
+        $unsupported = $this->bodyContract(['application/xml' => ['schema' => ['type' => 'object']]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/xml'], '<a/>'));
+        Assert::same($unsupported->violations[0]->code, 'request.body.unsupported');
+        Assert::same($unsupported->violations[0]->message, 'Request media type "application/xml" cannot be validated against a non-string schema');
+        Assert::same($unsupported->violations[0]->actual, 'application/xml');
+        Assert::same(count($unsupported->violations), 1);
+    }
+
+    public function validatesDeclaredNonJsonBodiesAsFarAsTheSchemaAllows(): void
+    {
+        $plain = fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'text/plain; charset=utf-8'], $body);
+
+        Assert::true($this->bodyContract(['text/plain' => []])->validateRequest($plain('hello'))->isValid());
+        Assert::true($this->bodyContract(['application/octet-stream' => ['schema' => ['type' => 'string', 'format' => 'binary']]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/octet-stream'], "\x00\xff"))->isValid());
+        Assert::true($this->bodyContract(['text/plain' => ['schema' => ['type' => ['string', 'null'], 'maxLength' => 5]]])->validateRequest($plain('hello'))->isValid());
+
+        $tooLong = $this->bodyContract(['text/plain' => ['schema' => ['type' => 'string', 'maxLength' => 3]]])->validateRequest($plain('hello'));
+        Assert::same($tooLong->violations[0]->code, 'request.body.schema');
+        Assert::same($tooLong->violations[0]->actual, 'hello');
+        Assert::same(count($tooLong->violations), 1);
+
+        $enum = $this->bodyContract(['text/plain' => ['schema' => ['enum' => ['on', 'off']]]])->validateRequest($plain('hello'));
+        Assert::same($enum->violations[0]->code, 'request.body.unsupported');
+        $union = $this->bodyContract(['text/plain' => ['schema' => ['type' => ['string', 'integer']]]])->validateRequest($plain('hello'));
+        Assert::same($union->violations[0]->code, 'request.body.unsupported');
     }
 
     public function readsTheBodyFromTheStreamStart(): void

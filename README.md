@@ -136,6 +136,16 @@ and for arrays to the default of the item type. Unsupported styles,
 malformed boundaries, duplicate scalar parts, and invalid part content fail
 closed as `request.body.decode`.
 
+A declared non-JSON media type on either side (`text/plain`, `text/csv`,
+`application/octet-stream`, ...) is validated as far as its schema allows:
+without a schema the body is opaque and passes; with a string-typed schema
+(`type: string`, any `format`, `minLength`/`maxLength`/`pattern`) the raw
+payload is validated as that string value (`request.body.schema` /
+`response.body.schema`); any other schema (an XML object, for example) cannot
+be evaluated against an undecoded payload and fails closed as
+`request.body.unsupported` / `response.body.unsupported`. An undeclared media
+type stays `request.body.media_type` / `response.body.media_type`.
+
 Body validation reads seekable PSR-7 streams from the beginning and restores
 their original position, including when reading fails. A body that needs
 validation but is non-seekable is not consumed: it produces
