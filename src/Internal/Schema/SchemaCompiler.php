@@ -18,8 +18,24 @@ final readonly class SchemaCompiler
     private const string JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
     private const string OPENAPI_31_BASE_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base';
 
-    /** @var list<string> */
-    private const array SINGLE_SCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not'];
+    /**
+     * Keywords whose value is a single subschema, mapped to whether a boolean
+     * form is legal in every supported dialect.
+     *
+     * OAS 3.0 predates boolean schemas, so `items` and `not` admit only an
+     * object there. `additionalProperties` is the exception the specification
+     * itself makes — OAS 3.0.3 spells it out as "Value can be boolean or
+     * object" — and `additionalProperties: false` is the commonest
+     * closed-object idiom in the 3.0 corpus, so gating it made those
+     * documents unusable.
+     *
+     * @var array<string, bool>
+     */
+    private const array SINGLE_SCHEMA_KEYWORDS = [
+        'additionalProperties' => true,
+        'items' => false,
+        'not' => false,
+    ];
 
     /** @var list<string> */
     private const array SCHEMA_LIST_KEYWORDS = [
@@ -104,9 +120,9 @@ final readonly class SchemaCompiler
             }
         }
 
-        foreach (self::SINGLE_SCHEMA_KEYWORDS as $keyword) {
+        foreach (self::SINGLE_SCHEMA_KEYWORDS as $keyword => $booleanAllowed) {
             if (array_key_exists($keyword, $schema)) {
-                $normalized = $this->normalizeSchemaValue($schema[$keyword], $dialect, $keyword);
+                $normalized = $this->normalizeSchemaValue($schema[$keyword], $dialect, $keyword, $booleanAllowed);
                 $schema = [...$schema, $keyword => $normalized];
             }
         }
@@ -138,17 +154,20 @@ final readonly class SchemaCompiler
 
             /** @var array<array-key, mixed> $values */
             $values = $schema[$keyword];
-            foreach (array_keys($values) as $name) {
-                if (!is_string($name)) {
-                    throw UnsupportedSchema::atKeyword($keyword, 'schema names must be strings');
-                }
-            }
             $normalizedValues = array_map(
+                // A schema name is whatever the document wrote. PHP normalizes
+                // a numeric-string array key to an integer, so `{"2020": …}`
+                // arrives here as `int 2020` — a legal name, not a malformed
+                // one. The object cast below restores it on the wire.
+                //
+                // The member schemas stay dialect-gated: OAS 3.0 admits a
+                // boolean only for `additionalProperties`, not inside
+                // `properties`.
                 fn(mixed $value): bool|array => $this->normalizeSchemaValue($value, $dialect, $keyword),
                 $values,
             );
-            $values = array_combine(array_keys($values), $normalizedValues);
-            $schema = [...$schema, $keyword => $values];
+
+            $schema = [...$schema, $keyword => (object) array_combine(array_keys($values), $normalizedValues)];
         }
 
         return $schema;
@@ -235,10 +254,10 @@ final readonly class SchemaCompiler
     /**
      * @return bool|array<string, mixed>
      */
-    private function normalizeSchemaValue(mixed $value, SchemaDialect $dialect, string $keyword): bool|array
+    private function normalizeSchemaValue(mixed $value, SchemaDialect $dialect, string $keyword, bool $booleanAllowed = false): bool|array
     {
         if (is_bool($value)) {
-            if ($dialect === SchemaDialect::OpenApi30) {
+            if (!$booleanAllowed && $dialect === SchemaDialect::OpenApi30) {
                 throw UnsupportedSchema::atKeyword($keyword, 'boolean schemas require OAS 3.1');
             }
 

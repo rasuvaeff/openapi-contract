@@ -69,10 +69,17 @@ final readonly class SchemaValueDecoder
         return (object) $result;
     }
 
-    /** @return array<string, mixed>|null */
+    /**
+     * The Schema Object a value carries, or `null` when it carries none of
+     * the shape this decoder reads. A boolean schema is a schema — it just
+     * has no keywords to decode with, and the backend enforces it — so it
+     * answers `null` here instead of raising out of a validation call.
+     *
+     * @return array<string, mixed>|null
+     */
     public function schema(mixed $value): ?array
     {
-        if ($value === null) {
+        if ($value === null || is_bool($value)) {
             return null;
         }
         if (!is_array($value) || array_is_list($value)) {
@@ -89,9 +96,11 @@ final readonly class SchemaValueDecoder
     }
 
     /**
-     * The Schema Objects a `properties` map declares, keyed by property name.
-     * Entries that are not objects — a malformed document, or a boolean
-     * schema — are dropped, so callers iterate declared properties only.
+     * The Schema Objects a `properties` map declares, keyed by the property
+     * name as it appears on the wire — PHP normalizes a numeric-string array
+     * key to an integer, so the name is cast back. A boolean member declares
+     * a property without decoding keywords and maps to the unconstrained
+     * schema; the backend still enforces what the boolean says.
      *
      * @param array<string, mixed> $schema
      * @return array<string, array<string, mixed>>
@@ -105,12 +114,12 @@ final readonly class SchemaValueDecoder
         }
         $result = [];
         foreach (array_keys($value) as $name) {
-            if (is_string($name)) {
-                $resolved = $this->schema($value[$name] ?? null);
-                if ($resolved !== null) {
-                    $result[$name] = $resolved;
-                }
+            /** @var mixed $member */
+            $member = $value[$name] ?? null;
+            if ($member === null) {
+                continue;
             }
+            $result[(string) $name] = is_bool($member) ? [] : ($this->schema($member) ?? []);
         }
 
         return $result;

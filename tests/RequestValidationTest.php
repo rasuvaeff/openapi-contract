@@ -418,6 +418,80 @@ final class RequestValidationTest
     }
 
     /**
+     * A boolean member of `properties` used to raise a bare
+     * `InvalidArgumentException` out of `validateRequest()` — not a violation,
+     * not an `InvalidContract` — because the body decoders read `properties`
+     * through a helper that only accepted object schemas. The same document
+     * shape was silently accepted for a JSON body, so the two encodings were
+     * wrong in two different directions at once.
+     */
+    #[DataProvider('booleanPropertyBodyProvider')]
+    public function validatesBooleanPropertySchemasInEveryBodyEncoding(string $mediaType, string $body, bool $valid): void
+    {
+        $schema = ['type' => 'object', 'properties' => ['open' => true, 'secret' => false]];
+        $contract = $this->bodyContract([$mediaType => ['schema' => $schema]]);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => $mediaType], $body);
+
+        Assert::same($contract->validateRequest($request)->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function booleanPropertyBodyProvider(): iterable
+    {
+        yield 'json accepts the open property' => ['application/json', '{"open":1}', true];
+        yield 'json rejects the forbidden property' => ['application/json', '{"secret":1}', false];
+        yield 'form accepts the open property' => ['application/x-www-form-urlencoded', 'open=1', true];
+        yield 'form rejects the forbidden property' => ['application/x-www-form-urlencoded', 'secret=1', false];
+        yield 'multipart accepts the open property' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"open\"\r\n\r\n1\r\n--X--\r\n",
+            true,
+        ];
+        yield 'multipart rejects the forbidden property' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"secret\"\r\n\r\n1\r\n--X--\r\n",
+            false,
+        ];
+    }
+
+    /**
+     * A numeric property name is a name, not a malformed key: PHP normalizes
+     * `"2020"` to an integer array key, and dropping it took the property, its
+     * subschema and its `required` entry out of the check entirely.
+     */
+    public function validatesPropertiesWhoseNameIsNumericInABody(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => [
+            'type' => 'object', 'properties' => ['2020' => ['type' => 'integer']], 'required' => ['2020'],
+        ]]]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($request('{"2020":1}'))->isValid());
+        Assert::same($contract->validateRequest($request('{}'))->violations[0]->code, 'request.body.schema');
+        Assert::same($contract->validateRequest($request('{"2020":"x"}'))->violations[0]->code, 'request.body.schema');
+    }
+
+    /**
+     * OAS 3.0.3: "additionalProperties — Value can be boolean or object".
+     * Rejecting the boolean form made the commonest closed-object idiom of
+     * the 3.0 corpus throw out of the first validation call, after the
+     * document had already loaded.
+     */
+    public function acceptsBooleanAdditionalPropertiesInAnOas30Document(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.0.3', 'paths' => ['/b' => ['post' => [
+            'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => [
+                'type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false,
+            ]]]],
+            'responses' => ['204' => []],
+        ]]]]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($request('{"a":"x"}'))->isValid());
+        Assert::same($contract->validateRequest($request('{"a":"x","b":1}'))->violations[0]->code, 'request.body.schema');
+    }
+
+    /**
      * OAS 3.1 spells a type as a union, and the wire shape follows the union's
      * membership rather than its identity.
      */
