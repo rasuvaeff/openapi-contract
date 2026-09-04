@@ -492,6 +492,95 @@ final class RequestValidationTest
     }
 
     /**
+     * A form property the document declares a `contentType` for does not
+     * travel as a serialized parameter: its single pair carries a whole
+     * document in that media type. Reading it as a parameter meant a property
+     * declared `application/json` arrived as a string, failed its own object
+     * schema, and was reported as `request.body.schema` — a valid request
+     * called invalid, with a message pointing away from the cause. The
+     * multipart decoder has always honoured `contentType`; this one ignored
+     * it without even rejecting it.
+     */
+    #[DataProvider('formContentTypeProvider')]
+    public function honoursEncodingContentTypeOnAFormProperty(string $body, ?string $violation): void
+    {
+        $contract = $this->bodyContract(['application/x-www-form-urlencoded' => [
+            'schema' => [
+                'type' => 'object',
+                'required' => ['meta'],
+                'properties' => ['meta' => ['type' => 'object', 'required' => ['a'], 'properties' => ['a' => ['type' => 'integer']]]],
+            ],
+            'encoding' => ['meta' => ['contentType' => 'application/json']],
+        ]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], $body));
+
+        Assert::same($result->isValid(), $violation === null);
+        if ($violation !== null) {
+            Assert::same($result->violations[0]->code, $violation);
+        }
+    }
+
+    /** @return iterable<string, array{string, null|string}> */
+    public static function formContentTypeProvider(): iterable
+    {
+        yield 'json object decodes' => ['meta=' . rawurlencode('{"a":1}'), null];
+        yield 'json object failing its schema' => ['meta=' . rawurlencode('{"a":"x"}'), 'request.body.schema'];
+        yield 'malformed json' => ['meta=' . rawurlencode('{'), 'request.body.decode'];
+        yield 'repeated property' => ['meta=%7B%7D&meta=%7B%7D', 'request.body.decode'];
+    }
+
+    /**
+     * A non-JSON `contentType` leaves the value as the string it already is —
+     * as far as an undecoded payload can be judged, the same rule a whole
+     * opaque body follows.
+     */
+    public function readsANonJsonFormContentTypeAsAString(): void
+    {
+        $contract = $this->bodyContract(['application/x-www-form-urlencoded' => [
+            'schema' => ['type' => 'object', 'required' => ['note'], 'properties' => ['note' => ['type' => 'string', 'minLength' => 2]]],
+            'encoding' => ['note' => ['contentType' => 'text/plain']],
+        ]]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], $body);
+
+        Assert::true($contract->validateRequest($request('note=hello'))->isValid());
+        Assert::same($contract->validateRequest($request('note=h'))->violations[0]->code, 'request.body.schema');
+    }
+
+    /**
+     * A Header Object declared for a multipart part was checked for presence
+     * and nothing else, so a constraint the document states was enforced by
+     * nothing — while the same declaration on a response header was fully
+     * validated.
+     */
+    #[DataProvider('multipartHeaderProvider')]
+    public function validatesDeclaredMultipartPartHeaders(string $headers, bool $valid): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => [
+            'schema' => ['type' => 'object', 'required' => ['note'], 'properties' => ['note' => ['type' => 'string']]],
+            'encoding' => ['note' => ['headers' => [
+                'X-Chunk' => ['required' => true, 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                'X-Tag' => ['schema' => ['type' => 'string', 'enum' => ['a', 'b']]],
+            ]]],
+        ]]);
+        $payload = "--X\r\nContent-Disposition: form-data; name=\"note\"\r\n" . $headers . "\r\nhi\r\n--X--\r\n";
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary=X'], $payload);
+
+        Assert::same($contract->validateRequest($request)->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function multipartHeaderProvider(): iterable
+    {
+        yield 'required header present and valid' => ["X-Chunk: 3\r\n", true];
+        yield 'optional header valid' => ["X-Chunk: 3\r\nX-Tag: a\r\n", true];
+        yield 'optional header absent' => ["X-Chunk: 1\r\n", true];
+        yield 'required header missing' => ['', false];
+        yield 'required header below its minimum' => ["X-Chunk: 0\r\n", false];
+        yield 'required header of the wrong type' => ["X-Chunk: many\r\n", false];
+        yield 'optional header outside its enum' => ["X-Chunk: 1\r\nX-Tag: z\r\n", false];
+    }
+
+    /**
      * A query string is `application/x-www-form-urlencoded` content, where
      * `+` spells a space. Percent-decoding it literally made the validator
      * report a violation for the exact value the application behind it

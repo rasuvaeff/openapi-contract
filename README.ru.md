@@ -157,9 +157,14 @@ request. Неизвестный ключ операции даёт одно ст
 `response.operation.unknown`.
 
 Request body с `application/x-www-form-urlencoded` декодируется по тем же
-form-правилам, что и query-параметры. `multipart/form-data` поддерживает
+form-правилам, что и query-параметры, а свойство с объявленным в `encoding`
+content type несёт вместо этого целый документ: JSON декодируется и
+проверяется по схеме свойства, любой другой media type проверяется как строка,
+которой он уже является. `multipart/form-data` поддерживает
 ограниченный разбор частей, JSON и binary parts, повторяющиеся части-массивы и
-`encoding` с content type/required headers для свойства. Без content type в
+`encoding` с content type и заголовками для свойства — объявленный заголовок
+части обязан присутствовать при `required` и обязан удовлетворять своей схеме,
+читается стилем `simple`, как заголовочный параметр запроса. Без content type в
 `encoding` часть по умолчанию — `text/plain` для примитивов,
 `application/octet-stream` для binary-строк, `application/json` для объектов,
 а для массивов — умолчание типа элементов. Неподдержанные styles,
@@ -175,6 +180,11 @@ fail-closed как `request.body.decode`.
 быть проверена по недекодированному телу и отвергается fail-closed как
 `request.body.unsupported` / `response.body.unsupported`. Необъявленный media
 type по-прежнему даёт `request.body.media_type` / `response.body.media_type`.
+
+Ответ, который объявляет схему и приходит с пустым телом, даёт
+`response.body.missing` — зеркало `request.body.missing`. Исключены статусы,
+которые по определению не несут тела: `204`, `304` и любой ответ на запрос
+`HEAD`, а также media type без схемы и безусловная булева схема.
 
 При валидации body seekable PSR-7 stream читается с начала, после чего его
 исходная позиция восстанавливается, в том числе при ошибке чтения. Если body

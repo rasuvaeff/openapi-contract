@@ -301,7 +301,7 @@ final readonly class RequestValidator
             } elseif ($mediaType === 'application/x-www-form-urlencoded') {
                 $value = $this->forms->decode($body, $schema ?? [], $encoding);
             } else {
-                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema ?? [], $encoding);
+                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema ?? [], $encoding, $dialect);
             }
         } catch (\JsonException) {
             return [$this->bodyViolation($matched, 'request.body.json', 'Request body is not valid JSON')];
