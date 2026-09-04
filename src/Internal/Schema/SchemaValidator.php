@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 use Opis\JsonSchema\Parsers\SchemaParser;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Validator as OpisValidator;
+use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
 
 /**
  * @internal
@@ -45,7 +46,16 @@ final readonly class SchemaValidator
      */
     public function isValid(mixed $value, array $schema, SchemaDialect $dialect, string $direction = 'request'): bool
     {
-        return $this->validator->validate($value, $this->compiler->compile($this->effectiveSchema($schema, $direction), $dialect))->isValid();
+        $compiled = $this->compiler->compile($this->effectiveSchema($schema, $direction), $dialect);
+
+        try {
+            return $this->validator->validate($value, $compiled)->isValid();
+        } catch (\Throwable $exception) {
+            // Backends are implementation details: a document the compiler
+            // accepted but the backend chokes on leaves as a package type, on
+            // the exit `compile()` above already uses.
+            throw UnsupportedSchema::fromBackend($exception);
+        }
     }
 
     /** @param array<string, mixed> $schema

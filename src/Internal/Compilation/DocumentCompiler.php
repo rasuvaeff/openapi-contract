@@ -104,7 +104,7 @@ final readonly class DocumentCompiler
                     ));
                 }
                 $templates[$templateKey] = $pathString;
-                $parameters = $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver);
+                $parameters = $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver, $pathString, $method);
                 $this->assertPathParameters($pathString, $parameters);
                 $servers = $this->servers($raw['servers'] ?? null, $pathServers);
                 $operations[$key] = new Operation(
@@ -250,50 +250,76 @@ final readonly class DocumentCompiler
         return $base === '' ? '/' : $base;
     }
 
+    /** RFC 6901: `~` and `/` are the only characters a pointer token escapes. */
+    private function escapePointer(string $value): string
+    {
+        return str_replace(['~', '/'], ['~0', '~1'], $value);
+    }
+
     /**
      * @param array<array-key, mixed> $path
      * @param array<array-key, mixed> $operation
      * @return list<CompiledParameter>
      */
-    private function parameters(array $path, array $operation, JsonPointerResolver $resolver): array
+    private function parameters(array $path, array $operation, JsonPointerResolver $resolver, string $pathString, string $method): array
     {
+        // A Path Item's parameters and an Operation's are merged for lookup,
+        // but they live at different pointers; the merged position is not one
+        // a reader can find in their document.
+        $sources = [
+            sprintf('/paths/%s/parameters', $this->escapePointer($pathString)) => array_values($path),
+            sprintf('/paths/%s/%s/parameters', $this->escapePointer($pathString), $method) => array_values($operation),
+        ];
         $result = [];
-        foreach ([...$path, ...$operation] as $raw) {
-            if (!is_array($raw)) {
-                continue;
+        foreach ($sources as $pointer => $declarations) {
+            foreach (array_keys($declarations) as $index) {
+                $result = [...$result, ...$this->parameter($declarations[$index], $resolver, sprintf('%s/%d', $pointer, $index))];
             }
-            $raw = $resolver->resolve($raw);
-            $name = $raw['name'] ?? null;
-            $in = $raw['in'] ?? null;
-            if (!is_string($name) || $name === '' || !is_string($in) || !in_array($in, ['path', 'query', 'header', 'cookie'], strict: true)) {
-                throw new InvalidContract('OpenAPI parameter must have a valid name and location');
-            }
-            /** @var mixed $schemaValue */
-            $schemaValue = $raw['schema'] ?? null;
-            $schema = $this->resolvedSchema($schemaValue, $resolver);
-            $key = $in . ':' . ($in === 'header' ? strtolower($name) : $name);
-            /** @var mixed $styleValue */
-            $styleValue = $raw['style'] ?? null;
-            /** @var mixed $explodeValue */
-            $explodeValue = $raw['explode'] ?? null;
-            $style = is_string($styleValue) ? $styleValue : ($in === 'query' || $in === 'cookie' ? 'form' : 'simple');
-            $this->assertSupportedStyle($name, $in, $style, $raw);
-            /** @var CompiledParameter $parameter */
-            $parameter = [
-                'name' => $name,
-                'in' => $in,
-                'required' => ($raw['required'] ?? false) === true,
-                'style' => $style,
-                'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
-                'allowReserved' => ($raw['allowReserved'] ?? false) === true,
-                'schema' => $schema,
-                ...array_key_exists('example', $raw) ? ['example' => $raw['example']] : [],
-                ...array_key_exists('examples', $raw) ? ['examples' => $this->namedExamples($name, $raw['examples'])] : [],
-            ];
-            $result[$key] = $parameter;
         }
 
         return array_values($result);
+    }
+
+    /**
+     * @param non-empty-string $specPointer
+     * @return array<string, CompiledParameter>
+     */
+    private function parameter(mixed $raw, JsonPointerResolver $resolver, string $specPointer): array
+    {
+        if (!is_array($raw)) {
+            throw new InvalidContract('OpenAPI parameter must be an object');
+        }
+        $raw = $resolver->resolve($raw);
+        $name = $raw['name'] ?? null;
+        $in = $raw['in'] ?? null;
+        if (!is_string($name) || $name === '' || !is_string($in) || !in_array($in, ['path', 'query', 'header', 'cookie'], strict: true)) {
+            throw new InvalidContract('OpenAPI parameter must have a valid name and location');
+        }
+        /** @var mixed $schemaValue */
+        $schemaValue = $raw['schema'] ?? null;
+        $schema = $this->resolvedSchema($schemaValue, $resolver);
+        $key = $in . ':' . ($in === 'header' ? strtolower($name) : $name);
+        /** @var mixed $styleValue */
+        $styleValue = $raw['style'] ?? null;
+        /** @var mixed $explodeValue */
+        $explodeValue = $raw['explode'] ?? null;
+        $style = is_string($styleValue) ? $styleValue : ($in === 'query' || $in === 'cookie' ? 'form' : 'simple');
+        $this->assertSupportedStyle($name, $in, $style, $raw);
+        /** @var CompiledParameter $parameter */
+        $parameter = [
+            'name' => $name,
+            'in' => $in,
+            'required' => ($raw['required'] ?? false) === true,
+            'style' => $style,
+            'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
+            'allowReserved' => ($raw['allowReserved'] ?? false) === true,
+            'schema' => $schema,
+            ...array_key_exists('example', $raw) ? ['example' => $raw['example']] : [],
+            ...array_key_exists('examples', $raw) ? ['examples' => $this->namedExamples($name, $raw['examples'])] : [],
+            'specPointer' => $specPointer,
+        ];
+
+        return [$key => $parameter];
     }
 
     /**

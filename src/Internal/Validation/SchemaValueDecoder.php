@@ -11,17 +11,29 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
  */
 final readonly class SchemaValueDecoder
 {
-    /** @param array<string, mixed> $schema */
+    /**
+     * The wire shape a value of this schema takes. OAS 3.1 spells a type as a
+     * union, so membership decides, not identity. A union naming both `array`
+     * and `object` cannot be told apart on the wire — see the class docblock on
+     * {@see \Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec} —
+     * so the list shape wins, deliberately, rather than raising from a place
+     * whose callers do not all turn an exception into a violation.
+     *
+     * @param array<string, mixed> $schema
+     */
     public function kind(array $schema): ParameterKind
     {
         /** @var mixed $type */
         $type = $schema['type'] ?? 'string';
+        $types = is_array($type) ? $type : [$type];
+        if (in_array('array', $types, strict: true)) {
+            return ParameterKind::List;
+        }
+        if (in_array('object', $types, strict: true)) {
+            return ParameterKind::Object;
+        }
 
-        return match ($type) {
-            'array' => ParameterKind::List,
-            'object' => ParameterKind::Object,
-            default => ParameterKind::Scalar,
-        };
+        return ParameterKind::Scalar;
     }
 
     /**

@@ -9,7 +9,9 @@ use Nyholm\Psr7\Stream;
 use Psr\Http\Message\StreamInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\ContractViolation;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
@@ -369,6 +371,188 @@ final class RequestValidationTest
     {
         yield 'unexploded' => [false, '.blue,black,brown'];
         yield 'exploded' => [true, '.blue.black.brown'];
+    }
+
+    /**
+     * PSR-7 joins repeated header lines with ", " and RFC 9110 allows the
+     * whitespace anyway, so a list read from a header carries it whichever way
+     * the client sent the value. The response direction has always stripped it.
+     */
+    #[DataProvider('headerListWiresProvider')]
+    public function stripsTheWhitespaceAroundAHeaderListSeparator(array $headers): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'X-Tags', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false,
+            'schema' => ['type' => 'array', 'minItems' => 2, 'items' => ['type' => 'string', 'pattern' => '^[a-z]+\z']],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', $headers))->isValid());
+    }
+
+    /** @return iterable<string, array{array<string, string|list<string>>}> */
+    public static function headerListWiresProvider(): iterable
+    {
+        yield 'no whitespace' => [['X-Tags' => 'red,blue']];
+        yield 'whitespace after the comma' => [['X-Tags' => 'red, blue']];
+        yield 'repeated header lines' => [['X-Tags' => ['red', 'blue']]];
+    }
+
+    /**
+     * An open object cannot tell an undeclared query pair from a stray one, but
+     * a pair another parameter declares is certainly not part of it.
+     */
+    public function anOpenObjectParameterLeavesTheOtherParametersAlone(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+            'parameters' => [
+                [
+                    'name' => 'filter', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => true,
+                    'schema' => ['type' => 'object', 'maxProperties' => 2, 'additionalProperties' => ['type' => 'string']],
+                ],
+                ['name' => 'page', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer']],
+            ],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?a=1&b=2&page=3'))->isValid());
+    }
+
+    /**
+     * OAS 3.1 spells a type as a union, and the wire shape follows the union's
+     * membership rather than its identity.
+     */
+    public function readsTheWireShapeOfATypeUnion(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'tags', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => false,
+            'schema' => ['type' => ['array', 'null'], 'minItems' => 2, 'items' => ['type' => 'string']],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?tags=red,blue'))->isValid());
+    }
+
+    /**
+     * `explode: false` puts the whole array in one part as a comma-separated
+     * list; the form decoder has always read that, the multipart one had not.
+     */
+    #[DataProvider('multipartExplodeProvider')]
+    public function readsTheEncodingExplodeOfAMultipartArray(bool $explode, string $parts): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => [
+            'schema' => ['type' => 'object', 'required' => ['tags'], 'properties' => [
+                'tags' => ['type' => 'array', 'minItems' => 3, 'items' => ['type' => 'string', 'maxLength' => 4]],
+            ]],
+            'encoding' => ['tags' => ['explode' => $explode]],
+        ]]);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary=X'], $parts);
+
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
+    /** @return iterable<string, array{bool, string}> */
+    public static function multipartExplodeProvider(): iterable
+    {
+        $part = static fn(string $value): string => "--X\r\nContent-Disposition: form-data; name=\"tags\"\r\n\r\n" . $value . "\r\n";
+        yield 'unexploded, one part' => [false, $part('red,blue,pink') . "--X--\r\n"];
+        yield 'exploded, repeated parts' => [true, $part('red') . $part('blue') . $part('pink') . "--X--\r\n"];
+    }
+
+    /**
+     * A boolean schema is a schema: `false` admits nothing at all. Reading it
+     * as "no schema declared" let every body through.
+     */
+    public function aFalseBodySchemaAdmitsNothing(): void
+    {
+        $result = $this->bodyContract(['application/json' => ['schema' => false]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+
+        Assert::same($result->violations[0]->code, 'request.body.schema');
+    }
+
+    public function aTrueBodySchemaConstrainsNothing(): void
+    {
+        $result = $this->bodyContract(['application/json' => ['schema' => true]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"any":"thing"}'));
+
+        Assert::true($result->isValid());
+    }
+
+    /**
+     * A Path Item's parameters and an Operation's are merged for lookup but
+     * live at different pointers; a position in the merged list points at a
+     * declaration the reader cannot find.
+     */
+    public function parameterPointersNameTheDeclarationThatCarriesThem(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/p' => [
+            'parameters' => [['name' => 'a', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']]],
+            'get' => [
+                'parameters' => [['name' => 'b', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']]],
+                'responses' => ['200' => []],
+            ],
+        ]]]);
+
+        $result = $contract->validateRequest(new ServerRequest('GET', '/p'));
+
+        Assert::same(
+            array_map(static fn(Violation $violation): string => $violation->specPointer, $result->violations),
+            ['/paths/~1p/parameters/0', '/paths/~1p/get/parameters/0'],
+        );
+    }
+
+    /**
+     * `InvalidContract` extends `InvalidArgumentException`, which this loop
+     * catches to turn a deserialization failure into a violation. Without the
+     * narrower catch, an unsupported document is reported as something the
+     * request did wrong.
+     */
+    public function anUnsupportedSchemaRaisesInsteadOfBecomingAViolation(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'q', 'in' => 'query', 'required' => true,
+            'schema' => ['type' => 'string', '$anchor' => 'x'],
+        ]);
+
+        // Called directly as well as through the facade: the mutation mapping
+        // follows pcov's line coverage, and the validator is reached from
+        // Contract through a call graph that attributes the mutant elsewhere.
+        foreach ([
+            fn(): mixed => $contract->validateRequest(new ServerRequest('GET', '/q?q=x')),
+            fn(): mixed => (new RequestValidator())->validate(
+                $contract->match(new ServerRequest('GET', '/q?q=x')) ?? throw new \LogicException('No operation matched'),
+                new ServerRequest('GET', '/q?q=x'),
+                SchemaDialect::OpenApi31,
+            ),
+        ] as $call) {
+            try {
+                $call();
+                Assert::true(actual: false, message: 'Expected an unsupported schema');
+            } catch (ContractViolation $exception) {
+                Assert::true(actual: false, message: 'Contract errors must not be reported as violations: ' . $exception->getMessage());
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), 'Unsupported schema keyword "$anchor": reference identity is outside the support matrix');
+            }
+        }
+    }
+
+    /**
+     * A wire the codec cannot deserialize is the request's fault, and is
+     * reported rather than raised — the counterpart of the contract error
+     * above. Nothing asserted this code before, so the branch was only ever
+     * reached, never checked.
+     */
+    public function anUndeserializableWireIsReportedAsASerializationViolation(): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'o', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => false,
+            'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]],
+        ]);
+
+        $violation = $contract->validateRequest(new ServerRequest('GET', '/q?o=a,1,odd'))->violations[0];
+
+        Assert::same($violation->code, 'request.parameter.serialization');
+        Assert::same($violation->message, 'Query parameter "o" cannot be deserialized');
+        Assert::same($violation->instancePath, 'o');
     }
 
     public function scalarParametersIgnoreObjectQueryHandling(): void

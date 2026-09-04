@@ -168,7 +168,7 @@ final readonly class ResponseValidator
             /** @var array<string, mixed> $schema */
             $schemaValid = $this->schemas->isValid($value, $schema, $dialect, direction: 'response');
         } else {
-            $schemaValid = true;
+            $schemaValid = !$this->declaresNothingValid($mediaDefinition);
         }
         if (!$schemaValid) {
             $violations[] = new Violation(
@@ -275,7 +275,7 @@ final readonly class ResponseValidator
 
         $kind = $this->values->kind($schema);
         if ($kind !== ParameterKind::Scalar) {
-            $wire = implode(',', array_map(trim(...), explode(',', $wire)));
+            $wire = $this->parameters->withoutHeaderWhitespace($wire);
         }
 
         try {

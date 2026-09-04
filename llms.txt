@@ -71,7 +71,9 @@ API reference:
   descriptions and extensions are dropped.
 - `Operation` (readonly): `key` (operationId or `METHOD /path` fallback),
   `operationId`, `method`, `path`, `parameters` (compiled list with name/in/
-  required/style/explode/allowReserved/schema, plus `example`/`examples` keys
+  required/style/explode/allowReserved/schema/specPointer — the last being the
+  JSON Pointer of the declaration itself, which for a Path Item's parameters is
+  not under the operation — plus `example`/`examples` keys
   present exactly when the document declares them — annotations for
   validation, inputs for the generator's example phase), `requestBody`,
   `responses`,

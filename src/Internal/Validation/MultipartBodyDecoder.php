@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
+use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
+use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 
 /**
  * @internal
@@ -16,6 +18,7 @@ final readonly class MultipartBodyDecoder
 
     public function __construct(
         private SchemaValueDecoder $values = new SchemaValueDecoder(),
+        private ParameterCodec $parameters = new ParameterCodec(),
     ) {}
 
     /**
@@ -41,6 +44,11 @@ final readonly class MultipartBodyDecoder
                 /** @var mixed $itemsValue */
                 $itemsValue = $property['items'] ?? null;
                 $items = $this->values->schema($itemsValue) ?? [];
+                // `explode: false` puts the whole array in one part as a
+                // comma-separated list; the exploded form repeats the part.
+                if (!$configuration['explode'] && is_string($value)) {
+                    $value = $this->parameters->parse($name, $value, ParameterStyle::Simple, explode: false, kind: ParameterKind::List);
+                }
                 $values = is_array($value) && array_is_list($value) ? $value : [$value];
                 /** @var list<mixed> $list */
                 $list = is_array($result[$name] ?? null) ? $result[$name] : [];
@@ -230,11 +238,11 @@ final readonly class MultipartBodyDecoder
         }
     }
 
-    /** @return array{contentType: ?string, headers: array<array-key, mixed>} */
+    /** @return array{contentType: ?string, headers: array<array-key, mixed>, explode: bool} */
     private function encoding(mixed $value, string $name): array
     {
         if ($value === null) {
-            return ['contentType' => null, 'headers' => []];
+            return ['contentType' => null, 'headers' => [], 'explode' => true];
         }
         if (!is_array($value) || array_is_list($value)) {
             throw new BodyDecodingFailed(sprintf('Encoding for multipart property "%s" must be an object', $name));
@@ -255,8 +263,13 @@ final readonly class MultipartBodyDecoder
         if (!is_array($headersValue)) {
             throw new BodyDecodingFailed(sprintf('Encoding headers for multipart property "%s" must be an object', $name));
         }
+        /** @var mixed $explode */
+        $explode = $value['explode'] ?? true;
+        if (!is_bool($explode)) {
+            throw new BodyDecodingFailed(sprintf('Encoding explode for multipart property "%s" must be a boolean', $name));
+        }
 
-        return ['contentType' => $contentType, 'headers' => $headersValue];
+        return ['contentType' => $contentType, 'headers' => $headersValue, 'explode' => $explode];
     }
 
     /** @param array<string, mixed> $schema

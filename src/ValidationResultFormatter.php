@@ -99,9 +99,16 @@ final readonly class ValidationResultFormatter
         return $normalized;
     }
 
+    /**
+     * A body is user data of unknown shape: a schema failure anywhere in it can
+     * put credentials into the rendered diagnostic, and the instance path — the
+     * only thing the name pattern below can inspect — is `$` for a whole-body
+     * violation. Redact bodies wholesale rather than guessing which field of a
+     * payload was sensitive.
+     */
     private function redactsActual(Violation $violation): bool
     {
-        if (in_array($violation->location, ['header', 'cookie', 'query'], strict: true)) {
+        if (in_array($violation->location, ['header', 'cookie', 'query', 'body'], strict: true)) {
             return true;
         }
 
