@@ -29,7 +29,7 @@ final readonly class FormUrlencodedBodyDecoder
         }
 
         $pairs = $this->pairs($body);
-        $properties = $this->properties($schema);
+        $properties = $this->values->properties($schema);
         $consumed = [];
         $result = [];
         foreach ($properties as $name => $property) {
@@ -38,7 +38,7 @@ final readonly class FormUrlencodedBodyDecoder
             $kind = $this->values->kind($property);
             $names = [$name];
             if ($kind === ParameterKind::Object && $explode) {
-                $names = array_keys($this->properties($property));
+                $names = array_keys($this->values->properties($property));
             }
             $selected = [];
             foreach ($pairs as $index => $pair) {
@@ -106,30 +106,6 @@ final readonly class FormUrlencodedBodyDecoder
                 'value' => rawurldecode(str_replace('+', '%20', $rawValue)),
                 'wire' => $wire,
             ];
-        }
-
-        return $result;
-    }
-
-    /** @param array<string, mixed> $schema
-     * @return array<string, array<string, mixed>>
-     */
-    private function properties(array $schema): array
-    {
-        /** @var mixed $value */
-        $value = $schema['properties'] ?? [];
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $result = [];
-        foreach (array_keys($value) as $name) {
-            if (is_string($name)) {
-                $resolved = $this->values->schema($value[$name] ?? null);
-                if ($resolved !== null) {
-                    $result[$name] = $resolved;
-                }
-            }
         }
 
         return $result;

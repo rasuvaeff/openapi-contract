@@ -266,33 +266,30 @@ final readonly class RequestValidator
         if ($this->declaresNothingValid($definition)) {
             return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema')];
         }
-        if (!$this->isJsonMediaType($mediaType) && $mediaType !== 'application/x-www-form-urlencoded' && !str_starts_with($mediaType, 'multipart/')) {
+        if (!MediaType::isJson($mediaType) && $mediaType !== 'application/x-www-form-urlencoded' && !str_starts_with($mediaType, 'multipart/')) {
             return $this->validateOpaqueBody($matched, $mediaType, $body, $definition, $dialect);
         }
+        /** @var mixed $schemaValue */
+        $schemaValue = $this->constrainingSchema($definition);
+        $schema = $this->values->schema($schemaValue);
 
         try {
-            /** @var mixed $schemaValue */
-            $schemaValue = $this->constrainingSchema($definition);
-            $schema = $this->values->schema($schemaValue) ?? [];
             /** @var mixed $encodingValue */
             $encodingValue = $definition['encoding'] ?? [];
             $encoding = is_array($encodingValue) ? $encodingValue : [];
-            if ($this->isJsonMediaType($mediaType)) {
+            if (MediaType::isJson($mediaType)) {
                 /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass $value */
                 $value = json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
             } elseif ($mediaType === 'application/x-www-form-urlencoded') {
-                $value = $this->forms->decode($body, $schema, $encoding);
+                $value = $this->forms->decode($body, $schema ?? [], $encoding);
             } else {
-                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema, $encoding);
+                $value = $this->multipart->decode($body, $request->getHeaderLine('Content-Type'), $schema ?? [], $encoding);
             }
         } catch (\JsonException) {
             return [$this->bodyViolation($matched, 'request.body.json', 'Request body is not valid JSON')];
         } catch (BodyDecodingFailed $exception) {
             return [$this->bodyViolation($matched, 'request.body.decode', $exception->getMessage())];
         }
-        /** @var mixed $schemaValue */
-        $schemaValue = $this->constrainingSchema($definition);
-        $schema = $this->values->schema($schemaValue);
         if ($schema !== null && !$this->schemas->isValid($value, $schema, $dialect)) {
             return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $value)];
         }
@@ -311,18 +308,11 @@ final readonly class RequestValidator
      */
     private function validateOpaqueBody(MatchedOperation $matched, string $mediaType, string $body, array $definition, SchemaDialect $dialect): array
     {
-        $schema = $this->declaredSchema($definition);
-        if ($schema === null || $schema === []) {
-            return [];
-        }
-        if (!$this->isStringSchema($schema)) {
-            return [$this->bodyViolation($matched, 'request.body.unsupported', sprintf('Request media type "%s" cannot be validated against a non-string schema', $mediaType), $mediaType)];
-        }
-        if ($this->schemas->isValid($body, $schema, $dialect)) {
-            return [];
-        }
-
-        return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $body)];
+        return match (OpaqueBodyVerdict::of($this->declaredSchema($definition), $body, $this->schemas, $dialect, 'request')) {
+            OpaqueBodyVerdict::Opaque, OpaqueBodyVerdict::Valid => [],
+            OpaqueBodyVerdict::Unsupported => [$this->bodyViolation($matched, 'request.body.unsupported', sprintf('Request media type "%s" cannot be validated against a non-string schema', $mediaType), $mediaType)],
+            OpaqueBodyVerdict::Invalid => [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $body)],
+        };
     }
 
     private function bodyViolation(MatchedOperation $matched, string $code, string $message, mixed $actual = null): Violation
@@ -374,7 +364,8 @@ final readonly class RequestValidator
         };
     }
 
-    /** @param array<string, mixed> $schema
+    /**
+     * @param array<string, mixed> $schema
      * @return list<string>
      */
     private function propertyNames(array $schema): array

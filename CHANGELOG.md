@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.1 — 2026-09-04
+
+- Media type normalization and matching moved to a shared `MediaType` helper.
+  The validators and the multipart decoder each carried their own copy of the
+  wildcard rules, so `*/*`, `type/*` and `*+json` were decided in two places
+  that could drift; the multipart copy also skipped the normalization the
+  others did, and now folds parameters and case off a part's declared type as
+  well.
+- The `properties` reader the form and multipart decoders duplicated verbatim
+  is one method on `SchemaValueDecoder`.
+- Whether an undecodable body can be judged against its schema is one
+  fail-closed decision, `OpaqueBodyVerdict`, that the request and response
+  validators map to their own wording. The two directions carried separate
+  copies of the rule.
+- `RequestValidator` computes the constraining schema once per body instead of
+  twice.
+- Filtering every property of an object for a direction leaves the document's
+  own openness intact — `additionalProperties: false` still closes it, and its
+  absence still leaves it open. Behavior is unchanged; it is now pinned by a
+  test, because the open half reads like a hole in a fail-closed package and
+  is not one.
+
 ## 0.5.0 — 2026-09-04
 
 - Reference-identity keywords fail closed (#39). `$id`, `$anchor`, `$dynamicRef`

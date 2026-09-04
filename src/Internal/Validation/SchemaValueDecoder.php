@@ -88,6 +88,34 @@ final readonly class SchemaValueDecoder
         return $value;
     }
 
+    /**
+     * The Schema Objects a `properties` map declares, keyed by property name.
+     * Entries that are not objects — a malformed document, or a boolean
+     * schema — are dropped, so callers iterate declared properties only.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, array<string, mixed>>
+     */
+    public function properties(array $schema): array
+    {
+        /** @var mixed $value */
+        $value = $schema['properties'] ?? [];
+        if (!is_array($value)) {
+            return [];
+        }
+        $result = [];
+        foreach (array_keys($value) as $name) {
+            if (is_string($name)) {
+                $resolved = $this->schema($value[$name] ?? null);
+                if ($resolved !== null) {
+                    $result[$name] = $resolved;
+                }
+            }
+        }
+
+        return $result;
+    }
+
     /** @param array<string, mixed> $schema */
     public function scalar(string $value, array $schema): string|int|float|bool|null
     {

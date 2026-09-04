@@ -9,8 +9,10 @@ use Rasuvaeff\OpenApiContract\Contract;
 
 /**
  * Message-reading helpers shared by the request and response validators:
- * body access that preserves seekable stream positions, media-type
- * normalization and matching, and JSON Pointer escaping.
+ * body access that preserves seekable stream positions, the schema a Media
+ * Type Object declares, and JSON Pointer escaping. Media type normalization
+ * and matching itself lives in {@see MediaType}, which the body decoders
+ * share too.
  *
  * @internal
  */
@@ -49,7 +51,8 @@ trait MessageReading
         }
     }
 
-    /** @param array<array-key, mixed> $content
+    /**
+     * @param array<array-key, mixed> $content
      * @return array<array-key, mixed>|null
      */
     private function mediaDefinition(array $content, string $mediaType): ?array
@@ -58,7 +61,7 @@ trait MessageReading
             if (!is_string($declared) || !is_array($definition)) {
                 continue;
             }
-            if ($this->mediaMatches($declared, $mediaType)) {
+            if (MediaType::matches($declared, $mediaType)) {
                 return $definition;
             }
         }
@@ -66,29 +69,9 @@ trait MessageReading
         return null;
     }
 
-    private function isJsonMediaType(string $mediaType): bool
-    {
-        return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
-    }
-
-    private function mediaMatches(string $declared, string $actual): bool
-    {
-        $declared = strtolower(trim(explode(';', $declared, 2)[0]));
-        if ($declared === $actual || $declared === '*/*') {
-            return true;
-        }
-        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
-        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
-        if ($declaredType !== $actualType) {
-            return false;
-        }
-
-        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
-    }
-
     private function mediaTypeOf(MessageInterface $message): string
     {
-        return strtolower(trim(explode(';', $message->getHeaderLine('Content-Type'), 2)[0]));
+        return MediaType::normalize($message->getHeaderLine('Content-Type'));
     }
 
     private function escape(string $value): string
@@ -132,28 +115,4 @@ trait MessageReading
         return $schema;
     }
 
-    /**
-     * Whether a raw non-JSON payload can be validated as the string value the
-     * schema describes: `type: string`, or a type list of `string` (and
-     * `null`) only.
-     *
-     * @param array<string, mixed> $schema
-     */
-    private function isStringSchema(array $schema): bool
-    {
-        $type = $schema['type'] ?? null;
-        if ($type === 'string') {
-            return true;
-        }
-        if (!is_array($type) || !array_is_list($type) || !in_array('string', $type, strict: true)) {
-            return false;
-        }
-        foreach ($type as $candidate) {
-            if ($candidate !== 'string' && $candidate !== 'null') {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }

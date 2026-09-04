@@ -789,6 +789,31 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($request)->isValid());
     }
 
+    /**
+     * A part's declared `contentType` is matched after normalization, so a
+     * declaration carrying parameters or mixed case still matches the part
+     * that arrives. Before the media-type helper was shared, the multipart
+     * matcher was the one copy that skipped normalizing the declaration and
+     * rejected this exchange.
+     */
+    public function normalizesADeclaredPartContentTypeBeforeMatching(): void
+    {
+        $boundary = 'test-boundary';
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => [
+            'type' => 'object',
+            'required' => ['note'],
+            'properties' => ['note' => ['type' => 'string']],
+        ], 'encoding' => ['note' => ['contentType' => 'Text/Plain; charset=utf-8']]]]);
+        $body = '--' . $boundary . "\r\n"
+            . "Content-Disposition: form-data; name=\"note\"\r\n"
+            . "Content-Type: text/plain\r\n\r\n"
+            . 'hello' . "\r\n"
+            . '--' . $boundary . "--\r\n";
+
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary="' . $boundary . '"'], $body);
+        Assert::true($contract->validateRequest($request)->isValid());
+    }
+
     public function defaultsAnArrayPartContentTypeToItsItemType(): void
     {
         $boundary = 'test-boundary';

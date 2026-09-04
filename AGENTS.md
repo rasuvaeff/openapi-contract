@@ -52,6 +52,13 @@ make release-check
   backend objects.
 - Code uses `declare(strict_types=1)`, internal feasibility types carry
   `@internal`, and public types carry `@api`.
+- `tests/Differential/` runs in the **Unit** suite on purpose. The suite
+  convention puts non-unit tests under `tests/Integration/`, but those are the
+  ones that need a server and are skipped by env; the league and cebe
+  differentials are hermetic — they need nothing but dev dependencies, and
+  they are the only thing that catches this package agreeing with itself while
+  disagreeing with every other reader of the same document. Moving them out of
+  the default suite would take them out of CI.
 - `examples/` is part of the public contract; every listed script must run.
 - CI actions stay SHA-pinned with read-only permissions and checkout
   credentials disabled.
