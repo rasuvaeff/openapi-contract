@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Fixed.** OAS 3.0 documents that use a boolean `additionalProperties` no
+  longer fail validation (#49). `additionalProperties` was grouped with `items`
+  and `not`, which really do forbid a boolean before OAS 3.1, but the 3.0
+  specification spells this one out as "Value can be boolean or object" — and
+  `additionalProperties: false` is the standard closed-object idiom of the 3.0
+  corpus. The document loaded and then every `validateRequest()` /
+  `validateResponse()` threw `UnsupportedSchema`.
+- **Fixed.** A property whose name is numeric or whose schema is a boolean is
+  validated instead of being silently dropped (#50). PHP normalizes the array
+  key `"2020"` to an integer, and the directional filter discarded any member
+  it did not recognise — together with its `required` entry — so the whole
+  declaration went unchecked in both directions, with no diagnostic. Direction
+  (`readOnly`/`writeOnly`) is now the only reason a property is dropped;
+  anything else is passed through for the compiler and the backend to judge,
+  and the compiler no longer rejects an integer-normalized name in `properties`
+  or `$defs`.
+- **Fixed.** A boolean property schema in a form or multipart body no longer
+  escapes as a bare `InvalidArgumentException` out of `validateRequest()`
+  (#51). The body decoders read `properties` through a helper that accepted
+  object schemas only; a boolean member now maps to the unconstrained schema
+  for decoding, and the backend enforces what the boolean says.
+- **Internal.** `MediaType::isJson()` normalizes its own argument, like the
+  twin helper in `property-testing-openapi`. It assumed a pre-normalized value,
+  so the answer depended on which caller had remembered to normalize first —
+  the same asymmetry that hid a multipart bug in `mediaMatches()` until 0.5.1.
+
 ## 0.5.1 — 2026-09-04
 
 - Media type normalization and matching moved to a shared `MediaType` helper.

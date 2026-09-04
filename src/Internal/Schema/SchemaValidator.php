@@ -77,6 +77,13 @@ final readonly class SchemaValidator
      * it still admits anything, exactly as it does for the other direction.
      * OAS implies no closed object, so this does not close one.
      *
+     * Direction is the *only* reason a property is dropped. A member this
+     * method does not recurse into — a boolean schema, or any shape it does
+     * not read — is passed through untouched for the compiler and the backend
+     * to judge. Dropping it here instead removed the property, its subschema
+     * and its `required` entry from the check, which is the one outcome a
+     * validator must never produce silently.
+     *
      * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
@@ -90,17 +97,24 @@ final readonly class SchemaValidator
                 continue;
             }
             if ($keyword === 'properties' && is_array($schema[$keyword])) {
+                $flag = $direction === 'request' ? 'readOnly' : 'writeOnly';
                 $properties = [];
+                /** @var array<string, true> $dropped */
+                $dropped = [];
                 /** @var array<array-key, mixed> $propertyMap */
                 $propertyMap = $schema[$keyword];
                 foreach (array_keys($propertyMap) as $name) {
-                    if (!is_string($name) || !is_array($propertyMap[$name]) || array_is_list($propertyMap[$name])) {
+                    /** @var mixed $property */
+                    $property = $propertyMap[$name];
+                    if (!is_array($property) || array_is_list($property)) {
+                        $properties[$name] = $property;
+
                         continue;
                     }
                     /** @var array<string, mixed> $property */
-                    $property = $propertyMap[$name];
-                    $flag = $direction === 'request' ? 'readOnly' : 'writeOnly';
                     if (($property[$flag] ?? false) === true) {
+                        $dropped[(string) $name] = true;
+
                         continue;
                     }
                     $properties[$name] = $this->effectiveSchema($property, $direction);
@@ -113,7 +127,7 @@ final readonly class SchemaValidator
                 /** @var mixed $required */
                 $required = $schema['required'] ?? null;
                 if (is_array($required)) {
-                    $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => is_string($name) && array_key_exists($name, $properties)));
+                    $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($dropped[$name])));
                 }
             } elseif ($keyword === 'items' && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
                 /** @var array<string, mixed> $items */

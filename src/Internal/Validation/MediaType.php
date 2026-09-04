@@ -44,11 +44,16 @@ final readonly class MediaType
     }
 
     /**
-     * Whether a normalized media type carries a JSON payload: the JSON media
-     * type itself, or any of the `+json` structured syntax suffixes.
+     * Whether a media type carries a JSON payload: the JSON media type
+     * itself, or any of the `+json` structured syntax suffixes. Accepts an
+     * unnormalized value, so the answer cannot depend on which caller
+     * remembered to normalize first — the twin helper in
+     * `property-testing-openapi` reads the same way.
      */
-    public static function isJson(string $mediaType): bool
+    public static function isJson(string $value): bool
     {
-        return $mediaType === 'application/json' || str_ends_with($mediaType, '+json');
+        $normalized = self::normalize($value);
+
+        return $normalized === 'application/json' || str_ends_with($normalized, '+json');
     }
 }

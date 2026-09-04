@@ -175,6 +175,118 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid((object) ['unrelated' => 'x'], $closed, SchemaDialect::OpenApi31));
     }
 
+    /**
+     * OAS 3.0.3 spells `additionalProperties` out as "Value can be boolean or
+     * object". Grouping it with `items` and `not` — which really do forbid a
+     * boolean before 3.1 — made the commonest closed-object idiom in the 3.0
+     * corpus throw out of every validation call.
+     */
+    public function acceptsBooleanAdditionalPropertiesUnderOas30(): void
+    {
+        $validator = new SchemaValidator();
+        $closed = ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'additionalProperties' => false];
+
+        Assert::true($validator->isValid((object) ['a' => 'x'], $closed, SchemaDialect::OpenApi30));
+        Assert::false($validator->isValid((object) ['a' => 'x', 'b' => 1], $closed, SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid((object) ['b' => 1], ['type' => 'object', 'additionalProperties' => true], SchemaDialect::OpenApi30));
+    }
+
+    /**
+     * `items` and `not` keep the 3.1 gate: only `additionalProperties` is
+     * exempt, and only because the 3.0 specification says so.
+     */
+    #[DataProvider('oas30BooleanSchemaProvider')]
+    public function rejectsBooleanSchemaWhereOas30Forbids(array $schema): void
+    {
+        try {
+            (new SchemaValidator())->isValid(value: true, schema: $schema, dialect: SchemaDialect::OpenApi30);
+        } catch (UnsupportedSchema $exception) {
+            Assert::string($exception->getMessage())->contains('boolean schemas require OAS 3.1');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected unsupported schema exception');
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function oas30BooleanSchemaProvider(): iterable
+    {
+        yield 'items' => [['items' => false]];
+        yield 'not' => [['not' => true]];
+        yield 'properties member' => [['type' => 'object', 'properties' => ['a' => true]]];
+    }
+
+    /**
+     * PHP normalizes the array key `"2020"` to `int 2020`, so a legal
+     * `properties: {"2020": …}` used to be dropped as a malformed name — and
+     * its `required` entry with it, which made the whole declaration silently
+     * unchecked in both directions.
+     */
+    public function validatesPropertiesWhoseNameIsNumeric(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['type' => 'object', 'properties' => ['2020' => ['type' => 'integer']], 'required' => ['2020']];
+
+        Assert::true($validator->isValid((object) ['2020' => 1], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['2020' => 'x'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, direction: 'response'));
+    }
+
+    /**
+     * Numeric names that happen to run 0, 1, 2 make `properties` a PHP list,
+     * which JSON-encodes as an array unless the map is cast back to an object.
+     */
+    public function validatesPropertiesWhoseNamesFormAList(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'properties' => ['0' => ['type' => 'integer'], '1' => ['type' => 'string']],
+            'required' => ['0'],
+        ];
+
+        Assert::true($validator->isValid((object) ['0' => 1, '1' => 'x'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['0' => 'not-an-integer'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['1' => 'x'], $schema, SchemaDialect::OpenApi31));
+    }
+
+    /**
+     * A boolean member of `properties` is a schema, not a form to skip:
+     * `false` admits no value for that property at all, `true` admits any.
+     */
+    public function validatesBooleanPropertySchemas(): void
+    {
+        $validator = new SchemaValidator();
+        $forbidden = ['type' => 'object', 'properties' => ['secret' => false]];
+        $anything = ['type' => 'object', 'properties' => ['a' => true], 'required' => ['a']];
+
+        Assert::true($validator->isValid((object) [], $forbidden, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['secret' => 1], $forbidden, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['a' => 'anything'], $anything, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $anything, SchemaDialect::OpenApi31));
+    }
+
+    /**
+     * The directional filter is the only reason a `required` entry is
+     * dropped. An entry naming a property the filter passed through untouched
+     * has to survive, or the requirement disappears from the check.
+     */
+    public function keepsRequiredEntriesOfPropertiesItDoesNotRecurseInto(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'properties' => ['open' => true, 'id' => ['type' => 'integer', 'readOnly' => true]],
+            'required' => ['open', 'id'],
+        ];
+
+        Assert::true($validator->isValid((object) ['open' => 'x'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['id' => 1], $schema, SchemaDialect::OpenApi31));
+    }
+
     public function normalizesNestedOas30SchemasInEveryContainer(): void
     {
         $validator = new SchemaValidator();
