@@ -5,9 +5,14 @@ Guidance for AI agents working on this package. Read before changing code.
 ## What this is
 
 A framework-neutral OpenAPI contract validator for complete PSR-7 exchanges,
-in namespace `Rasuvaeff\OpenApiContract`. The package is in feasibility work;
-do not promote internal milestone types to public API before the backend,
-dialect, and diagnostics fixtures prove the shape.
+in namespace `Rasuvaeff\OpenApiContract`, published as
+`rasuvaeff/openapi-contract` (0.x). The feasibility phase is closed — the
+backend decision and the executable corpus status are recorded in
+[FEASIBILITY.md](FEASIBILITY.md). The public API (`Contract`, `Operation`,
+`MatchedOperation`, `ValidationResult`, `Violation`,
+`ValidationResultFormatter`) is documented in README EN/RU and `llms.txt`;
+milestone types stay under `Internal\` and carry `@internal` — never let one
+appear in a public signature.
 
 ## Golden rules
 
@@ -38,7 +43,10 @@ make release-check
 - OAS 3.0 Schema Objects are not Draft 2020-12 schemas. Keep the 3.0
   normalization path separate from the native 3.1 path.
 - Unknown `jsonSchemaDialect` and `$schema` values are errors, not annotations.
-- Only same-document fragment references are eligible for v0.1.
+- `fromFile()` resolves multi-file documents: relative `$ref`s to sibling
+  JSON/YAML files inside the entry file's directory tree, with traversal,
+  scheme, and symlink escapes rejected. `fromArray()`/`fromJson()` have no
+  trusted filesystem root and accept same-document references only.
 - Response selection is exact status, then uppercase range (`2XX`), then
   `default`; do not emit body/header errors if no Response Object matched.
 - Validation backends are implementation details. Public diagnostics and
@@ -50,7 +58,7 @@ make release-check
   interaction contracts belong in `property-testing-openapi`, where public
   adapters use `understudy-testo`. Backend compatibility fixtures use real
   backend objects.
-- Code uses `declare(strict_types=1)`, internal feasibility types carry
+- Code uses `declare(strict_types=1)`, internal types carry
   `@internal`, and public types carry `@api`.
 - `tests/Differential/` runs in the **Unit** suite on purpose. The suite
   convention puts non-unit tests under `tests/Integration/`, but those are the
