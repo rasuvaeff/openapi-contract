@@ -31,23 +31,31 @@ final readonly class FormUrlencodedBodyDecoder
         $pairs = $this->pairs($body);
         $properties = $this->values->properties($schema);
         $consumed = [];
+        /** @var array<string, mixed> $result */
         $result = [];
         foreach ($properties as $name => $property) {
             $configuration = $this->encoding($encoding[$name] ?? null, $name);
             $explode = $configuration['explode'];
             $kind = $this->values->kind($property);
             $names = [$name];
-            if ($kind === ParameterKind::Object && $explode) {
+            if ($configuration['contentType'] === null && $kind === ParameterKind::Object && $explode) {
                 $names = array_keys($this->values->properties($property));
             }
             $selected = [];
+            $values = [];
             foreach ($pairs as $index => $pair) {
                 if (in_array($pair['name'], $names, strict: true)) {
                     $selected[] = $pair['wire'];
+                    $values[] = $pair['value'];
                     $consumed[$index] = true;
                 }
             }
             if ($selected === []) {
+                continue;
+            }
+            if ($configuration['contentType'] !== null) {
+                $result[$name] = $this->encodedProperty($values, $configuration['contentType'], $name);
+
                 continue;
             }
 
@@ -79,6 +87,7 @@ final readonly class FormUrlencodedBodyDecoder
                 $result[$pair['name']] = $value;
                 continue;
             }
+            /** @var mixed $existing */
             $existing = $result[$pair['name']];
             $result[$pair['name']] = is_array($existing) ? [...$existing, $value] : [$existing, $value];
         }
@@ -111,11 +120,46 @@ final readonly class FormUrlencodedBodyDecoder
         return $result;
     }
 
-    /** @return array{explode: bool} */
+    /**
+     * A property the document declares a `contentType` for does not travel as
+     * a serialized parameter at all: its single pair carries a whole document
+     * in that media type. Reading it as a parameter meant a property declared
+     * `application/json` arrived as a string, failed its own object schema,
+     * and was reported as `request.body.schema` — a valid request called
+     * invalid, with a message pointing away from the cause.
+     *
+     * A JSON media type is decoded; anything else is what the value already
+     * is, a string, which is as far as an undecoded payload can be judged —
+     * the same rule {@see OpaqueBodyVerdict} applies to a whole body.
+     *
+     * @param list<string> $values
+     * @return null|bool|int|float|string|array<array-key, mixed>|\stdClass
+     */
+    private function encodedProperty(array $values, string $contentType, string $name): bool|int|float|string|array|\stdClass|null
+    {
+        if ($values === [] || isset($values[1])) {
+            throw new BodyDecodingFailed(sprintf('Form property "%s" declares a content type and must occur exactly once', $name));
+        }
+        $value = $values[0];
+        if (!MediaType::isJson($contentType)) {
+            return $value;
+        }
+
+        try {
+            /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass $decoded */
+            $decoded = json_decode($value, depth: 64, flags: JSON_THROW_ON_ERROR);
+
+            return $decoded;
+        } catch (\JsonException $exception) {
+            throw new BodyDecodingFailed(sprintf('Form property "%s" is not valid JSON', $name), $exception->getCode(), previous: $exception);
+        }
+    }
+
+    /** @return array{explode: bool, contentType: ?string} */
     private function encoding(mixed $value, string $name): array
     {
         if ($value === null) {
-            return ['explode' => true];
+            return ['explode' => true, 'contentType' => null];
         }
         if (!is_array($value) || array_is_list($value)) {
             throw new BodyDecodingFailed(sprintf('Encoding for form property "%s" must be an object', $name));
@@ -130,7 +174,12 @@ final readonly class FormUrlencodedBodyDecoder
         if (!is_bool($explode)) {
             throw new BodyDecodingFailed(sprintf('Encoding explode for form property "%s" must be a boolean', $name));
         }
+        /** @var mixed $contentTypeValue */
+        $contentTypeValue = $value['contentType'] ?? null;
+        if ($contentTypeValue !== null && (!is_string($contentTypeValue) || $contentTypeValue === '')) {
+            throw new BodyDecodingFailed(sprintf('Encoding contentType for form property "%s" must be a non-empty string', $name));
+        }
 
-        return ['explode' => $explode];
+        return ['explode' => $explode, 'contentType' => is_string($contentTypeValue) ? $contentTypeValue : null];
     }
 }

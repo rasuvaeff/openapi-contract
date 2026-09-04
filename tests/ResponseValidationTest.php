@@ -11,6 +11,7 @@ use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Test;
 
 #[Test]
@@ -127,12 +128,54 @@ final class ResponseValidationTest
         Assert::same($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $invalid)->violations[0]->code, 'response.body.schema');
     }
 
-    public function acceptsEmptyBodyWhenResponseContentIsDeclared(): void
+    /**
+     * A response that declares a schema and answers with nothing has not
+     * answered. This used to pass — the empty body short-circuited before the
+     * media type and schema were looked at — which made the endpoint returning
+     * an empty 200 the one failure contract testing let through, while the
+     * request side has always reported `request.body.missing` for the mirror
+     * case.
+     */
+    public function reportsAMissingDeclaredResponseBody(): void
     {
         $contract = $this->contract();
         $response = new Response(200, ['X-Request-Id' => 'abc']);
+        $result = $contract->validateExchange(new ServerRequest('GET', '/pets/7'), $response);
 
-        Assert::true($contract->validateExchange(new ServerRequest('GET', '/pets/7'), $response)->isValid());
+        Assert::same($result->violations[0]->code, 'response.body.missing');
+        Assert::same($result->violations[0]->message, 'Declared response body is missing');
+    }
+
+    /**
+     * The statuses that carry no body by definition are excluded — 204 and
+     * 304 per RFC 9110 §15 — as is every response to a HEAD request, which
+     * repeats the GET headers without the content they describe. So is a
+     * media type entry that declares no schema at all, or the unconstrained
+     * boolean one, which is indistinguishable from an absent declaration.
+     *
+     * @param array<string, mixed> $content
+     */
+    #[DataProvider('bodylessResponseProvider')]
+    public function acceptsAnEmptyBodyWhereNoneIsPromised(string $method, int $status, array $content): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/r' => [strtolower($method) => [
+            'responses' => [(string) $status => ['description' => 'ok', ...$content]],
+        ]]]]);
+
+        Assert::true($contract->validateExchange(new ServerRequest($method, '/r'), new Response($status))->isValid());
+    }
+
+    /** @return iterable<string, array{string, int, array<string, mixed>}> */
+    public static function bodylessResponseProvider(): iterable
+    {
+        $object = ['content' => ['application/json' => ['schema' => ['type' => 'object']]]];
+
+        yield 'no content declared' => ['GET', 200, []];
+        yield 'media type without a schema' => ['GET', 200, ['content' => ['application/json' => []]]];
+        yield 'unconstrained boolean schema' => ['GET', 200, ['content' => ['application/json' => ['schema' => true]]]];
+        yield 'no content status' => ['GET', 204, $object];
+        yield 'not modified status' => ['GET', 304, $object];
+        yield 'head request' => ['HEAD', 200, $object];
     }
 
     public function reportsExactResponseViolationPointers(): void

@@ -50,6 +50,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `request.body.decode` violation. A body with no parts at all stays rejected —
   the same clause requires at least one — and `tests/Differential/` now pins
   every one of these four verdicts against league.
+- **Fixed.** `encoding.contentType` is honoured for
+  `application/x-www-form-urlencoded` bodies (#55). It was neither applied nor
+  rejected, so a property declared `application/json` arrived as a string,
+  failed its own object schema, and was reported as `request.body.schema` — a
+  valid request called invalid, with a message pointing away from the cause.
+  A JSON media type is now decoded and validated against the property schema;
+  any other is validated as the string it already is, the rule an undecoded
+  body already follows.
+- **Fixed.** A declared multipart part header is validated against its schema,
+  not merely checked for presence (#58). The constraint was stated by the
+  document and enforced by nothing, while the same declaration on a response
+  header was fully validated. A part header is read with the `simple` style,
+  like a request header parameter; a `content`-form or non-`simple` declaration
+  fails closed rather than passing an unchecked value through.
+- **Added.** `response.body.missing` — a response that declares a schema and
+  arrives with an empty body is a violation (#57), the mirror of
+  `request.body.missing`. Checking only the bodies that arrived meant the one
+  failure contract testing exists to catch, an endpoint answering 200 with
+  nothing, was the one it passed. Excluded: `204`, `304`, every response to a
+  `HEAD` request, and a media type entry declaring no schema or the
+  unconstrained boolean one.
 
 ## 0.5.1 — 2026-09-04
 

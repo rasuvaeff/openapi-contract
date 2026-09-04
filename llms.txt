@@ -105,11 +105,19 @@ API reference:
   then `NXX`, then `default`.
 - Request body media types: JSON, `application/x-www-form-urlencoded` using
   form parameter semantics, and bounded `multipart/form-data` with JSON/binary
-  parts, arrays, and per-property encoding content types/required headers.
-  Default part content type: `text/plain` (primitives),
+  parts, arrays, and per-property encoding content types and headers. An
+  `encoding.contentType` on a form or multipart property carries a whole
+  document: JSON is decoded and validated against the property schema, any
+  other media type is validated as the string it already is. A declared part
+  header must be present when `required` and must satisfy its schema, read with
+  the `simple` style. Default part content type: `text/plain` (primitives),
   `application/octet-stream` (binary), `application/json` (objects), and for
   arrays the item type's default. Malformed body serialization fails as
   `request.body.decode`.
+- A response declaring a schema that arrives with an empty body →
+  `response.body.missing`, the mirror of `request.body.missing`. Excluded:
+  `204`, `304`, every response to `HEAD`, and a media type entry with no schema
+  or the unconstrained boolean one.
 - Declared non-JSON media types (request or response): no schema → opaque,
   valid; string-typed schema → the raw payload is validated as that string
   (`*.body.schema`); any other schema → `request.body.unsupported` /

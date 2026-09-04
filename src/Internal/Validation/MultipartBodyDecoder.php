@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
@@ -19,13 +21,14 @@ final readonly class MultipartBodyDecoder
     public function __construct(
         private SchemaValueDecoder $values = new SchemaValueDecoder(),
         private ParameterCodec $parameters = new ParameterCodec(),
+        private SchemaValidator $schemas = new SchemaValidator(),
     ) {}
 
     /**
      * @param array<string, mixed> $schema
      * @param array<array-key, mixed> $encoding
      */
-    public function decode(string $body, string $contentType, array $schema, array $encoding = []): object
+    public function decode(string $body, string $contentType, array $schema, array $encoding, SchemaDialect $dialect): object
     {
         if ($this->values->kind($schema) !== ParameterKind::Object) {
             throw new BodyDecodingFailed('Multipart request bodies require an object schema');
@@ -37,7 +40,7 @@ final readonly class MultipartBodyDecoder
             $name = $this->partName($part['headers']);
             $property = $properties[$name] ?? $this->additionalSchema($schema);
             $configuration = $this->encoding($encoding[$name] ?? null, $name);
-            $this->requiredHeaders($configuration['headers'], $part['headers'], $name);
+            $this->partHeaders($configuration['headers'], $part['headers'], $name, $dialect);
             $value = $this->partValue($part['body'], $part['headers'], $property, $configuration['contentType'], $name);
 
             if ($this->values->kind($property) === ParameterKind::List) {
@@ -223,20 +226,76 @@ final readonly class MultipartBodyDecoder
     }
 
     /**
+     * The Header Objects a part declares: a required one has to be present,
+     * and a present one has to satisfy its schema. Only presence used to be
+     * checked, so a declared constraint on a part header was stated by the
+     * document and enforced by nothing — while the same declaration on a
+     * response header was fully validated.
+     *
+     * A part's `Content-Type` is described by `encoding.contentType` and is
+     * ignored here, as the specification requires.
+     *
      * @param array<array-key, mixed> $headers
      * @param array<string, string> $actual
      */
-    private function requiredHeaders(array $headers, array $actual, string $property): void
+    private function partHeaders(array $headers, array $actual, string $property, SchemaDialect $dialect): void
     {
         foreach (array_keys($headers) as $name) {
-            if (!is_string($name)) {
+            if (!is_string($name) || strcasecmp($name, 'content-type') === 0) {
                 continue;
             }
-            /** @var mixed $required */
-            $required = is_array($headers[$name]) ? ($headers[$name]['required'] ?? false) : false;
-            if ($required === true && !array_key_exists(strtolower($name), $actual)) {
-                throw new BodyDecodingFailed(sprintf('Multipart property "%s" requires header "%s"', $property, $name));
+            $header = is_array($headers[$name]) ? $headers[$name] : [];
+            if (!array_key_exists(strtolower($name), $actual)) {
+                if (($header['required'] ?? false) === true) {
+                    throw new BodyDecodingFailed(sprintf('Multipart property "%s" requires header "%s"', $property, $name));
+                }
+
+                continue;
             }
+            $this->assertHeaderValue($header, $actual[strtolower($name)], $property, $name, $dialect);
+        }
+    }
+
+    /**
+     * A Header Object is read exactly as a `simple` request header parameter
+     * is. A declaration this package cannot evaluate — the `content` form, or
+     * a style other than `simple` — fails closed rather than passing an
+     * unchecked value through.
+     *
+     * @param array<array-key, mixed> $header
+     */
+    private function assertHeaderValue(array $header, string $wire, string $property, string $name, SchemaDialect $dialect): void
+    {
+        /** @var mixed $schemaValue */
+        $schemaValue = $header['schema'] ?? null;
+        $schema = $this->values->schema($schemaValue);
+        if ($schema === null) {
+            if (array_key_exists('content', $header)) {
+                throw new BodyDecodingFailed(sprintf('Multipart property "%s" header "%s" uses unsupported content serialization', $property, $name));
+            }
+
+            return;
+        }
+        if (($header['style'] ?? 'simple') !== 'simple') {
+            throw new BodyDecodingFailed(sprintf('Multipart property "%s" header "%s" uses an unsupported style', $property, $name));
+        }
+        $kind = $this->values->kind($schema);
+
+        try {
+            $parsed = $this->parameters->parse(
+                name: $name,
+                wire: $kind === ParameterKind::Scalar ? $wire : $this->parameters->withoutHeaderWhitespace($wire),
+                style: ParameterStyle::Simple,
+                explode: ($header['explode'] ?? false) === true,
+                kind: $kind,
+            );
+            /** @var mixed $value */
+            $value = $this->values->coerce($parsed, $schema);
+        } catch (\InvalidArgumentException $exception) {
+            throw new BodyDecodingFailed(sprintf('Multipart property "%s" header "%s" cannot be deserialized', $property, $name), $exception->getCode(), previous: $exception);
+        }
+        if (!$this->schemas->isValid($value, $schema, $dialect)) {
+            throw new BodyDecodingFailed(sprintf('Multipart property "%s" header "%s" does not match its schema', $property, $name));
         }
     }
 

@@ -158,14 +158,18 @@ requiring a live request. Unknown operation keys produce a single structured
 `response.operation.unknown` violation.
 
 Request bodies with `application/x-www-form-urlencoded` are decoded using the
-same form parameter rules as query parameters. `multipart/form-data` bodies
-support bounded part parsing, JSON and binary parts, repeated array parts, and
-per-property `encoding` content types/required headers. Without an `encoding`
-content type a part defaults to `text/plain` for primitives,
-`application/octet-stream` for binary strings, `application/json` for objects,
-and for arrays to the default of the item type. Unsupported styles,
-malformed boundaries, duplicate scalar parts, and invalid part content fail
-closed as `request.body.decode`.
+same form parameter rules as query parameters, and a property that declares an
+`encoding` content type carries a whole document instead: a JSON media type is
+decoded and validated against the property schema, any other is validated as
+the string it already is. `multipart/form-data` bodies support bounded part
+parsing, JSON and binary parts, repeated array parts, and per-property
+`encoding` content types and headers — a declared part header must be present
+when `required` and must satisfy its schema, read with the `simple` style like
+a request header parameter. Without an `encoding` content type a part defaults
+to `text/plain` for primitives, `application/octet-stream` for binary strings,
+`application/json` for objects, and for arrays to the default of the item type.
+Unsupported styles, malformed boundaries, duplicate scalar parts, and invalid
+part content fail closed as `request.body.decode`.
 
 A declared non-JSON media type on either side (`text/plain`, `text/csv`,
 `application/octet-stream`, ...) is validated as far as its schema allows:
@@ -176,6 +180,12 @@ payload is validated as that string value (`request.body.schema` /
 be evaluated against an undecoded payload and fails closed as
 `request.body.unsupported` / `response.body.unsupported`. An undeclared media
 type stays `request.body.media_type` / `response.body.media_type`.
+
+A response that declares a schema and arrives with an empty body produces
+`response.body.missing`, the mirror of `request.body.missing`. The statuses
+that carry no body by definition are excluded: `204`, `304`, and every response
+to a `HEAD` request, as is a media type entry that declares no schema or the
+unconstrained boolean one.
 
 Body validation reads seekable PSR-7 streams from the beginning and restores
 their original position, including when reading fails. A body that needs

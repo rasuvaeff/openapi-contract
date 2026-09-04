@@ -122,7 +122,7 @@ final readonly class ResponseValidator
             return new ValidationResult($violations);
         }
         if ($body === '') {
-            return new ValidationResult($violations);
+            return new ValidationResult([...$violations, ...$this->missingBody($matched, $content, $response->getStatusCode(), $basePointer)]);
         }
         $mediaType = $this->mediaTypeOf($response);
         $mediaDefinition = $this->mediaDefinition($content, $mediaType);
@@ -184,6 +184,49 @@ final readonly class ResponseValidator
         }
 
         return new ValidationResult($violations);
+    }
+
+    /**
+     * A response that declares a schema and answers with nothing has not
+     * answered. Checking only the bodies that arrived meant the one failure
+     * contract testing exists to catch — the endpoint that returns an empty
+     * 200 — was the one it passed, while the request side has always reported
+     * `request.body.missing` for the mirror case.
+     *
+     * The statuses that carry no body by definition are excluded: 204 and 304
+     * per RFC 9110 §15, and every response to a HEAD request, which repeats
+     * the GET headers without the content they describe.
+     *
+     * @param array<array-key, mixed> $content
+     * @return list<Violation>
+     */
+    private function missingBody(MatchedOperation $matched, array $content, int $status, string $basePointer): array
+    {
+        if ($matched->operation->method === 'HEAD' || in_array($status, [204, 304], strict: true)) {
+            return [];
+        }
+        $declaresSchema = false;
+        /** @var mixed $definition */
+        foreach ($content as $definition) {
+            if (is_array($definition) && array_key_exists('schema', $definition) && $definition['schema'] !== true) {
+                $declaresSchema = true;
+                break;
+            }
+        }
+        if (!$declaresSchema) {
+            return [];
+        }
+
+        return [new Violation(
+            code: 'response.body.missing',
+            operation: $matched->operation->key,
+            location: 'body',
+            instancePath: '$',
+            specPointer: $basePointer . '/content',
+            expected: array_keys($content),
+            actual: null,
+            message: 'Declared response body is missing',
+        )];
     }
 
     /**
