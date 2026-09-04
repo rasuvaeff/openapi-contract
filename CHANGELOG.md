@@ -64,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header was fully validated. A part header is read with the `simple` style,
   like a request header parameter; a `content`-form or non-`simple` declaration
   fails closed rather than passing an unchecked value through.
+- **Fixed.** A path template whose placeholder shares its segment with literals
+  — `/report.{format}`, `/v{version}/items`, `/{a}-{b}` — is matched (#56). Such
+  a path compiled and then matched nothing at all, so the operation was
+  unreachable, and a request that literally equalled the template was blamed for
+  a missing parameter instead. Concrete paths still win over templated ones, a
+  decoded separator still cannot escape a segment, and the literal runs are
+  matched as written.
 - **Added.** `response.body.missing` — a response that declares a schema and
   arrives with an empty body is a violation (#57), the mirror of
   `request.body.missing`. Checking only the bodies that arrived meant the one
