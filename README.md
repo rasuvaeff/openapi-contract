@@ -80,7 +80,9 @@ them, while the generator package feeds them into its deterministic example
 phase. `MatchedOperation` carries the operation and the raw path parameters
 extracted from the URI. Matching honours server base paths,
 prefers concrete paths over templated ones, decodes each segment exactly
-once, and rejects decoded separators that would escape a template slot.
+once, and rejects decoded separators that would escape a template slot. A
+placeholder may share its segment with literals (`/report.{format}`,
+`/v{version}/items`, `/{a}-{b}`); the literal runs are matched as written.
 
 Servers are compiled as a full model (`Operation::$servers`): scheme, host,
 port, and base path, with operation > path > root precedence and server
@@ -202,7 +204,11 @@ header, cookie, query, and recognizably sensitive actual values;
 
 Unsupported contract semantics are never ignored: versions, dialects,
 references, serialization styles, and schema assertions outside the support
-matrix fail closed. User-supplied documents and message bodies are read with
+matrix fail closed, and a declared constraint this package cannot evaluate is
+reported rather than skipped. What it *can* evaluate, it evaluates: a schema
+form it does not recognise is handed to the backend instead of being dropped,
+because silently unchecking part of a contract is the one failure a validator
+must never produce. User-supplied documents and message bodies are read with
 byte and JSON-depth budgets, and diagnostics render expected/actual values
 in bounded form without exposing credential parameters.
 

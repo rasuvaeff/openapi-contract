@@ -915,6 +915,65 @@ final class ContractTest
         Assert::null($only('/{a}/x')->match(new Request('GET', '/1/y')));
     }
 
+    /**
+     * OpenAPI lets a placeholder share its segment with literals, and such a
+     * path used to compile and then match nothing at all: the operation was
+     * unreachable, and a request that literally equalled the template was
+     * blamed for a missing parameter instead.
+     */
+    #[DataProvider('partialTemplateProvider')]
+    public function matchesPartialPathTemplates(string $template, string $requestPath, ?array $expected): void
+    {
+        preg_match_all('/\{([^{}]+)\}/', $template, $matches);
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [$template => [
+            'parameters' => array_map(
+                static fn(string $name): array => ['name' => $name, 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']],
+                $matches[1] ?? [],
+            ),
+            'get' => ['responses' => ['200' => []]],
+        ]]]);
+        $matched = $contract->match(new Request('GET', $requestPath));
+
+        if ($expected === null) {
+            Assert::null($matched);
+
+            return;
+        }
+        Assert::instanceOf($matched, MatchedOperation::class);
+        Assert::same($matched->pathParameters, $expected);
+    }
+
+    /** @return iterable<string, array{string, string, null|array<string, string>}> */
+    public static function partialTemplateProvider(): iterable
+    {
+        yield 'extension suffix' => ['/report.{format}', '/report.json', ['format' => 'json']];
+        yield 'prefix in the segment' => ['/v{version}/items', '/v2/items', ['version' => '2']];
+        yield 'two placeholders in one segment' => ['/{a}-{b}', '/x-y', ['a' => 'x', 'b' => 'y']];
+        yield 'literal around a placeholder' => ['/f/pre{id}post', '/f/pre42post', ['id' => '42']];
+        yield 'suffix does not match' => ['/report.{format}', '/report', null];
+        yield 'literal does not match' => ['/v{version}/items', '/x2/items', null];
+        yield 'placeholder needs at least one character' => ['/report.{format}', '/report.', null];
+        yield 'an encoded slash still cannot leave the segment' => ['/report.{format}', '/report.a%2Fb', null];
+    }
+
+    /**
+     * A concrete path still wins over a template that also matches, whether
+     * the placeholder spans the segment or shares it with a literal.
+     */
+    public function prefersAConcretePathOverAPartialTemplate(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/report.{format}' => [
+                'parameters' => [['name' => 'format', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]],
+                'get' => ['operationId' => 'report.byFormat', 'responses' => ['200' => []]],
+            ],
+            '/report.json' => ['get' => ['operationId' => 'report.json', 'responses' => ['200' => []]]],
+        ]]);
+
+        Assert::same($contract->requireMatch(new Request('GET', '/report.json'))->operation->key, 'report.json');
+        Assert::same($contract->requireMatch(new Request('GET', '/report.csv'))->operation->key, 'report.byFormat');
+    }
+
     public function prefersConcreteRoutesAndLongerTemplates(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [

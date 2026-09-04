@@ -324,9 +324,54 @@ final readonly class Contract
                 $params[$match[1]] = $rawRequestPart;
                 continue;
             }
+            if (str_contains($part, '{')) {
+                $captured = $this->matchTemplateSegment($part, $rawRequestPart);
+                if ($captured === null) {
+                    return null;
+                }
+                $params = [...$params, ...$captured];
+                continue;
+            }
             if ($part !== $requestPart) {
                 return null;
             }
+        }
+
+        return $params;
+    }
+
+    /**
+     * One path segment that mixes literals with placeholders — `/report.{format}`,
+     * `/v{version}/…` — which OpenAPI allows and this package used to compile
+     * and then never match, so the operation was unreachable and a request
+     * that literally equalled the template was blamed for a missing parameter.
+     *
+     * The literal runs are matched as written: a segment whose literal part
+     * arrives percent-encoded does not match, which is the same trade the
+     * whole-segment form makes in reverse and is invisible for every template
+     * shape a document actually uses.
+     *
+     * @return array<string, string>|null
+     */
+    private function matchTemplateSegment(string $template, string $rawRequestPart): ?array
+    {
+        $names = [];
+        $pattern = '';
+        $offset = 0;
+        while (preg_match('/\{([^{}]+)\}/', $template, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            [$placeholder, $position] = $match[0];
+            $pattern .= preg_quote(substr($template, $offset, $position - $offset), '~') . '([^/]+)';
+            $names[] = $match[1][0];
+            $offset = $position + strlen($placeholder);
+        }
+        $pattern .= preg_quote(substr($template, $offset), '~');
+        if (preg_match('~^' . $pattern . '\z~', $rawRequestPart, $captured) !== 1) {
+            return null;
+        }
+
+        $params = [];
+        foreach ($names as $index => $name) {
+            $params[$name] = $captured[$index + 1];
         }
 
         return $params;

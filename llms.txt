@@ -83,7 +83,8 @@ API reference:
   schemes, and userinfo/query/fragment fail closed at compile time).
 - `Contract::match(RequestInterface): ?MatchedOperation` — method, server
   base paths, concrete-before-templated precedence, single percent-decode,
-  no separator escape from a template slot; an absolute server additionally
+  no separator escape from a template slot, placeholders that share a segment
+  with literals (`/report.{format}`, `/{a}-{b}`); an absolute server additionally
   requires the normalized scheme/host/effective-port the request URI carries
   (path-only requests and relative servers stay host-agnostic); a declared
   path whose server authority disagrees validates as
