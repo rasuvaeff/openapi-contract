@@ -4,26 +4,40 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 
+use Opis\JsonSchema\Errors\ValidationError;
 use Opis\JsonSchema\Parsers\SchemaParser;
+use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Validator as OpisValidator;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
 
 /**
+ * Validates a value against an OAS Schema Object, hiding the backend.
+ *
+ * Compilation is cached per contract instance. It is not cheap — the
+ * directional rewrite, a JSON round trip and the backend's own parse — and a
+ * document offers the same handful of schemas over and over, once per
+ * parameter per request. Doing it on every call made `Contract::fromArray()`
+ * a parser and `validateRequest()` the compiler, which is the wrong way round
+ * for a type named after a compiled contract.
+ *
  * @internal
  */
-final readonly class SchemaValidator
+final class SchemaValidator
 {
+    /** @var array<string, Schema> */
+    private array $compiled = [];
+
     /**
      * Keywords whose subschemas constrain the same direction as the schema
      * that carries them, and so are rewritten with it.
      */
     private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'allOf', 'anyOf', 'oneOf'];
 
-    private OpisValidator $validator;
+    private readonly OpisValidator $validator;
 
     public function __construct(
-        private SchemaCompiler $compiler = new SchemaCompiler(),
+        private readonly SchemaCompiler $compiler = new SchemaCompiler(),
     ) {
         $parser = new SchemaParser(options: [
             'allowDataKeyword' => false,
@@ -52,14 +66,37 @@ final readonly class SchemaValidator
      */
     public function isValid(mixed $value, array $schema, SchemaDialect $dialect, string $direction = 'request'): bool
     {
-        $compiled = $this->compiler->compile($this->effectiveSchema($schema, $direction), $dialect);
+        $compiled = $this->compiledSchema($schema, $dialect, $direction);
 
         try {
-            return $this->validator->validate($value, $compiled)->isValid();
+            return !$this->validator->schemaValidation($value, $compiled) instanceof ValidationError;
         } catch (\Throwable $exception) {
             // Backends are implementation details: a document the compiler
             // accepted but the backend chokes on leaves as a package type, on
             // the exit `compile()` above already uses.
+            throw UnsupportedSchema::fromBackend($exception);
+        }
+    }
+
+    /**
+     * The cache key is the schema itself, so two Media Type Objects that
+     * declare the same shape share one compilation and a schema that differs
+     * by a single keyword does not. Direction and dialect are part of it
+     * because both change what the compiled form asserts.
+     *
+     * @param array<string, mixed> $schema
+     */
+    private function compiledSchema(array $schema, SchemaDialect $dialect, string $direction): Schema
+    {
+        $key = hash('xxh128', $dialect->name . "\0" . $direction . "\0" . json_encode($schema, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+        if (isset($this->compiled[$key])) {
+            return $this->compiled[$key];
+        }
+        $object = $this->compiler->compile($this->effectiveSchema($schema, $direction), $dialect);
+
+        try {
+            return $this->compiled[$key] = $this->validator->loader()->loadObjectSchema($object);
+        } catch (\Throwable $exception) {
             throw UnsupportedSchema::fromBackend($exception);
         }
     }

@@ -25,13 +25,28 @@ final readonly class RequestValidator
 {
     use MessageReading;
 
-    public function __construct(
-        private SchemaValidator $schemas = new SchemaValidator(),
-        private ParameterCodec $parameters = new ParameterCodec(),
-        private SchemaValueDecoder $values = new SchemaValueDecoder(),
-        private FormUrlencodedBodyDecoder $forms = new FormUrlencodedBodyDecoder(),
-        private MultipartBodyDecoder $multipart = new MultipartBodyDecoder(),
-    ) {}
+    private ParameterCodec $parameters;
+
+    private SchemaValueDecoder $values;
+
+    private FormUrlencodedBodyDecoder $forms;
+
+    private MultipartBodyDecoder $multipart;
+
+    /**
+     * The schema validator is the one collaborator worth sharing: it caches
+     * compilations, and a contract validates the same handful of schemas on
+     * every request. The rest are stateless and built here rather than taken
+     * as parameters, so a caller cannot hand in a decoder that does not use
+     * the same validator.
+     */
+    public function __construct(private SchemaValidator $schemas = new SchemaValidator())
+    {
+        $this->parameters = new ParameterCodec();
+        $this->values = new SchemaValueDecoder();
+        $this->forms = new FormUrlencodedBodyDecoder();
+        $this->multipart = new MultipartBodyDecoder(schemas: $this->schemas);
+    }
 
     public function validate(
         MatchedOperation $matched,

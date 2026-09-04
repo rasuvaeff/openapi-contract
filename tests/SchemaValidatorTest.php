@@ -287,6 +287,51 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid((object) ['id' => 1], $schema, SchemaDialect::OpenApi31));
     }
 
+    /**
+     * Compilation is cached per instance, so the cache key has to carry
+     * everything that changes what the compiled form asserts. Direction and
+     * dialect both do: the same schema drops different properties for a
+     * request and a response, and means different things under 3.0 and 3.1.
+     */
+    public function cachesCompilationWithoutMergingDirectionsOrDialects(): void
+    {
+        $validator = new SchemaValidator();
+        $directional = [
+            'type' => 'object',
+            'required' => ['id', 'secret'],
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'secret' => ['type' => 'string', 'writeOnly' => true],
+            ],
+        ];
+        $request = (object) ['secret' => 'x'];
+        $response = (object) ['id' => 1];
+
+        // Twice each, so a second call reads the cache rather than compiling.
+        foreach ([1, 2] as $ignored) {
+            Assert::true($validator->isValid($request, $directional, SchemaDialect::OpenApi31));
+            Assert::false($validator->isValid($response, $directional, SchemaDialect::OpenApi31));
+            Assert::true($validator->isValid($response, $directional, SchemaDialect::OpenApi31, direction: 'response'));
+            Assert::false($validator->isValid($request, $directional, SchemaDialect::OpenApi31, direction: 'response'));
+        }
+
+        // `nullable` is an OAS 3.0 keyword and is rejected under 3.1: caching
+        // the 3.0 compilation must not answer the 3.1 call from the cache.
+        $nullable = ['type' => 'string', 'nullable' => true];
+        Assert::true($validator->isValid(null, $nullable, SchemaDialect::OpenApi30));
+        Assert::true($validator->isValid(null, $nullable, SchemaDialect::OpenApi30));
+
+        try {
+            $validator->isValid(null, $nullable, SchemaDialect::OpenApi31);
+        } catch (UnsupportedSchema $exception) {
+            Assert::string($exception->getMessage())->contains('nullable');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected the 3.1 dialect to reject the cached 3.0 schema');
+    }
+
     public function normalizesNestedOas30SchemasInEveryContainer(): void
     {
         $validator = new SchemaValidator();

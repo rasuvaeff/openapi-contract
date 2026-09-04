@@ -71,6 +71,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a missing parameter instead. Concrete paths still win over templated ones, a
   decoded separator still cannot escape a segment, and the literal runs are
   matched as written.
+- **Fixed.** A parameter violation renders its `actual` value again (#63).
+  `redactsActual()` returned true for `header`, `cookie`, `query` and `body` —
+  every location a violation normally carries — so `expected` was printed in
+  full, schema and all, beside an `actual` that always said `[redacted]`. The
+  class already carried a name-based rule written for exactly those locations
+  and unreachable behind the location check. It decides now, and it is applied
+  to container members too, so a credential sitting under a member name the
+  instance path does not reach is still replaced. Bodies stay redacted
+  wholesale: their member names belong to the application, and a whole-body
+  violation has the instance path `$`.
+- **Changed.** Schema compilation is cached per `Contract` instance, keyed by
+  schema, direction and dialect. The directional rewrite, the JSON round trip
+  and the backend's parse ran on every validated message, which made
+  `fromArray()` a parser and `validateRequest()` the compiler. Measured on a
+  document with three parameters and a twenty-property body,
+  `validateRequest()` went from 1.173 ms to 0.067 ms per call. The new
+  `ValidateRequestBench` measures the hot path; the benchmark suite covered
+  only response selection before.
+
 - **Added.** `response.body.missing` — a response that declares a schema and
   arrives with an empty body is a violation (#57), the mirror of
   `request.body.missing`. Checking only the bodies that arrived meant the one
