@@ -14,6 +14,12 @@ use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
  */
 final readonly class SchemaValidator
 {
+    /**
+     * Keywords whose subschemas constrain the same direction as the schema
+     * that carries them, and so are rewritten with it.
+     */
+    private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'allOf', 'anyOf', 'oneOf'];
+
     private OpisValidator $validator;
 
     public function __construct(
@@ -58,7 +64,20 @@ final readonly class SchemaValidator
         }
     }
 
-    /** @param array<string, mixed> $schema
+    /**
+     * The schema as it constrains one direction: properties the other
+     * direction owns (`readOnly` on a request, `writeOnly` on a response) are
+     * dropped, along with their `required` entries, recursively through
+     * `items` and the composition keywords.
+     *
+     * Dropping the last property drops `properties` itself rather than
+     * leaving an empty map, which would forbid every property. What the
+     * document says about undeclared properties keeps saying it: a schema
+     * with `additionalProperties: false` then admits nothing, and one without
+     * it still admits anything, exactly as it does for the other direction.
+     * OAS implies no closed object, so this does not close one.
+     *
+     * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
     private function effectiveSchema(array $schema, string $direction): array
@@ -66,7 +85,7 @@ final readonly class SchemaValidator
         if ($direction !== 'request' && $direction !== 'response') {
             throw new \InvalidArgumentException(sprintf('Unknown schema direction "%s"', $direction));
         }
-        foreach (['properties' => true, 'items' => false, 'allOf' => false, 'anyOf' => false, 'oneOf' => false] as $keyword => $_) {
+        foreach (self::DIRECTIONAL_KEYWORDS as $keyword) {
             if (!array_key_exists($keyword, $schema)) {
                 continue;
             }

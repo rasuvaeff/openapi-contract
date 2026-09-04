@@ -30,7 +30,7 @@ final readonly class MultipartBodyDecoder
         if ($this->values->kind($schema) !== ParameterKind::Object) {
             throw new BodyDecodingFailed('Multipart request bodies require an object schema');
         }
-        $properties = $this->properties($schema);
+        $properties = $this->values->properties($schema);
         /** @var array<string, mixed> $result */
         $result = [];
         foreach ($this->parts($body, $this->boundary($contentType)) as $part) {
@@ -67,7 +67,8 @@ final readonly class MultipartBodyDecoder
         return (object) $result;
     }
 
-    /** @param array<string, mixed> $schema
+    /**
+     * @param array<string, mixed> $schema
      * @return null|bool|int|float|string|array<array-key, mixed>|\stdClass
      */
     private function partItem(mixed $value, array $schema): bool|int|float|string|array|\stdClass|null
@@ -169,13 +170,13 @@ final readonly class MultipartBodyDecoder
      */
     private function partValue(string $body, array $headers, array $schema, ?string $declaredContentType, string $name): string|int|float|bool|array|\stdClass|null
     {
-        $actual = strtolower(trim(explode(';', $headers['content-type'] ?? 'text/plain', 2)[0]));
+        $actual = MediaType::normalize($headers['content-type'] ?? 'text/plain');
         $expected = $declaredContentType ?? $this->defaultContentType($schema);
-        $matches = array_filter(array_map(trim(...), explode(',', strtolower($expected))), fn(string $type): bool => $this->mediaMatches($type, $actual));
+        $matches = array_filter(array_map(trim(...), explode(',', strtolower($expected))), fn(string $type): bool => MediaType::matches($type, $actual));
         if ($matches === []) {
             throw new BodyDecodingFailed(sprintf('Multipart property "%s" has content type "%s", expected "%s"', $name, $actual, $expected));
         }
-        if ($actual === 'application/json' || str_ends_with($actual, '+json')) {
+        if (MediaType::isJson($actual)) {
             try {
                 /** @var null|bool|int|float|string|array<array-key, mixed>|\stdClass $decoded */
                 $decoded = json_decode($body, depth: 64, flags: JSON_THROW_ON_ERROR);
@@ -210,18 +211,8 @@ final readonly class MultipartBodyDecoder
         return ($schema['format'] ?? null) === 'binary' ? 'application/octet-stream' : 'text/plain';
     }
 
-    private function mediaMatches(string $declared, string $actual): bool
-    {
-        if ($declared === $actual || $declared === '*/*') {
-            return true;
-        }
-        [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
-        [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
-
-        return $declaredType === $actualType && ($declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json')));
-    }
-
-    /** @param array<array-key, mixed> $headers
+    /**
+     * @param array<array-key, mixed> $headers
      * @param array<string, string> $actual
      */
     private function requiredHeaders(array $headers, array $actual, string $property): void
@@ -272,30 +263,8 @@ final readonly class MultipartBodyDecoder
         return ['contentType' => $contentType, 'headers' => $headersValue, 'explode' => $explode];
     }
 
-    /** @param array<string, mixed> $schema
-     * @return array<string, array<string, mixed>>
-     */
-    private function properties(array $schema): array
-    {
-        /** @var mixed $value */
-        $value = $schema['properties'] ?? [];
-        if (!is_array($value)) {
-            return [];
-        }
-        $result = [];
-        foreach (array_keys($value) as $name) {
-            if (is_string($name)) {
-                $resolved = $this->values->schema($value[$name] ?? null);
-                if ($resolved !== null) {
-                    $result[$name] = $resolved;
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /** @param array<string, mixed> $schema
+    /**
+     * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
     private function additionalSchema(array $schema): array

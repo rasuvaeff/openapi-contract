@@ -152,6 +152,29 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid('scalar', $readOnly, SchemaDialect::OpenApi31));
     }
 
+    /**
+     * Dropping the last property drops `properties` itself, so what the
+     * document says about undeclared properties is what still decides: a
+     * closed object stays closed, and an open one stays open. Pinned because
+     * the open half reads like a hole in a fail-closed package and is not
+     * one — OAS implies no `additionalProperties: false`.
+     */
+    public function filteringEveryPropertyLeavesTheDocumentsOwnOpennessIntact(): void
+    {
+        $validator = new SchemaValidator();
+        $properties = ['id' => ['type' => 'integer', 'readOnly' => true]];
+        $open = ['type' => 'object', 'properties' => $properties];
+        $closed = ['type' => 'object', 'properties' => $properties, 'additionalProperties' => false];
+
+        Assert::true($validator->isValid((object) [], $open, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['id' => 1], $open, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['unrelated' => 'x'], $open, SchemaDialect::OpenApi31));
+
+        Assert::true($validator->isValid((object) [], $closed, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['id' => 1], $closed, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['unrelated' => 'x'], $closed, SchemaDialect::OpenApi31));
+    }
+
     public function normalizesNestedOas30SchemasInEveryContainer(): void
     {
         $validator = new SchemaValidator();

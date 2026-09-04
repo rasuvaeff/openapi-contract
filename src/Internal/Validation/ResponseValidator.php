@@ -140,7 +140,7 @@ final readonly class ResponseValidator
 
             return new ValidationResult($violations);
         }
-        if (!$this->isJsonMediaType($mediaType)) {
+        if (!MediaType::isJson($mediaType)) {
             return new ValidationResult([...$violations, ...$this->validateOpaqueBody($matched, $mediaType, $body, $mediaDefinition, $dialect, $basePointer)]);
         }
 
@@ -204,11 +204,10 @@ final readonly class ResponseValidator
         string $basePointer,
     ): array {
         $schema = $this->declaredSchema($mediaDefinition);
-        if ($schema === null || $schema === []) {
-            return [];
-        }
-        if (!$this->isStringSchema($schema)) {
-            return [new Violation(
+
+        return match (OpaqueBodyVerdict::of($schema, $body, $this->schemas, $dialect, 'response')) {
+            OpaqueBodyVerdict::Opaque, OpaqueBodyVerdict::Valid => [],
+            OpaqueBodyVerdict::Unsupported => [new Violation(
                 code: 'response.body.unsupported',
                 operation: $matched->operation->key,
                 location: 'body',
@@ -217,22 +216,18 @@ final readonly class ResponseValidator
                 expected: 'JSON media type or string-typed schema',
                 actual: $mediaType,
                 message: sprintf('Response media type "%s" cannot be validated against a non-string schema', $mediaType),
-            )];
-        }
-        if ($this->schemas->isValid($body, $schema, $dialect, direction: 'response')) {
-            return [];
-        }
-
-        return [new Violation(
-            code: 'response.body.schema',
-            operation: $matched->operation->key,
-            location: 'body',
-            instancePath: '$',
-            specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
-            expected: $schema,
-            actual: $body,
-            message: 'Response body does not match its schema',
-        )];
+            )],
+            OpaqueBodyVerdict::Invalid => [new Violation(
+                code: 'response.body.schema',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                expected: $schema,
+                actual: $body,
+                message: 'Response body does not match its schema',
+            )],
+        };
     }
 
     /**
