@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   twin helper in `property-testing-openapi`. It assumed a pre-normalized value,
   so the answer depended on which caller had remembered to normalize first —
   the same asymmetry that hid a multipart bug in `mediaMatches()` until 0.5.1.
+- **Fixed.** A `+` in the query string is read as a space (#52). A query is
+  `application/x-www-form-urlencoded` content, so `+` spells a space — which is
+  what an HTML form submits over GET and what every SAPI hands the application.
+  Percent-decoding it literally reported a violation for the exact value the
+  application receives as correct, and disagreed with this package's own form
+  body decoder, which has always folded `+` first.
+- **Fixed.** A query or cookie key with no `=` carries the empty value instead
+  of failing deserialization (#53). An exploded object parameter is handed
+  every pair a sibling parameter does not claim, so one stray `&flag` in the
+  request failed an unrelated parameter. The styles that have no valueless
+  form — `simple`, `label`, `matrix` — stay strict.
+- **Fixed.** A multipart body whose closing delimiter carries no trailing CRLF,
+  or is followed by an epilogue, is accepted (#54). RFC 2046 §5.1.1 makes both
+  legal and `league/openapi-psr7-validator` accepts them; requiring the exact
+  bytes `--<boundary>--\r\n` turned a conforming client into a
+  `request.body.decode` violation. A body with no parts at all stays rejected —
+  the same clause requires at least one — and `tests/Differential/` now pins
+  every one of these four verdicts against league.
 
 ## 0.5.1 — 2026-09-04
 

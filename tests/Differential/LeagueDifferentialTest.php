@@ -82,6 +82,33 @@ final class LeagueDifferentialTest
         yield 'missing required query parameter' => [new ServerRequest('GET', '/items'), false, false];
         yield 'wrong query parameter type' => [new ServerRequest('GET', '/items?limit=abc'), false, false];
         yield 'query parameter below minimum' => [new ServerRequest('GET', '/items?limit=0'), false, false];
+
+        // A query string is form-encoded content, so "+" is a space. We used
+        // to percent-decode it literally and report a violation for the exact
+        // value the application behind us receives as correct.
+        yield 'plus is a space in the query' => [new ServerRequest('GET', '/items?limit=1&q=a+b'), true, true];
+        yield 'percent-encoded space in the query' => [new ServerRequest('GET', '/items?limit=1&q=a%20b'), true, true];
+        // A key with no "=" carries the empty value. An exploded object
+        // parameter is handed every unclaimed pair, so one stray "&flag" used
+        // to fail an unrelated parameter's deserialization.
+        yield 'valueless foreign query key' => [new ServerRequest('GET', '/items?limit=1&flag'), true, true];
+        yield 'valueless declared query key' => [new ServerRequest('GET', '/items?limit=1&q'), false, false];
+
+        $part = "--X\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n";
+        $upload = static fn(string $payload): ServerRequest => new ServerRequest(
+            'POST',
+            '/uploads',
+            ['Content-Type' => 'multipart/form-data; boundary=X'],
+            $payload,
+        );
+
+        // RFC 2046 §5.1.1: the CRLF after the closing delimiter is optional
+        // and an epilogue may follow it — but a multipart entity must carry
+        // at least one part.
+        yield 'multipart closing delimiter with CRLF' => [$upload($part . "--X--\r\n"), true, true];
+        yield 'multipart closing delimiter without CRLF' => [$upload($part . '--X--'), true, true];
+        yield 'multipart closing delimiter with an epilogue' => [$upload($part . "--X--\r\nbye"), true, true];
+        yield 'multipart body with no parts' => [$upload("--X--\r\n"), false, false];
     }
 
     /** @return array<string, mixed> */
@@ -96,6 +123,7 @@ final class LeagueDifferentialTest
                         'operationId' => 'items.list',
                         'parameters' => [
                             ['name' => 'limit', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer', 'minimum' => 1]],
+                            ['name' => 'q', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'string', 'enum' => ['a b']]],
                         ],
                         'responses' => [
                             '200' => ['description' => 'ok', 'content' => ['application/json' => ['schema' => [
@@ -121,6 +149,17 @@ final class LeagueDifferentialTest
                                 'kind' => ['type' => 'string', 'enum' => ['cat', 'dog']],
                                 'id' => ['type' => 'integer', 'readOnly' => true],
                             ],
+                        ]]]],
+                        'responses' => ['201' => ['description' => 'created']],
+                    ],
+                ],
+                '/uploads' => [
+                    'post' => [
+                        'operationId' => 'uploads.create',
+                        'requestBody' => ['required' => true, 'content' => ['multipart/form-data' => ['schema' => [
+                            'type' => 'object',
+                            'required' => ['note'],
+                            'properties' => ['note' => ['type' => 'string']],
                         ]]]],
                         'responses' => ['201' => ['description' => 'created']],
                     ],

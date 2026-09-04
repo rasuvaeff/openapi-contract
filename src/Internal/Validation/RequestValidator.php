@@ -39,8 +39,9 @@ final readonly class RequestValidator
         SchemaDialect $dialect,
     ): ValidationResult {
         $violations = [];
+        $query = $this->formEncodedQuery($request->getUri()->getQuery());
         foreach ($matched->operation->parameters as $parameter) {
-            $wire = $this->parameterWire($parameter, $matched, $request);
+            $wire = $this->parameterWire($parameter, $matched, $request, $query);
             // Compiled at the declaration, where a Path Item's parameters and
             // an Operation's are still distinguishable.
             $pointer = $parameter['specPointer'];
@@ -108,14 +109,31 @@ final readonly class RequestValidator
     /**
      * @param CompiledParameter $parameter
      */
-    private function parameterWire(array $parameter, MatchedOperation $matched, RequestInterface $request): ?string
+    private function parameterWire(array $parameter, MatchedOperation $matched, RequestInterface $request, string $query): ?string
     {
         return match ($parameter['in']) {
             'path' => $matched->pathParameters[$parameter['name']] ?? null,
             'header' => $this->headerWire($parameter, $request),
-            'query' => $this->queryWire($parameter, $matched, $request->getUri()->getQuery()),
+            'query' => $this->queryWire($parameter, $matched, $query),
             'cookie' => $this->cookieWire($parameter, $matched, $request->getHeaderLine('Cookie')),
         };
+    }
+
+    /**
+     * A query string is `application/x-www-form-urlencoded` content, where
+     * `+` spells a space — that is what an HTML form submits over GET, and
+     * what every SAPI hands the application. Folding it into `%20` once, at
+     * the only boundary where the rule applies, keeps the rest of the
+     * parameter path a pure percent-decoder and keeps the form body decoder,
+     * which has always done this, from being the only place that agrees with
+     * the server.
+     *
+     * A path segment, a header and a cookie are not form-encoded, so they do
+     * not pass through here.
+     */
+    private function formEncodedQuery(string $query): string
+    {
+        return str_replace('+', '%20', $query);
     }
 
     /**
