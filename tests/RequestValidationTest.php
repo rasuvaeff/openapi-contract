@@ -321,6 +321,56 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?a=x&b=y&zzz=1'))->isValid());
     }
 
+    /**
+     * The separator arrives percent-encoded from any conforming client, so
+     * splitting on the raw octet alone reported a one-element array and failed
+     * a valid request.
+     */
+    #[DataProvider('delimitedQueryWiresProvider')]
+    public function acceptsDelimitedQueryParametersInTheirEncodedWireForm(string $style, string $query): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'color', 'in' => 'query', 'required' => true, 'style' => $style, 'explode' => false,
+            'schema' => ['type' => 'array', 'minItems' => 3, 'items' => ['type' => 'string']],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q?' . $query))->isValid());
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function delimitedQueryWiresProvider(): iterable
+    {
+        yield 'space encoded' => ['spaceDelimited', 'color=blue%20black%20brown'];
+        yield 'space raw' => ['spaceDelimited', 'color=blue black brown'];
+        yield 'pipe raw' => ['pipeDelimited', 'color=blue|black|brown'];
+        yield 'pipe encoded' => ['pipeDelimited', 'color=blue%7Cblack%7Cbrown'];
+    }
+
+    /**
+     * An unexploded label array is comma-separated; only the exploded form
+     * repeats the dot.
+     */
+    #[DataProvider('labelPathWiresProvider')]
+    public function acceptsLabelPathParametersInBothExplodeForms(bool $explode, string $segment): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/c/{color}' => ['get' => [
+            'parameters' => [[
+                'name' => 'color', 'in' => 'path', 'required' => true, 'style' => 'label', 'explode' => $explode,
+                'schema' => ['type' => 'array', 'minItems' => 3, 'items' => ['type' => 'string']],
+            ]],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/c/' . $segment))->isValid());
+    }
+
+    /** @return iterable<string, array{bool, string}> */
+    public static function labelPathWiresProvider(): iterable
+    {
+        yield 'unexploded' => [false, '.blue,black,brown'];
+        yield 'exploded' => [true, '.blue.black.brown'];
+    }
+
     public function scalarParametersIgnoreObjectQueryHandling(): void
     {
         $contract = $this->paramContract([

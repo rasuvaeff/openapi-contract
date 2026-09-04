@@ -15,6 +15,24 @@ namespace Rasuvaeff\OpenApiContract\Internal\Serialization;
 final readonly class ParameterCodec
 {
     /**
+     * Wire forms a spaceDelimited separator can take. A URI cannot carry a raw
+     * space, so conforming traffic percent-encodes it; the raw form is accepted
+     * because callers hand us query strings that have not been normalized yet.
+     *
+     * @var non-empty-list<non-empty-string>
+     */
+    private const array SPACE_DELIMITERS = ['%20', ' '];
+
+    /**
+     * Wire forms a pipeDelimited separator can take. The OpenAPI style table
+     * spells it raw, but "|" is outside the query character set, so every PSR-7
+     * URI implementation rewrites it to "%7C" on the way out.
+     *
+     * @var non-empty-list<non-empty-string>
+     */
+    private const array PIPE_DELIMITERS = ['%7C', '%7c', '|'];
+
+    /**
      * @param string|list<string>|array<string, string> $value
      */
     public function serialize(
@@ -29,11 +47,11 @@ final readonly class ParameterCodec
 
         return match ($style) {
             ParameterStyle::Simple => $this->simple($value, $explode, ','),
-            ParameterStyle::Label => '.' . $this->simple($value, $explode, '.'),
+            ParameterStyle::Label => '.' . $this->simple($value, $explode, $explode ? '.' : ','),
             ParameterStyle::Matrix => $this->matrix($name, $value, $explode),
             ParameterStyle::Form => $this->form($name, $value, $explode),
-            ParameterStyle::SpaceDelimited => $this->delimitedQuery($name, $this->asList($value), ' '),
-            ParameterStyle::PipeDelimited => $this->delimitedQuery($name, $this->asList($value), '|'),
+            ParameterStyle::SpaceDelimited => $this->delimitedQuery($name, $this->asList($value), ' ', '%20'),
+            ParameterStyle::PipeDelimited => $this->delimitedQuery($name, $this->asList($value), '|', '|'),
             ParameterStyle::DeepObject => throw new \LogicException('Deep object is handled above'),
         };
     }
@@ -50,11 +68,11 @@ final readonly class ParameterCodec
     ): string|array {
         return match ($style) {
             ParameterStyle::Simple => $this->parseSimple($wire, $explode, $kind, ','),
-            ParameterStyle::Label => $this->parseSimple($this->withoutPrefix($wire, '.'), $explode, $kind, '.'),
+            ParameterStyle::Label => $this->parseSimple($this->withoutPrefix($wire, '.'), $explode, $kind, $explode ? '.' : ','),
             ParameterStyle::Matrix => $this->parseMatrix($name, $wire, $explode, $kind),
             ParameterStyle::Form => $this->parseForm($name, $wire, $explode, $kind),
-            ParameterStyle::SpaceDelimited => $this->parseDelimitedQuery($name, $wire, ' ', $kind),
-            ParameterStyle::PipeDelimited => $this->parseDelimitedQuery($name, $wire, '|', $kind),
+            ParameterStyle::SpaceDelimited => $this->parseDelimitedQuery($name, $wire, self::SPACE_DELIMITERS, $kind),
+            ParameterStyle::PipeDelimited => $this->parseDelimitedQuery($name, $wire, self::PIPE_DELIMITERS, $kind),
             ParameterStyle::DeepObject => $this->parseDeepObject($name, $wire),
         };
     }
@@ -133,14 +151,25 @@ final readonly class ParameterCodec
         return $this->pair($name, $this->simple($this->asObject($value), explode: false, pairSeparator: ','), encoded: true);
     }
 
-    /** @param list<string> $value */
-    private function delimitedQuery(string $name, array $value, string $delimiter): string
+    /**
+     * @param list<string> $value
+     * @param non-empty-string $delimiter the separator as the value reads it
+     * @param non-empty-string $wireDelimiter the separator as it goes on the wire
+     */
+    private function delimitedQuery(string $name, array $value, string $delimiter, string $wireDelimiter): string
     {
         if (!array_is_list($value)) {
             throw new \InvalidArgumentException('Delimited query parameters require an array value');
         }
+        foreach ($value as $item) {
+            // The style has no escape for its own separator: an item carrying
+            // one would come back as two on parse.
+            if (str_contains($item, $delimiter)) {
+                throw new \InvalidArgumentException(sprintf('Delimited query parameter values cannot contain "%s"', $delimiter));
+            }
+        }
 
-        return $this->pair($name, implode($delimiter, array_map($this->encode(...), $value)), encoded: true);
+        return $this->pair($name, implode($wireDelimiter, array_map($this->encode(...), $value)), encoded: true);
     }
 
     /** @param array<string, string> $value */
@@ -312,18 +341,23 @@ final readonly class ParameterCodec
     }
 
     /**
-     * @param non-empty-string $delimiter
+     * @param non-empty-list<non-empty-string> $delimiters every wire form of the
+     *        separator; the first is the canonical one
      * @return list<string>
      */
-    private function parseDelimitedQuery(string $name, string $wire, string $delimiter, ParameterKind $kind): array
+    private function parseDelimitedQuery(string $name, string $wire, array $delimiters, ParameterKind $kind): array
     {
         if ($kind !== ParameterKind::List) {
             throw new \InvalidArgumentException('Delimited query parameters require a list shape');
         }
 
         $value = $this->valueForName($name, explode('&', $wire));
+        $canonical = $delimiters[0];
+        // Split before decoding, so a percent-encoded item never turns into a
+        // separator; folding the alternatives first keeps that single pass.
+        $value = str_replace($delimiters, $canonical, $value);
 
-        return $this->decodeList(explode($delimiter, $value));
+        return $this->decodeList(explode($canonical, $value));
     }
 
     /** @return array<string, string> */

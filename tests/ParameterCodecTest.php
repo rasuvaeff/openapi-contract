@@ -110,7 +110,15 @@ final class ParameterCodecTest
         );
     }
 
-    /** @return array<string, ArbitraryInterface> */
+    /**
+     * The alphabet must stay free of every separator a style can use — ".",
+     * ",", " ", "|", "=", "&", ";" — because a value carrying its own separator
+     * is unrepresentable in that style and would falsify the round-trip for a
+     * reason that is not a bug. Exact wire conformance is pinned by
+     * {@see self::styleExamplesProvider()} instead.
+     *
+     * @return array<string, ArbitraryInterface>
+     */
     public static function everySupportedStyleAndExplodeCombinationRoundTripsGenerators(): array
     {
         $scalar = Gen::stringFrom('abcXYZ', minLength: 1, maxLength: 4);
@@ -149,7 +157,94 @@ final class ParameterCodecTest
         Assert::same($codec->serialize('u', ['role' => 'admin', 'name' => 'Ada'], ParameterStyle::Matrix, explode: false), ';u=role,admin,name,Ada');
         Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::Simple, explode: false), 'a%20b,c');
         Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::Form, explode: false), 't=a%20b,c');
-        Assert::same($codec->serialize('t', ['a b', 'c'], ParameterStyle::SpaceDelimited, explode: false), 't=a%20b c');
+        Assert::same($codec->serialize('t', ['ab', 'c'], ParameterStyle::SpaceDelimited, explode: false), 't=ab%20c');
+    }
+
+    /**
+     * The wire strings below come from the OpenAPI style-examples table, not
+     * from this codec: a round-trip against our own serializer cannot tell a
+     * conformant separator from an invented one.
+     */
+    #[DataProvider('styleExamplesProvider')]
+    public function serializesTheWireFormatTheSpecificationDeclares(
+        string $name,
+        string|array $value,
+        ParameterStyle $style,
+        bool $explode,
+        ParameterKind $kind,
+        string $wire,
+    ): void {
+        Assert::same((new ParameterCodec())->serialize($name, $value, $style, $explode), $wire);
+    }
+
+    #[DataProvider('styleExamplesProvider')]
+    public function parsesTheWireFormatTheSpecificationDeclares(
+        string $name,
+        string|array $value,
+        ParameterStyle $style,
+        bool $explode,
+        ParameterKind $kind,
+        string $wire,
+    ): void {
+        Assert::same((new ParameterCodec())->parse($name, $wire, $style, $explode, $kind), $value);
+    }
+
+    /** @return iterable<string, array{string, string|array, ParameterStyle, bool, ParameterKind, string}> */
+    public static function styleExamplesProvider(): iterable
+    {
+        $scalar = 'blue';
+        $list = ['blue', 'black', 'brown'];
+        $object = ['R' => '100', 'G' => '200', 'B' => '150'];
+
+        yield 'simple scalar' => ['color', $scalar, ParameterStyle::Simple, false, ParameterKind::Scalar, 'blue'];
+        yield 'simple list' => ['color', $list, ParameterStyle::Simple, false, ParameterKind::List, 'blue,black,brown'];
+        yield 'simple list exploded' => ['color', $list, ParameterStyle::Simple, true, ParameterKind::List, 'blue,black,brown'];
+        yield 'simple object' => ['color', $object, ParameterStyle::Simple, false, ParameterKind::Object, 'R,100,G,200,B,150'];
+        yield 'simple object exploded' => ['color', $object, ParameterStyle::Simple, true, ParameterKind::Object, 'R=100,G=200,B=150'];
+
+        yield 'label scalar' => ['color', $scalar, ParameterStyle::Label, false, ParameterKind::Scalar, '.blue'];
+        yield 'label list' => ['color', $list, ParameterStyle::Label, false, ParameterKind::List, '.blue,black,brown'];
+        yield 'label list exploded' => ['color', $list, ParameterStyle::Label, true, ParameterKind::List, '.blue.black.brown'];
+        yield 'label object' => ['color', $object, ParameterStyle::Label, false, ParameterKind::Object, '.R,100,G,200,B,150'];
+        yield 'label object exploded' => ['color', $object, ParameterStyle::Label, true, ParameterKind::Object, '.R=100.G=200.B=150'];
+
+        yield 'matrix scalar' => ['color', $scalar, ParameterStyle::Matrix, false, ParameterKind::Scalar, ';color=blue'];
+        yield 'matrix list' => ['color', $list, ParameterStyle::Matrix, false, ParameterKind::List, ';color=blue,black,brown'];
+        yield 'matrix list exploded' => ['color', $list, ParameterStyle::Matrix, true, ParameterKind::List, ';color=blue;color=black;color=brown'];
+        yield 'matrix object' => ['color', $object, ParameterStyle::Matrix, false, ParameterKind::Object, ';color=R,100,G,200,B,150'];
+        yield 'matrix object exploded' => ['color', $object, ParameterStyle::Matrix, true, ParameterKind::Object, ';R=100;G=200;B=150'];
+
+        yield 'form scalar' => ['color', $scalar, ParameterStyle::Form, false, ParameterKind::Scalar, 'color=blue'];
+        yield 'form list' => ['color', $list, ParameterStyle::Form, false, ParameterKind::List, 'color=blue,black,brown'];
+        yield 'form list exploded' => ['color', $list, ParameterStyle::Form, true, ParameterKind::List, 'color=blue&color=black&color=brown'];
+        yield 'form object' => ['color', $object, ParameterStyle::Form, false, ParameterKind::Object, 'color=R,100,G,200,B,150'];
+        yield 'form object exploded' => ['color', $object, ParameterStyle::Form, true, ParameterKind::Object, 'R=100&G=200&B=150'];
+
+        yield 'space delimited list' => ['color', $list, ParameterStyle::SpaceDelimited, false, ParameterKind::List, 'color=blue%20black%20brown'];
+        yield 'pipe delimited list' => ['color', $list, ParameterStyle::PipeDelimited, false, ParameterKind::List, 'color=blue|black|brown'];
+    }
+
+    /**
+     * A raw space cannot travel in a URI and a raw "|" is outside the query
+     * character set, so both styles must also be read in their encoded form.
+     */
+    #[DataProvider('delimiterWireFormsProvider')]
+    public function parsesEveryWireFormOfADelimiter(string $wire, ParameterStyle $style): void
+    {
+        Assert::same(
+            (new ParameterCodec())->parse('color', $wire, $style, explode: false, kind: ParameterKind::List),
+            ['blue', 'black', 'brown'],
+        );
+    }
+
+    /** @return iterable<string, array{string, ParameterStyle}> */
+    public static function delimiterWireFormsProvider(): iterable
+    {
+        yield 'space encoded' => ['color=blue%20black%20brown', ParameterStyle::SpaceDelimited];
+        yield 'space raw' => ['color=blue black brown', ParameterStyle::SpaceDelimited];
+        yield 'pipe raw' => ['color=blue|black|brown', ParameterStyle::PipeDelimited];
+        yield 'pipe encoded' => ['color=blue%7Cblack%7Cbrown', ParameterStyle::PipeDelimited];
+        yield 'pipe encoded lowercase' => ['color=blue%7cblack%7cbrown', ParameterStyle::PipeDelimited];
     }
 
     #[DataProvider('invalidValueShapes')]
@@ -170,6 +265,8 @@ final class ParameterCodecTest
         yield 'delimited non-string item' => [[1], ParameterStyle::PipeDelimited, 'Parameter values must be strings'];
         yield 'deep object list value' => [['a', 'b'], ParameterStyle::DeepObject, 'Parameter requires an object value'];
         yield 'deep object int key' => [[0 => 'a', 'k' => 'b'], ParameterStyle::DeepObject, 'Parameter object keys and values must be strings'];
+        yield 'space delimited item carrying a space' => [['a b', 'c'], ParameterStyle::SpaceDelimited, 'Delimited query parameter values cannot contain " "'];
+        yield 'pipe delimited item carrying a pipe' => [['a|b', 'c'], ParameterStyle::PipeDelimited, 'Delimited query parameter values cannot contain "|"'];
     }
 
     public function parseToleratesRepeatedMatrixSeparators(): void
