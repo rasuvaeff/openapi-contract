@@ -67,8 +67,11 @@ on inputs that always split into two parts, throw-order swaps that surface
 the identical message from a later check, opis parser options that gate
 keywords the schema compiler already rejects fail-closed, the DocumentGraph
 filesize pre-check whose removal falls through to the identical post-read
-byte-budget throw, and the scheme-detection regex anchor whose removal only
-widens an already fail-closed rejection (a colon in a later path segment).
+byte-budget throw, the scheme-detection regex anchor whose removal only
+widens an already fail-closed rejection (a colon in a later path segment),
+and the canonical-delimiter index in `ParameterCodec::parseDelimitedQuery()`
+(every wire form of a delimiter is folded to the chosen one before the
+split, so any element of the list produces the same partition).
 
 ## When you finish
 

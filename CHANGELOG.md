@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- `label` parameters with `explode: false` use `,` between array items, not `.`
+  (#31). RFC 6570 spells the unexploded form `.3,4,5` and reserves the repeated
+  dot for `explode: true`; both the parser and the serializer used `.` in either
+  case, so a conforming client's `.3,4,5` deserialized to the single element
+  `"3,4,5"` and failed its own schema. Object forms were already correct.
+- `spaceDelimited` and `pipeDelimited` parameters recognise the percent-encoded
+  delimiter (#32). The value was split on a literal `' '` or `'|'` before
+  decoding, but a raw space cannot travel in a URI and `|` is outside the query
+  character set, so any PSR-7 URI implementation delivers `%20` / `%7C` and the
+  whole value came back as one element. Both wire forms are now accepted, the
+  serializer emits `%20` for `spaceDelimited`, and it rejects a list item that
+  contains its own delimiter — the style has no escape for one. That limitation
+  holds in both directions: a separator and an encoded item character are the
+  same octets on the wire, so `color=blue%7Cblack` is read as two values and
+  never as the single value `blue|black`.
+
+  Both bugs were symmetric between this package's parser and serializer, so the
+  round-trip property could not see them; the styles are now pinned by exact
+  wire fixtures taken from the OpenAPI style-examples table.
+
 ## 0.3.0 — 2026-09-03
 
 - `Contract::securitySchemes()` exposes `components.securitySchemes` as an
