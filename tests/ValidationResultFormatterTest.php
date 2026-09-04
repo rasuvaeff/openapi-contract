@@ -10,6 +10,7 @@ use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
 use Rasuvaeff\OpenApiContract\Violation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Test;
 
 #[Test]
@@ -67,11 +68,11 @@ final class ValidationResultFormatterTest
     {
         $long = str_repeat('a', 600);
         $result = new ValidationResult([new Violation(
-            code: 'response.body.schema',
+            code: 'request.parameter.schema',
             operation: 'body.get',
-            location: 'body',
-            instancePath: '$',
-            specPointer: '/paths/~1body/get/responses/200/content/application~1json/schema',
+            location: 'path',
+            instancePath: 'id',
+            specPointer: '/paths/~1body/get/parameters/0/schema',
             expected: ['a' => ['b' => ['c' => [
                 'object' => new \DateTimeImmutable('@0'),
                 'scalar' => 'kept',
@@ -93,20 +94,20 @@ final class ValidationResultFormatterTest
     {
         $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
             new Violation(
-                code: 'response.body.schema',
+                code: 'request.parameter.schema',
                 operation: 'body.get',
-                location: 'body',
-                instancePath: '$',
+                location: 'path',
+                instancePath: 'id',
                 specPointer: '/paths',
                 expected: 1.0,
                 actual: str_repeat('a', 510),
                 message: 'exact boundary',
             ),
             new Violation(
-                code: 'response.body.schema',
+                code: 'request.parameter.schema',
                 operation: 'body.get',
-                location: 'body',
-                instancePath: '$',
+                location: 'path',
+                instancePath: 'id',
                 specPointer: '/paths',
                 expected: 'a/b',
                 actual: "invalid\xFFutf8",
@@ -125,10 +126,10 @@ final class ValidationResultFormatterTest
     {
         $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
             new Violation(
-                code: 'response.body.schema',
+                code: 'request.parameter.schema',
                 operation: 'body.get',
-                location: 'body',
-                instancePath: '$',
+                location: 'path',
+                instancePath: 'id',
                 specPointer: '/paths',
                 expected: ['b' => 2, 'a' => 1],
                 actual: range(1, 18),
@@ -139,6 +140,40 @@ final class ValidationResultFormatterTest
         Assert::string($formatted)
             ->contains('expected: {"a":1,"b":2}')
             ->contains('actual: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,"[item limit]"]');
+    }
+
+    /**
+     * A body is user data of unknown shape, and a whole-body violation carries
+     * the instance path `$` — the name pattern has nothing to inspect. The
+     * value is redacted on the location alone, in either direction.
+     */
+    #[DataProvider('bodyViolationLocations')]
+    public function redactsBodyValuesWhateverTheyContain(string $code): void
+    {
+        $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
+            new Violation(
+                code: $code,
+                operation: 'login',
+                location: 'body',
+                instancePath: '$',
+                specPointer: '/paths',
+                expected: ['type' => 'object'],
+                actual: ['user' => 'ada', 'password' => 'hunter2'],
+                message: 'Body does not match its schema',
+            ),
+        ]));
+
+        Assert::false(str_contains($formatted, 'hunter2'));
+        Assert::string($formatted)
+            ->contains('actual: "[redacted]"')
+            ->contains('expected: {"type":"object"}');
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function bodyViolationLocations(): iterable
+    {
+        yield 'request' => ['request.body.schema'];
+        yield 'response' => ['response.body.schema'];
     }
 
     public function redactsSensitiveNamesCaseInsensitively(): void

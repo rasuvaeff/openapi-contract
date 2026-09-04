@@ -22,6 +22,7 @@ use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
  *     explode: bool,
  *     allowReserved: bool,
  *     schema: array<string, mixed>,
+ *     specPointer: non-empty-string,
  *     example?: mixed,
  *     examples?: array<string, mixed>,
  * }

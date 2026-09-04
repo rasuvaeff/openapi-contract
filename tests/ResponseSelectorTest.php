@@ -40,6 +40,24 @@ final class ResponseSelectorTest
             200,
             '200',
         ];
+        // A document writing the range in lowercase names the same range;
+        // failing to match it reports "status not declared", which this
+        // package answers by validating nothing at all.
+        yield 'a lowercase range matches' => [
+            ['2xx' => ['description' => 'range'], 'default' => ['description' => 'default']],
+            204,
+            '2xx',
+        ];
+        yield 'a mixed-case range matches' => [
+            ['4Xx' => ['description' => 'range']],
+            404,
+            '4Xx',
+        ];
+        yield 'exact status still beats a lowercase range' => [
+            [204 => ['description' => 'exact'], '2xx' => ['description' => 'range']],
+            204,
+            '204',
+        ];
         yield 'range beats default' => [
             ['2XX' => ['description' => 'range'], 'default' => ['description' => 'default']],
             204,

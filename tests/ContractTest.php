@@ -19,6 +19,7 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
 use Rasuvaeff\OpenApiContract\Violation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Expect;
 use Testo\Test;
 
@@ -643,10 +644,55 @@ final class ContractTest
         ]]]]);
 
         Assert::same($contract->operations()[0]->parameters, [
-            ['name' => 'q', 'in' => 'query', 'required' => false, 'style' => 'form', 'explode' => true, 'allowReserved' => false, 'schema' => ['type' => 'integer', 'minimum' => 2]],
-            ['name' => 'q', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => true, 'schema' => ['type' => 'string']],
-            ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => false, 'schema' => ['type' => 'string']],
+            ['name' => 'q', 'in' => 'query', 'required' => false, 'style' => 'form', 'explode' => true, 'allowReserved' => false, 'schema' => ['type' => 'integer', 'minimum' => 2], 'specPointer' => '/paths/~1h/get/parameters/0'],
+            ['name' => 'q', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => true, 'schema' => ['type' => 'string'], 'specPointer' => '/paths/~1h/get/parameters/1'],
+            ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => false, 'schema' => ['type' => 'string'], 'specPointer' => '/paths/~1h/get/parameters/3'],
         ]);
+    }
+
+    /**
+     * These keywords do not merely add a check — they re-root or re-target
+     * every `$ref` in the document. Passing them to the backend unhandled
+     * would let it decide what the document means.
+     */
+    #[DataProvider('referenceIdentityKeywords')]
+    public function rejectsReferenceIdentityKeywords(string $keyword): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+                'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'string', $keyword => '#x']]],
+                'responses' => ['200' => []],
+            ]]]])->validateRequest(new Request('GET', '/h?q=x'));
+            Assert::true(actual: false, message: 'Expected an unsupported keyword');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), sprintf('Unsupported schema keyword "%s": reference identity is outside the support matrix', $keyword));
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function referenceIdentityKeywords(): iterable
+    {
+        yield '$id' => ['$id'];
+        yield '$anchor' => ['$anchor'];
+        yield '$dynamicRef' => ['$dynamicRef'];
+        yield '$dynamicAnchor' => ['$dynamicAnchor'];
+    }
+
+    /**
+     * Every other malformedness in the same loop throws; skipping this one let
+     * a parameter the document meant to declare go unvalidated.
+     */
+    public function rejectsANonObjectParametersEntry(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+                'parameters' => ['oops'],
+                'responses' => ['200' => []],
+            ]]]]);
+            Assert::true(actual: false, message: 'Expected an invalid parameter');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI parameter must be an object');
+        }
     }
 
     public function pathLevelParametersApplyToEveryOperation(): void

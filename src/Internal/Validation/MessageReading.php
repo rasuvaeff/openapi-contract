@@ -97,6 +97,19 @@ trait MessageReading
     }
 
     /**
+     * Whether a Media Type Object declares the boolean schema `false`, which
+     * admits no value at all. `true` is the unconstrained boolean schema and
+     * is indistinguishable from an absent declaration, so only `false` needs
+     * telling apart from "no schema here".
+     *
+     * @param array<array-key, mixed> $definition
+     */
+    private function declaresNothingValid(array $definition): bool
+    {
+        return ($definition['schema'] ?? null) === false;
+    }
+
+    /**
      * The Schema Object a Media Type Object declares, or `null` when it
      * declares none.
      *

@@ -22,9 +22,14 @@ final readonly class ResponseSelector
             return $this->selected((string) $status, $responses[$status]);
         }
 
+        // `2XX` is the canonical spelling, but a document writing `2xx` names
+        // the same range; the document's own key is kept so the specPointer
+        // still points at what the file says.
         $range = intdiv($status, 100) . 'XX';
-        if (array_key_exists($range, $responses)) {
-            return $this->selected($range, $responses[$range]);
+        foreach (array_keys($responses) as $key) {
+            if (is_string($key) && strcasecmp($key, $range) === 0) {
+                return $this->selected($key, $responses[$key]);
+            }
         }
 
         if (array_key_exists('default', $responses)) {

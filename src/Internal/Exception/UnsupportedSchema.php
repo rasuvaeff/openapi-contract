@@ -15,4 +15,12 @@ final class UnsupportedSchema extends InvalidContract
     {
         return new self(sprintf('Unsupported schema keyword "%s": %s', $keyword, $reason));
     }
+
+    public static function fromBackend(\Throwable $previous): self
+    {
+        return new self(
+            sprintf('Schema cannot be evaluated by the validation backend: %s', $previous->getMessage()),
+            previous: $previous,
+        );
+    }
 }

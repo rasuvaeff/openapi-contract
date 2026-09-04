@@ -401,6 +401,22 @@ final class ResponseValidationTest
     }
 
     /** @param array<string, array<array-key, mixed>> $headers */
+    /**
+     * A boolean schema is a schema: `false` admits nothing at all. Reading it
+     * as "no schema declared" let every body through.
+     */
+    public function aFalseResponseBodySchemaAdmitsNothing(): void
+    {
+        $result = $this->validateBody($this->contentContract(['application/json' => ['schema' => false]]), '{}');
+
+        Assert::same($result->violations[0]->code, 'response.body.schema');
+    }
+
+    public function aTrueResponseBodySchemaConstrainsNothing(): void
+    {
+        Assert::true($this->validateBody($this->contentContract(['application/json' => ['schema' => true]]), '{"any":"thing"}')->isValid());
+    }
+
     private function headerContract(array $headers): Contract
     {
         return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
@@ -412,6 +428,14 @@ final class ResponseValidationTest
     private function validate(Contract $contract, array $headers): \Rasuvaeff\OpenApiContract\ValidationResult
     {
         return $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, $headers));
+    }
+
+    private function validateBody(Contract $contract, string $body): \Rasuvaeff\OpenApiContract\ValidationResult
+    {
+        return $contract->validateExchange(
+            new ServerRequest('GET', '/h'),
+            new Response(200, ['Content-Type' => 'application/json'], $body),
+        );
     }
 
     /** @param array<array-key, mixed> $content */

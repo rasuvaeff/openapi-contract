@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Reference-identity keywords fail closed (#39). `$id`, `$anchor`, `$dynamicRef`
+  and `$dynamicAnchor` were neither resolved nor rejected — they reached the
+  validation backend as they were. This was not a missing check: a document
+  using `$dynamicRef` sent the backend into unbounded recursion until it
+  exhausted memory and killed the process. The backend call is also wrapped, so
+  a document the compiler accepts but the backend cannot evaluate leaves as
+  `UnsupportedSchema` rather than as a backend class. Dead duplicate entries for
+  `dependentSchemas` and `patternProperties` were removed from the schema-map
+  list; the assertion list already rejected both.
+- A boolean schema is a schema (#40). `schema: false` admits nothing and
+  `schema: true` constrains nothing; both were read as "no schema declared", so
+  a `false` schema silently accepted every body, and on the request side `true`
+  raised out of `validateRequest()`.
+- Diagnostics no longer render body content (#41). Redaction was decided from
+  the parameter location and the instance path, and a whole-body violation has
+  neither — up to 512 bytes of the decoded payload, credentials included, went
+  into the rendered message. Body violations are now redacted on the location
+  alone, in both directions.
+- A malformed `parameters` entry is rejected instead of skipped (#42). A
+  non-object entry compiled silently and the parameter it meant to declare was
+  never validated.
+- `label`, `matrix` and `simple` header parameters lose the whitespace around
+  their list separator (#35). PSR-7 joins repeated header lines with `", "`, so
+  `X-Tags: a, b` produced the element `" b"`. The response direction already
+  did this; the two now share one helper.
+- An exploded object parameter whose schema leaves `additionalProperties` open
+  no longer swallows the other declared parameters (#36). Which undeclared pair
+  belongs to an open object is genuinely unknowable and still counts toward it —
+  that is the style's ambiguity — but a pair another parameter declares is not
+  part of it.
+- `SchemaValueDecoder::kind()` reads an OAS 3.1 type union (#37), so
+  `["array", "null"]` is parsed as a list instead of a scalar. A union naming
+  both `array` and `object` cannot be told apart on the wire; the list shape
+  wins, deliberately.
+- `encoding.explode` is honoured for `multipart/form-data` (#38). An array sent
+  the unexploded way — one part carrying a comma-separated list — decoded as a
+  single element. The form decoder already read `explode`.
+- A parameter's `specPointer` names the declaration that carries it (#43).
+  Path Item parameters and Operation parameters are merged for lookup but live
+  at different pointers, and the merged index pointed at neither. The compiled
+  parameter shape gains a `specPointer` key.
+- A response range key matches whatever case the document spells it in (#44).
+  `2xx` never matched `2XX`, and an unmatched status is reported by validating
+  nothing at all.
+- A contract error raised while validating a parameter is no longer reported as
+  a request violation. `InvalidContract` extends `InvalidArgumentException`,
+  which the parameter loop catches to turn deserialization failures into
+  `request.parameter.serialization`; an unsupported schema was disguised as
+  something the request did wrong.
+
 ## 0.4.0 — 2026-09-04
 
 - `label` parameters with `explode: false` use `,` between array items, not `.`

@@ -11,6 +11,7 @@ use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
@@ -38,9 +39,11 @@ final readonly class RequestValidator
         SchemaDialect $dialect,
     ): ValidationResult {
         $violations = [];
-        foreach ($matched->operation->parameters as $index => $parameter) {
+        foreach ($matched->operation->parameters as $parameter) {
             $wire = $this->parameterWire($parameter, $matched, $request);
-            $pointer = sprintf('/paths/%s/%s/parameters/%d', $this->escape($matched->operation->path), strtolower($matched->operation->method), $index);
+            // Compiled at the declaration, where a Path Item's parameters and
+            // an Operation's are still distinguishable.
+            $pointer = $parameter['specPointer'];
             if ($wire === null) {
                 if ($parameter['required']) {
                     $violations[] = new Violation(
@@ -79,6 +82,12 @@ final readonly class RequestValidator
                         message: sprintf('%s parameter "%s" does not match its schema', ucfirst($parameter['in']), $parameter['name']),
                     );
                 }
+            } catch (InvalidContract $exception) {
+                // A document this package cannot support is a contract error,
+                // not something the request did wrong; `InvalidContract`
+                // extends `InvalidArgumentException`, so without this it would
+                // be reported as a deserialization violation.
+                throw $exception;
             } catch (\InvalidArgumentException) {
                 $violations[] = new Violation(
                     code: 'request.parameter.serialization',
@@ -103,16 +112,32 @@ final readonly class RequestValidator
     {
         return match ($parameter['in']) {
             'path' => $matched->pathParameters[$parameter['name']] ?? null,
-            'header' => $request->hasHeader($parameter['name']) ? $request->getHeaderLine($parameter['name']) : null,
-            'query' => $this->queryWire($parameter, $request->getUri()->getQuery()),
-            'cookie' => $this->cookieWire($parameter, $request->getHeaderLine('Cookie')),
+            'header' => $this->headerWire($parameter, $request),
+            'query' => $this->queryWire($parameter, $matched, $request->getUri()->getQuery()),
+            'cookie' => $this->cookieWire($parameter, $matched, $request->getHeaderLine('Cookie')),
         };
     }
 
     /**
      * @param CompiledParameter $parameter
      */
-    private function queryWire(array $parameter, string $query): ?string
+    private function headerWire(array $parameter, RequestInterface $request): ?string
+    {
+        if (!$request->hasHeader($parameter['name'])) {
+            return null;
+        }
+        $wire = $request->getHeaderLine($parameter['name']);
+        if ($this->kind($parameter['schema']) === ParameterKind::Scalar) {
+            return $wire;
+        }
+
+        return $this->parameters->withoutHeaderWhitespace($wire);
+    }
+
+    /**
+     * @param CompiledParameter $parameter
+     */
+    private function queryWire(array $parameter, MatchedOperation $matched, string $query): ?string
     {
         if ($query === '') {
             return null;
@@ -122,7 +147,9 @@ final readonly class RequestValidator
         }
         if ($parameter['explode'] && $this->kind($parameter['schema']) === ParameterKind::Object) {
             if (($parameter['schema']['additionalProperties'] ?? true) !== false) {
-                return $query;
+                $foreign = $this->siblingNames($matched, $parameter);
+
+                return $this->filterPairs($query, static fn(string $key): bool => !in_array($key, $foreign, strict: true));
             }
 
             $properties = $this->propertyNames($parameter['schema']);
@@ -136,7 +163,7 @@ final readonly class RequestValidator
     /**
      * @param CompiledParameter $parameter
      */
-    private function cookieWire(array $parameter, string $cookie): ?string
+    private function cookieWire(array $parameter, MatchedOperation $matched, string $cookie): ?string
     {
         if ($cookie === '') {
             return null;
@@ -147,7 +174,9 @@ final readonly class RequestValidator
         }
         if ($parameter['explode'] && $this->kind($parameter['schema']) === ParameterKind::Object) {
             if (($parameter['schema']['additionalProperties'] ?? true) !== false) {
-                return $wire;
+                $foreign = $this->siblingNames($matched, $parameter);
+
+                return $this->filterPairs($wire, static fn(string $key): bool => !in_array($key, $foreign, strict: true));
             }
 
             $properties = $this->propertyNames($parameter['schema']);
@@ -156,6 +185,27 @@ final readonly class RequestValidator
         }
 
         return $this->filterPairs($wire, static fn(string $key): bool => $key === $parameter['name']);
+    }
+
+    /**
+     * The names another parameter in the same location declares. An open
+     * object cannot tell an undeclared pair from a stray one — that ambiguity
+     * is the style's, not ours — but a pair that a sibling parameter declares
+     * is certainly not part of this object.
+     *
+     * @param CompiledParameter $parameter
+     * @return list<string>
+     */
+    private function siblingNames(MatchedOperation $matched, array $parameter): array
+    {
+        $names = [];
+        foreach ($matched->operation->parameters as $sibling) {
+            if ($sibling['in'] === $parameter['in'] && $sibling['name'] !== $parameter['name']) {
+                $names[] = $sibling['name'];
+            }
+        }
+
+        return $names;
     }
 
     /** @param callable(string): bool $accept */
@@ -213,13 +263,16 @@ final readonly class RequestValidator
         if ($definition === null) {
             return [$this->bodyViolation($matched, 'request.body.media_type', sprintf('Request media type "%s" is not declared', $mediaType))];
         }
+        if ($this->declaresNothingValid($definition)) {
+            return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema')];
+        }
         if (!$this->isJsonMediaType($mediaType) && $mediaType !== 'application/x-www-form-urlencoded' && !str_starts_with($mediaType, 'multipart/')) {
             return $this->validateOpaqueBody($matched, $mediaType, $body, $definition, $dialect);
         }
 
         try {
             /** @var mixed $schemaValue */
-            $schemaValue = $definition['schema'] ?? null;
+            $schemaValue = $this->constrainingSchema($definition);
             $schema = $this->values->schema($schemaValue) ?? [];
             /** @var mixed $encodingValue */
             $encodingValue = $definition['encoding'] ?? [];
@@ -238,7 +291,7 @@ final readonly class RequestValidator
             return [$this->bodyViolation($matched, 'request.body.decode', $exception->getMessage())];
         }
         /** @var mixed $schemaValue */
-        $schemaValue = $definition['schema'] ?? null;
+        $schemaValue = $this->constrainingSchema($definition);
         $schema = $this->values->schema($schemaValue);
         if ($schema !== null && !$this->schemas->isValid($value, $schema, $dialect)) {
             return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $value)];
@@ -284,6 +337,21 @@ final readonly class RequestValidator
             actual: $actual,
             message: $message,
         );
+    }
+
+    /**
+     * The declared schema with the unconstrained boolean `true` folded into
+     * "nothing declared". `false` is handled before this, where it belongs:
+     * it is a schema that admits no body at all.
+     *
+     * @param array<array-key, mixed> $definition
+     */
+    private function constrainingSchema(array $definition): mixed
+    {
+        /** @var mixed $schema */
+        $schema = $definition['schema'] ?? null;
+
+        return $schema === true ? null : $schema;
     }
 
     /** @param array<string, mixed> $schema */

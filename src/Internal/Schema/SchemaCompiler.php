@@ -28,11 +28,23 @@ final readonly class SchemaCompiler
         'oneOf',
     ];
 
+    /**
+     * Keywords that re-root or re-target reference resolution. They are not
+     * assertions, so ignoring them does not merely lose a check — it changes
+     * what every `$ref` in the document means.
+     *
+     * @var list<string>
+     */
+    private const array UNSUPPORTED_IDENTITY_KEYWORDS = [
+        '$anchor',
+        '$dynamicAnchor',
+        '$dynamicRef',
+        '$id',
+    ];
+
     /** @var list<string> */
     private const array SCHEMA_MAP_KEYWORDS = [
         '$defs',
-        'dependentSchemas',
-        'patternProperties',
         'properties',
     ];
 
@@ -83,6 +95,12 @@ final readonly class SchemaCompiler
         foreach (self::UNSUPPORTED_ASSERTION_KEYWORDS as $keyword) {
             if (array_key_exists($keyword, $schema)) {
                 throw UnsupportedSchema::atKeyword($keyword, 'assertion is outside the v0.1 support matrix');
+            }
+        }
+
+        foreach (self::UNSUPPORTED_IDENTITY_KEYWORDS as $keyword) {
+            if (array_key_exists($keyword, $schema)) {
+                throw UnsupportedSchema::atKeyword($keyword, 'reference identity is outside the support matrix');
             }
         }
 

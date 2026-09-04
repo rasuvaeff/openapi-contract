@@ -71,7 +71,10 @@ byte-budget throw, the scheme-detection regex anchor whose removal only
 widens an already fail-closed rejection (a colon in a later path segment),
 and the canonical-delimiter index in `ParameterCodec::parseDelimitedQuery()`
 (every wire form of a delimiter is folded to the chosen one before the
-split, so any element of the list produces the same partition).
+split, so any element of the list produces the same partition), and the
+`array_values()` calls over a Path Item's and an Operation's `parameters`
+in `DocumentCompiler::parameters()` (a JSON array decodes to a list, so
+the re-index has nothing to change and only the pointer index would move).
 
 ## When you finish
 

@@ -57,6 +57,16 @@ final readonly class ParameterCodec
     }
 
     /**
+     * Strips the optional whitespace RFC 9110 allows around a header list
+     * separator. PSR-7 joins repeated header lines with ", ", so a list read
+     * from a header carries it whichever way the client sent the value.
+     */
+    public function withoutHeaderWhitespace(string $wire): string
+    {
+        return implode(',', array_map(trim(...), explode(',', $wire)));
+    }
+
+    /**
      * @return string|list<string>|array<string, string>
      */
     public function parse(
