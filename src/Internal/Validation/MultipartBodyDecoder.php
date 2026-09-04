@@ -92,7 +92,18 @@ final readonly class MultipartBodyDecoder
         return $boundary;
     }
 
-    /** @return list<array{headers: array<string, string>, body: string}> */
+    /**
+     * RFC 2046 §5.1.1 ends a multipart entity with `--<boundary>--`, where the
+     * CRLF after it is optional and an epilogue may follow. Requiring the
+     * exact bytes `--<boundary>--\r\n` turned a conforming client into a
+     * `request.body.decode` violation; league/openapi-psr7-validator accepts
+     * all three forms, and `tests/Differential/` pins that agreement.
+     *
+     * A body with no parts at all stays rejected: the same clause requires at
+     * least one, and league fails on it too.
+     *
+     * @return list<array{headers: array<string, string>, body: string}>
+     */
     private function parts(string $body, string $boundary): array
     {
         $delimiter = '--' . $boundary;
@@ -101,7 +112,7 @@ final readonly class MultipartBodyDecoder
         }
         $segments = explode("\r\n" . $delimiter, substr($body, strlen($delimiter) + 2));
         $closing = array_pop($segments);
-        if ($closing !== "--\r\n") {
+        if (preg_match('/^--(?:\r\n.*)?\z/s', $closing) !== 1) {
             throw new BodyDecodingFailed('Multipart request body has an invalid closing boundary');
         }
         if (count($segments) > self::MAX_PARTS) {

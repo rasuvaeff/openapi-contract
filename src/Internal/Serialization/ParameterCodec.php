@@ -376,7 +376,7 @@ final readonly class ParameterCodec
         /** @var array<string, string> $result */
         $result = [];
         foreach (explode('&', $wire) as $part) {
-            [$key, $value] = $this->splitPair($part, equals: true);
+            [$key, $value] = $this->namedPair($part);
             $prefix = $this->encode($name) . '%5B';
             if (!str_starts_with($key, $prefix) || !str_ends_with($key, '%5D')) {
                 throw new \InvalidArgumentException('Invalid deepObject parameter');
@@ -411,7 +411,7 @@ final readonly class ParameterCodec
         /** @var array<string, string> $result */
         $result = [];
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, equals: true);
+            [$key, $value] = $this->namedPair($part);
             $result[$this->decode($key)] = $this->decode($value);
         }
 
@@ -423,7 +423,7 @@ final readonly class ParameterCodec
     {
         $encodedName = $this->encode($name);
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, equals: true);
+            [$key, $value] = $this->namedPair($part);
             if ($key === $encodedName) {
                 return $value;
             }
@@ -441,7 +441,7 @@ final readonly class ParameterCodec
         $encodedName = $this->encode($name);
         $values = [];
         foreach ($parts as $part) {
-            [$key, $value] = $this->splitPair($part, equals: true);
+            [$key, $value] = $this->namedPair($part);
             if ($key === $encodedName) {
                 $values[] = $value;
             }
@@ -452,6 +452,26 @@ final readonly class ParameterCodec
         }
 
         return $values;
+    }
+
+    /**
+     * One `name=value` pair of a query or cookie string, where a name with no
+     * `=` carries the empty value — the reading `parse_str()` and every SAPI
+     * apply, so the validator sees what the application will.
+     *
+     * This is deliberately more forgiving than {@see splitPair()}, which stays
+     * strict for the styles that have no valueless form. The pairs read here
+     * are not all ours: an exploded object parameter is handed every pair a
+     * sibling parameter does not claim, so one stray `&flag` in the request
+     * used to fail an unrelated parameter's deserialization.
+     *
+     * @return array{string, string}
+     */
+    private function namedPair(string $part): array
+    {
+        [$key, $value] = array_pad(explode('=', $part, 2), 2, '');
+
+        return [$key, $value];
     }
 
     /** @return array{string, string} */

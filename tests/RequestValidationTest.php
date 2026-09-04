@@ -492,6 +492,100 @@ final class RequestValidationTest
     }
 
     /**
+     * A query string is `application/x-www-form-urlencoded` content, where
+     * `+` spells a space. Percent-decoding it literally made the validator
+     * report a violation for the exact value the application behind it
+     * receives as correct — and disagree with its own form body decoder,
+     * which has always folded `+` first.
+     *
+     * The decoded value is pinned by the schema rather than inspected: each
+     * case only passes if the parameter deserialized to exactly the listed
+     * members.
+     */
+    #[DataProvider('formEncodedQueryProvider')]
+    public function readsPlusAsASpaceInTheQuery(array $parameter, string $query): void
+    {
+        Assert::true($this->paramContract($parameter)->validateRequest(new ServerRequest('GET', '/q?' . $query))->isValid());
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function formEncodedQueryProvider(): iterable
+    {
+        $scalar = static fn(string $value): array => [
+            'name' => 'q', 'in' => 'query', 'required' => true,
+            'schema' => ['type' => 'string', 'enum' => [$value]],
+        ];
+        $list = static fn(string $style, bool $explode, array $members): array => [
+            'name' => 'q', 'in' => 'query', 'required' => true, 'style' => $style, 'explode' => $explode,
+            'schema' => ['type' => 'array', 'minItems' => count($members), 'maxItems' => count($members),
+                'items' => ['type' => 'string', 'enum' => $members]],
+        ];
+
+        yield 'scalar decodes to a space' => [$scalar('a b'), 'q=a+b'];
+        yield 'a percent-encoded plus stays a plus' => [$scalar('a+b'), 'q=a%2Bb'];
+        yield 'percent-encoded space is unchanged' => [$scalar('a b'), 'q=a%20b'];
+        yield 'exploded list decodes each member' => [$list('form', true, ['a b', 'c']), 'q=a+b&q=c'];
+        // The spaceDelimited separator *is* a space, so a "+" separates too.
+        yield 'space delimited splits on a plus' => [$list('spaceDelimited', false, ['a', 'b']), 'q=a+b'];
+    }
+
+    /**
+     * A key with no `=` carries the empty value, the way `parse_str()` and
+     * every SAPI read it. An exploded object parameter is handed every pair a
+     * sibling parameter does not claim, so a single stray `&flag` used to fail
+     * an unrelated parameter's deserialization instead.
+     */
+    #[DataProvider('valuelessQueryKeyProvider')]
+    public function readsAValuelessQueryKeyAsAnEmptyValue(string $query, bool $valid): void
+    {
+        $contract = $this->paramContract([
+            'name' => 'o', 'in' => 'query', 'required' => true, 'style' => 'form', 'explode' => true,
+            'schema' => ['type' => 'object', 'properties' => ['a' => ['type' => 'string']], 'required' => ['a']],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q?' . $query))->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function valuelessQueryKeyProvider(): iterable
+    {
+        yield 'clean' => ['a=x', true];
+        yield 'foreign valueless key' => ['a=x&flag', true];
+        yield 'foreign valueless key first' => ['flag&a=x', true];
+        yield 'the required property itself is valueless' => ['a', true];
+        yield 'still reports the missing property' => ['flag', false];
+    }
+
+    /**
+     * RFC 2046 §5.1.1: the CRLF after the closing delimiter is optional, and
+     * an epilogue may follow it. A body with no parts at all stays rejected —
+     * the same clause requires at least one.
+     */
+    #[DataProvider('multipartClosingProvider')]
+    public function acceptsEveryLegalMultipartClosingDelimiter(string $payload, bool $valid): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => [
+            'type' => 'object', 'required' => ['note'], 'properties' => ['note' => ['type' => 'string']],
+        ]]]);
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary=X'], $payload);
+
+        Assert::same($contract->validateRequest($request)->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function multipartClosingProvider(): iterable
+    {
+        $part = "--X\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n";
+
+        yield 'closing delimiter with CRLF' => [$part . "--X--\r\n", true];
+        yield 'closing delimiter without CRLF' => [$part . '--X--', true];
+        yield 'closing delimiter with an epilogue' => [$part . "--X--\r\nbye\r\n", true];
+        yield 'no parts at all' => ["--X--\r\n", false];
+        yield 'garbage after the closing delimiter' => [$part . '--X--junk', false];
+        yield 'unterminated body' => [$part, false];
+    }
+
+    /**
      * OAS 3.1 spells a type as a union, and the wire shape follows the union's
      * membership rather than its identity.
      */
