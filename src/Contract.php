@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 
@@ -43,6 +44,10 @@ final readonly class Contract
     public const int MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
     public const int MAX_MESSAGE_BODY_BYTES = 1024 * 1024;
 
+    private RequestValidator $requests;
+
+    private ResponseValidator $responses;
+
     /**
      * @param list<Operation> $operations
      * @param array<string, CompiledSecurityScheme> $securitySchemes
@@ -51,7 +56,15 @@ final readonly class Contract
         private SchemaDialect $dialect,
         private array $operations,
         private array $securitySchemes,
-    ) {}
+    ) {
+        // One schema validator for the contract, so the compilation of a
+        // schema is paid once and not once per validated message. Both
+        // directions share it: a request and a response schema differ by the
+        // direction the cache key already carries.
+        $schemas = new SchemaValidator();
+        $this->requests = new RequestValidator($schemas);
+        $this->responses = new ResponseValidator($schemas);
+    }
 
     /** @param array<string, mixed> $document */
     public static function fromArray(array $document): self
@@ -232,7 +245,7 @@ final readonly class Contract
             return $this->unmatchedResult($request, $serverMismatch);
         }
 
-        return (new RequestValidator())->validate($matched, $request, $this->dialect);
+        return $this->requests->validate($matched, $request, $this->dialect);
     }
 
     public function validateExchange(RequestInterface $request, ResponseInterface $response): ValidationResult
@@ -242,8 +255,8 @@ final readonly class Contract
             return $this->unmatchedResult($request, $serverMismatch);
         }
 
-        $requestResult = (new RequestValidator())->validate($matched, $request, $this->dialect);
-        $responseResult = (new ResponseValidator())->validate($matched, $response, $this->dialect);
+        $requestResult = $this->requests->validate($matched, $request, $this->dialect);
+        $responseResult = $this->responses->validate($matched, $response, $this->dialect);
 
         return new ValidationResult([...$requestResult->violations, ...$responseResult->violations]);
     }
@@ -265,7 +278,7 @@ final readonly class Contract
             )]);
         }
 
-        return (new ResponseValidator())->validate(
+        return $this->responses->validate(
             new MatchedOperation($operation, []),
             $response,
             $this->dialect,

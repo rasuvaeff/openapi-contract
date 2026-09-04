@@ -196,9 +196,13 @@ validation but is non-seekable is not consumed: it produces
 Bodies larger than `Contract::MAX_MESSAGE_BODY_BYTES` (1 MiB) produce the
 corresponding `request.body.too_large` or `response.body.too_large` violation.
 `ValidationResultFormatter` renders every violation in stable order with
-bounded fields, depth, item counts, and expected/actual values. It redacts
-header, cookie, query, and recognizably sensitive actual values;
-`ContractViolation` uses the same complete rendering.
+bounded fields, depth, item counts, and expected/actual values. A value is
+rendered only where its name can be checked: a body is redacted wholesale —
+its member names are the application's and a whole-body violation has the
+instance path `$` — while a parameter is rendered with any member whose name
+matches the credential pattern (`authorization`, `api_key`, `token`, `secret`,
+`password`, `cookie`) replaced, and a parameter whose own name matches is
+redacted outright. `ContractViolation` uses the same rendering.
 
 ## Security
 
@@ -215,6 +219,12 @@ in bounded form without exposing credential parameters.
 ## Examples
 
 Runnable scripts live in [examples/](examples/README.md).
+
+Schema compilation is cached per `Contract`: the directional rewrite, the JSON
+round trip, and the backend's own parse happen once per distinct schema,
+direction and dialect rather than once per validated message. A contract
+offers the same handful of schemas on every request, so this is where the cost
+belongs — `composer bench` measures the difference.
 
 ## Development
 

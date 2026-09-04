@@ -28,7 +28,7 @@ final class ValidationResultFormatterTest
                 instancePath: 'page',
                 specPointer: '/paths/~1pets/get/parameters/0/schema',
                 expected: ['type' => 'integer'],
-                actual: 'top-secret',
+                actual: 'abc',
                 message: "Query parameter is invalid\nwithout injecting a line",
             ),
             new Violation(
@@ -51,7 +51,7 @@ final class ValidationResultFormatterTest
                instancePath: "page"
                specPointer: "/paths/~1pets/get/parameters/0/schema"
                expected: {"type":"integer"}
-               actual: "[redacted]"
+               actual: "abc"
                message: "Query parameter is invalid\nwithout injecting a line"
             2. code: "response.status.mismatch"
                operation: "pets.get"
@@ -193,6 +193,72 @@ final class ValidationResultFormatterTest
 
         Assert::false(str_contains($formatted, 'top-secret'));
         Assert::string($formatted)->contains('actual: "[redacted]"');
+    }
+
+    /**
+     * A parameter violation is the one a reader is most likely to be
+     * debugging, and it used to print `expected` in full — schema and all —
+     * beside an `actual` that said `[redacted]` whatever it held. Redacting on
+     * the location alone was not a safe default but an unreadable diagnostic.
+     */
+    #[DataProvider('parameterValueProvider')]
+    public function rendersParameterValuesTheInstancePathNames(string $location, string $instancePath, mixed $actual, string $expected): void
+    {
+        $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
+            new Violation(
+                code: 'request.parameter.schema',
+                operation: 'pets.get',
+                location: $location,
+                instancePath: $instancePath,
+                specPointer: '/paths',
+                expected: ['type' => 'integer'],
+                actual: $actual,
+                message: 'invalid',
+            ),
+        ]));
+
+        Assert::string($formatted)->contains('actual: ' . $expected);
+    }
+
+    /** @return iterable<string, array{string, string, mixed, string}> */
+    public static function parameterValueProvider(): iterable
+    {
+        yield 'query scalar' => ['query', 'page', 'abc', '"abc"'];
+        yield 'header scalar' => ['header', 'X-Tenant', 'public', '"public"'];
+        yield 'cookie scalar' => ['cookie', 'session_kind', 'guest', '"guest"'];
+        yield 'query scalar with a credential name' => ['query', 'api_key', 'shhh', '"[redacted]"'];
+        yield 'header scalar with a credential name' => ['header', 'Authorization', 'Bearer x', '"[redacted]"'];
+        yield 'path scalar' => ['path', 'id', '42', '"42"'];
+    }
+
+    /**
+     * A container is named by its own keys rather than by the instance path,
+     * so a credential can sit under one of them — which is what happens when a
+     * query credential is appended next to an exploded open object parameter.
+     * The value stays readable and the credential does not.
+     */
+    public function masksCredentialKeysInsideAParameterValue(): void
+    {
+        $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
+            new Violation(
+                code: 'request.parameter.schema',
+                operation: 'pets.get',
+                location: 'query',
+                instancePath: 'filter',
+                specPointer: '/paths',
+                expected: ['type' => 'object'],
+                actual: ['kind' => 'cat', 'api_key' => 'SUPER-SECRET', 'nested' => ['TOKEN' => 'also-secret', 'page' => 2]],
+                message: 'invalid',
+            ),
+        ]));
+
+        Assert::false(str_contains($formatted, 'SUPER-SECRET'));
+        Assert::false(str_contains($formatted, 'also-secret'));
+        Assert::string($formatted)
+            ->contains('"kind":"cat"')
+            ->contains('"api_key":"[redacted]"')
+            ->contains('"TOKEN":"[redacted]"')
+            ->contains('"page":2');
     }
 
     public function contractViolationUsesTheFormatterAndHandlesEmptyResults(): void

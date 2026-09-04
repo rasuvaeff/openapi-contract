@@ -24,12 +24,19 @@ final readonly class ResponseValidator
 {
     use MessageReading;
 
-    public function __construct(
-        private ResponseSelector $selector = new ResponseSelector(),
-        private SchemaValidator $schemas = new SchemaValidator(),
-        private ParameterCodec $parameters = new ParameterCodec(),
-        private SchemaValueDecoder $values = new SchemaValueDecoder(),
-    ) {}
+    private ResponseSelector $selector;
+
+    private ParameterCodec $parameters;
+
+    private SchemaValueDecoder $values;
+
+    /** @see RequestValidator::__construct() for why only this one is injected. */
+    public function __construct(private SchemaValidator $schemas = new SchemaValidator())
+    {
+        $this->selector = new ResponseSelector();
+        $this->parameters = new ParameterCodec();
+        $this->values = new SchemaValueDecoder();
+    }
 
     public function validate(
         MatchedOperation $matched,

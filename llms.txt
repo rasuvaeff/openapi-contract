@@ -126,8 +126,12 @@ API reference:
 - `ValidationResult` (readonly): `violations` (`list<Violation>`),
   `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
 - `ValidationResultFormatter::format(ValidationResult): string` renders every
-  violation in stable order with bounded fields/values/depth/items and
-  credential-bearing actual parameter values redacted.
+  violation in stable order with bounded fields/values/depth/items. A body
+  `actual` is redacted wholesale; a parameter `actual` is rendered with members
+  whose name matches `authorization|api[-_]?key|token|secret|password|cookie`
+  replaced, and is redacted outright when the instance path itself matches.
+- Schema compilation is cached per `Contract` instance, keyed by schema,
+  direction and dialect.
 - `Violation` (readonly): `code` (stable, e.g. `request.parameter.missing`,
   `response.body.schema`), `operation`, `location`, `instancePath`,
   `specPointer` (JSON Pointer into the document), `expected`, `actual`

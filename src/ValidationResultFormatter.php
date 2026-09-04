@@ -15,6 +15,7 @@ final readonly class ValidationResultFormatter
     private const int MAX_VALUE_BYTES = 512;
     private const int MAX_VALUE_DEPTH = 4;
     private const int MAX_VALUE_ITEMS = 16;
+    private const string REDACTED = '[redacted]';
 
     public function format(ValidationResult $result): string
     {
@@ -33,7 +34,7 @@ final readonly class ValidationResultFormatter
             $lines[] = '   instancePath: ' . $this->field($violation->instancePath);
             $lines[] = '   specPointer: ' . $this->field($violation->specPointer);
             $lines[] = '   expected: ' . $this->value($violation->expected);
-            $lines[] = '   actual: ' . ($this->redactsActual($violation) ? '"[redacted]"' : $this->value($violation->actual));
+            $lines[] = '   actual: ' . ($this->redactsActual($violation) ? $this->value(self::REDACTED) : $this->value($violation->actual, maskNames: true));
             $lines[] = '   message: ' . $this->field($violation->message);
         }
 
@@ -47,10 +48,19 @@ final readonly class ValidationResultFormatter
         return $this->truncate(is_string($encoded) ? $encoded : '"[unrenderable]"', self::MAX_FIELD_BYTES);
     }
 
-    private function value(mixed $value): string
+    private function isSensitiveName(string $name): bool
+    {
+        return preg_match('/(?:authorization|api[-_]?key|token|secret|password|cookie)/i', $name) === 1;
+    }
+
+    /**
+     * @param bool $maskNames replace the value of every member whose name
+     *        matches the credential pattern — see {@see redactsActual()}
+     */
+    private function value(mixed $value, bool $maskNames = false): string
     {
         $encoded = json_encode(
-            $this->normalize($value, depth: 0),
+            $this->normalize($value, depth: 0, maskNames: $maskNames),
             JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION,
         );
 
@@ -58,13 +68,13 @@ final readonly class ValidationResultFormatter
     }
 
     /** @return null|bool|int|float|string|array<array-key, mixed> */
-    private function normalize(mixed $value, int $depth): bool|int|float|string|array|null
+    private function normalize(mixed $value, int $depth, bool $maskNames = false): bool|int|float|string|array|null
     {
         if ($depth >= self::MAX_VALUE_DEPTH && (is_array($value) || is_object($value))) {
             return '[depth limit]';
         }
         if ($value instanceof \stdClass) {
-            return $this->normalize(get_object_vars($value), $depth);
+            return $this->normalize(get_object_vars($value), $depth, $maskNames);
         }
         if (is_object($value)) {
             return sprintf('[object %s]', $value::class);
@@ -89,7 +99,9 @@ final readonly class ValidationResultFormatter
             }
             /** @var mixed $item */
             $item = $value[$key];
-            $normalizedItem = $this->normalize($item, $depth + 1);
+            $normalizedItem = $maskNames && $this->isSensitiveName((string) $key)
+                ? self::REDACTED
+                : $this->normalize($item, $depth + 1, $maskNames);
             $normalized[$key] = $normalizedItem;
         }
         if (!array_is_list($normalized)) {
@@ -100,19 +112,27 @@ final readonly class ValidationResultFormatter
     }
 
     /**
-     * A body is user data of unknown shape: a schema failure anywhere in it can
-     * put credentials into the rendered diagnostic, and the instance path — the
-     * only thing the name pattern below can inspect — is `$` for a whole-body
-     * violation. Redact bodies wholesale rather than guessing which field of a
-     * payload was sensitive.
+     * A body is user data of unknown shape: a schema failure anywhere in it
+     * can put credentials into the rendered diagnostic, its member names are
+     * the application's rather than the document's, and the instance path is
+     * `$` for a whole-body violation, so there is nothing to inspect. Bodies
+     * stay redacted wholesale rather than guessing which field was sensitive.
+     *
+     * Everything else is named — by the instance path when the value is a
+     * scalar, and by its own keys when it is a container, both of which the
+     * document declares. Redacting those locations outright, as this did, left
+     * `expected` printed in full, schema and all, beside an `actual` that
+     * never said anything: not a safe default but an unreadable diagnostic.
+     * The name pattern decides instead, and {@see maskSensitiveKeys()} applies
+     * it to the members the instance path does not name.
      */
     private function redactsActual(Violation $violation): bool
     {
-        if (in_array($violation->location, ['header', 'cookie', 'query', 'body'], strict: true)) {
+        if ($violation->location === 'body') {
             return true;
         }
 
-        return preg_match('/(?:authorization|api[-_]?key|token|secret|password|cookie)/i', $violation->instancePath) === 1;
+        return $this->isSensitiveName($violation->instancePath);
     }
 
     private function truncate(string $value, int $bytes): string
