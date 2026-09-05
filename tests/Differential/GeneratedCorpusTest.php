@@ -38,15 +38,20 @@ use Testo\Test;
  * in the query must be reported against the query, not against a body we
  * mis-parsed on the way there.
  *
- * Checked against the version this all came out of rather than assumed:
- * replayed on 0.5.1's `src/`, the corpus refuses to compile the `bounded.create`
- * document at all (a boolean `additionalProperties` under 3.0) and rejects a
+ * Checked against the version this all came out of rather than assumed. On
+ * 0.5.1's `src/` the corpus refuses to compile the `bounded.create` document
+ * at all (a boolean `additionalProperties` under 3.0) and rejects a
  * `numeric.create` body that was built valid (an integer-keyed property
- * dropped). What it does not catch there is the third finding of that wave —
- * an ignored `encoding.contentType` is fail-open, so every valid case still
- * passes, and seeing it needs a part whose media type is deliberately wrong.
- * The generator has no such misuse to build yet
- * (rasuvaeff/property-testing-openapi#80).
+ * dropped). The third body finding of that wave took a second step: an ignored
+ * `encoding.contentType` is fail-open, so every valid case passes either way
+ * and no amount of valid traffic can see it. It took a case built to violate
+ * the keyword (rasuvaeff/property-testing-openapi#80), and with
+ * `encoded.create/part-content-type` recorded, making that check fail open
+ * again turns this replay red.
+ *
+ * That is the general shape worth remembering here: a keyword this package
+ * reads and ignores is invisible to valid traffic by construction. When one is
+ * added, the corpus covers it only once the generator can contradict it.
  *
  * Regenerate with `bin/record-openapi-corpus` from the monorepo root. Never
  * hand-edit it: a verdict that changed is a question about this package, and
