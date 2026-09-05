@@ -18,8 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the wild trim it and the value the application receives would not be the
   value the case recorded. No case changed its verdict.
 
-## Unreleased
-
 - **Changed.** The generated corpus gains the three cases that close its one
   known blind spot: a multipart part sent under a media type its
   `encoding.contentType` does not allow (290 cases, up from 287). Neglecting
@@ -51,8 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   case names the version the corpus was recorded against, so a moved
   verdict reads as a question about this package rather than as an
   unexplained disagreement.
-
-## Unreleased
 
 - **Changed.** A header parameter is read as it was sent, not
   percent-decoded (#66). OAS says a header uses `style: simple` and simple
