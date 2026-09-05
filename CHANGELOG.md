@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Changed.** The generated corpus is re-recorded against
+  `property-testing-openapi` at the header decision: 287 cases over 20
+  operations, up from 274 over 19. The new operation is `headers.get` — a
+  scalar, a list and an exploded object header — which the corpus could not
+  carry before, because the zoo had no header parameter at all and both
+  packages percent-encoded, so they agreed with each other and with nobody
+  else. One `uploads.create` case changed shape: the generator no longer
+  builds a multipart text part with whitespace on its edge, since the parsers
+  in the wild trim it and the value the application receives would not be the
+  value the case recorded. No case changed its verdict.
+
 ## 0.7.0 — 2026-09-05
 
 - **Added.** A conformance replay of generated traffic. The differentials in

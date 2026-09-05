@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.6.0",
+    "contractVersionAtRecording": "v0.7.0",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -755,6 +755,56 @@
                                 }
                             }
                         },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/headers": {
+                    "get": {
+                        "operationId": "headers.get",
+                        "parameters": [
+                            {
+                                "name": "X-Trace",
+                                "in": "header",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 8
+                                }
+                            },
+                            {
+                                "name": "X-Tags",
+                                "in": "header",
+                                "style": "simple",
+                                "explode": false,
+                                "schema": {
+                                    "type": "array",
+                                    "maxItems": 3,
+                                    "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 4
+                                    }
+                                }
+                            },
+                            {
+                                "name": "X-Filter",
+                                "in": "header",
+                                "style": "simple",
+                                "explode": true,
+                                "schema": {
+                                    "type": "object",
+                                    "maxProperties": 2,
+                                    "additionalProperties": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 4
+                                    }
+                                }
+                            }
+                        ],
                         "responses": {
                             "204": []
                         }
@@ -2008,12 +2058,12 @@
                 "target": "/encoded",
                 "headers": {
                     "Content-Type": [
-                        "multipart/form-data; boundary=openapi-b72cad81f1c14695"
+                        "multipart/form-data; boundary=openapi-393eafaab149d7a9"
                     ]
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "--openapi-b72cad81f1c14695\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\n\r\n\t\u50e0\u00adq&+\r\n--openapi-b72cad81f1c14695--\r\n"
+                    "content": "--openapi-393eafaab149d7a9\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\n\r\n\u01c8f\u01cc\r\n--openapi-393eafaab149d7a9--\r\n"
                 }
             },
             "expect": {
@@ -2999,6 +3049,276 @@
                 "method": "GET",
                 "target": "/files/1",
                 "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/length/1",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Filter": [
+                        "qzhjyjsf=nBgA,jsxh=\""
+                    ],
+                    "X-Tags": [
+                        "#,k&,$I"
+                    ],
+                    "X-Trace": [
+                        "aaaaaaaaa"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Trace"
+                }
+            }
+        },
+        {
+            "name": "headers.get/length/2",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "aaaaaaaaa"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Trace"
+                }
+            }
+        },
+        {
+            "name": "headers.get/length/3",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "aaaaaaaaa"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Trace"
+                }
+            }
+        },
+        {
+            "name": "headers.get/valid/1",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Filter": [
+                        "qzhjyjsf=nBgA,jsxh=\""
+                    ],
+                    "X-Tags": [
+                        "#,k&,$I"
+                    ],
+                    "X-Trace": [
+                        ",-=4:,"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/10",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "B-"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/2",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "V"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/3",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "Q>P"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/4",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Filter": [
+                        "yyklzc=W5,kcbtagww=5"
+                    ],
+                    "X-Trace": [
+                        ";<R"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/5",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "cpx+"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/6",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "H4s"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/7",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Tags": [
+                        "opK_,;Ry"
+                    ],
+                    "X-Trace": [
+                        "o\"1vdrL?"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/8",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Trace": [
+                        "CR@Z"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "headers.get/valid/9",
+            "document": "zoo",
+            "operationId": "headers.get",
+            "request": {
+                "method": "GET",
+                "target": "/headers",
+                "headers": {
+                    "X-Tags": [
+                        "Gs^"
+                    ],
+                    "X-Trace": [
+                        "=-.uq,i"
+                    ]
+                },
                 "body": null
             },
             "expect": {
