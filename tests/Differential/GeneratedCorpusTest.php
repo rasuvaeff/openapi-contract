@@ -56,7 +56,7 @@ use Testo\Test;
 #[CoversNothing]
 final class GeneratedCorpusTest
 {
-    /** @var array{documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>}|null */
+    /** @var array{contractVersionAtRecording?: string, documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>}|null */
     private static ?array $corpus = null;
 
     /** @var array<string, Contract> */
@@ -74,7 +74,7 @@ final class GeneratedCorpusTest
             $rendered = implode(', ', array_map(
                 static fn(Violation $violation): string => $violation->code . '@' . $violation->location . $violation->instancePath,
                 $result->violations,
-            ));
+            )) . $this->provenance();
 
             if ($case['expect']['valid'] === true) {
                 Assert::true($result->isValid(), $case['name'] . ' was built valid but was rejected: ' . $rendered);
@@ -84,7 +84,7 @@ final class GeneratedCorpusTest
 
             \assert(is_array($case['expect']['misuse']));
             $location = $case['expect']['misuse']['location'];
-            Assert::false($result->isValid(), $case['name'] . ' was built invalid but was accepted');
+            Assert::false($result->isValid(), $case['name'] . ' was built invalid but was accepted' . $this->provenance());
             $atLocation = array_filter(
                 $result->violations,
                 static fn(Violation $violation): bool => $violation->location === $location,
@@ -94,6 +94,20 @@ final class GeneratedCorpusTest
                 $case['name'] . ' was rejected somewhere else than ' . $location . ': ' . $rendered,
             );
         }
+    }
+
+    /**
+     * Says which version of this package the corpus was recorded against, so a
+     * failure reads as "these verdicts were true at 0.6.0" rather than as an
+     * unexplained disagreement. A verdict that moved since is a question about
+     * this package — re-recording answers it by deleting it, which is only the
+     * right answer once someone has looked.
+     */
+    private function provenance(): string
+    {
+        $version = self::corpus()['contractVersionAtRecording'] ?? 'unknown';
+
+        return ' (corpus recorded against ' . (is_string($version) ? $version : 'unknown') . ')';
     }
 
     /**
@@ -160,7 +174,7 @@ final class GeneratedCorpusTest
         return self::$contracts[$document] ??= Contract::fromArray(self::corpus()['documents'][$document]);
     }
 
-    /** @return array{documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>} */
+    /** @return array{contractVersionAtRecording?: string, documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>} */
     private static function corpus(): array
     {
         if (self::$corpus !== null) {
@@ -168,7 +182,7 @@ final class GeneratedCorpusTest
         }
         $raw = file_get_contents(dirname(__DIR__) . '/fixtures/generated-corpus/requests.json');
         \assert(is_string($raw));
-        /** @var array{documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>} $decoded */
+        /** @var array{contractVersionAtRecording?: string, documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>} $decoded */
         $decoded = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
 
         return self::$corpus = $decoded;
