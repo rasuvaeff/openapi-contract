@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded is the generator's intent, not our own verdict — a corpus of the
   latter would have faithfully pinned all four 0.6.0 bugs as correct
   behaviour. Verified by replaying it on 0.5.1: the `bounded.create` document
-  will not compile and a valid `numeric.create` body is rejected.
+  will not compile and a valid `numeric.create` body is rejected. A failing
+  case names the version the corpus was recorded against, so a moved
+  verdict reads as a question about this package rather than as an
+  unexplained disagreement.
 
 ## 0.6.0 — 2026-09-05
 
