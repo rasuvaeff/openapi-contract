@@ -67,8 +67,10 @@ make release-check
   case was built valid, this one was built to break `enum` in the query — not
   our verdict, because a corpus of our own verdicts pins today's bugs as
   expected behaviour. Re-record with `bin/record-openapi-corpus` from the
-  monorepo root when the generator's zoo grows; a case whose verdict moved is a
-  question about this package, and re-recording answers it by deleting it.
+  monorepo root when the generator's zoo grows, and `--check` on the same
+  command says whether you need to without rewriting anything. A case whose
+  verdict moved is a question about this package, and re-recording answers it
+  by deleting it — read the case first.
 - `tests/Differential/` runs in the **Unit** suite on purpose. The suite
   convention puts non-unit tests under `tests/Integration/`, but those are the
   ones that need a server and are skipped by env; the league and cebe
