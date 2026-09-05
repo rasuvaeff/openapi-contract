@@ -60,6 +60,15 @@ make release-check
   backend objects.
 - Code uses `declare(strict_types=1)`, internal types carry
   `@internal`, and public types carry `@api`.
+- `tests/fixtures/generated-corpus/requests.json` is **generated, never
+  hand-edited**. `rasuvaeff/property-testing-openapi` depends on this package,
+  so it cannot be a dev dependency here; the corpus is how its generated
+  traffic reaches this suite at all. It records that generator's intent — this
+  case was built valid, this one was built to break `enum` in the query — not
+  our verdict, because a corpus of our own verdicts pins today's bugs as
+  expected behaviour. Re-record with `bin/record-openapi-corpus` from the
+  monorepo root when the generator's zoo grows; a case whose verdict moved is a
+  question about this package, and re-recording answers it by deleting it.
 - `tests/Differential/` runs in the **Unit** suite on purpose. The suite
   convention puts non-unit tests under `tests/Integration/`, but those are the
   ones that need a server and are skipped by env; the league and cebe
