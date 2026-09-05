@@ -443,6 +443,27 @@ final class ResponseValidationTest
         Assert::same($contract->validateResponse('GET /h', new Response(200, ['X-Count' => 'x']))->violations[0]->code, 'response.header.schema');
     }
 
+    /**
+     * A response header is read as the server sent it, the same as a request
+     * header and for the same reason: nothing percent-encodes a field value,
+     * so decoding one rewrites what the client actually received (#66).
+     */
+    #[DataProvider('verbatimResponseHeaderProvider')]
+    public function readsAResponseHeaderValueAsItWasSent(string $sent, string $expected): void
+    {
+        $contract = $this->headerContract(['X-Trace' => ['required' => true, 'schema' => ['type' => 'string', 'const' => $expected]]]);
+
+        Assert::true($this->validate($contract, ['X-Trace' => $sent])->isValid());
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function verbatimResponseHeaderProvider(): iterable
+    {
+        yield 'a percent-escape is not an escape' => ['/a%20b', '/a%20b'];
+        yield 'a lone percent is a percent' => ['50%', '50%'];
+        yield 'a plus is a plus' => ['a+b', 'a+b'];
+    }
+
     /** @param array<string, array<array-key, mixed>> $headers */
     /**
      * A boolean schema is a schema: `false` admits nothing at all. Reading it

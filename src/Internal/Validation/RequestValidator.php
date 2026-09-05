@@ -27,6 +27,13 @@ final readonly class RequestValidator
 
     private ParameterCodec $parameters;
 
+    /**
+     * A header field value is not percent-encoded, so it is not decoded.
+     * {@see ParameterCodec::__construct()} for why the asymmetry is
+     * deliberate rather than a gap.
+     */
+    private ParameterCodec $headerParameters;
+
     private SchemaValueDecoder $values;
 
     private FormUrlencodedBodyDecoder $forms;
@@ -43,6 +50,7 @@ final readonly class RequestValidator
     public function __construct(private SchemaValidator $schemas = new SchemaValidator())
     {
         $this->parameters = new ParameterCodec();
+        $this->headerParameters = new ParameterCodec(percentEncoded: false);
         $this->values = new SchemaValueDecoder();
         $this->forms = new FormUrlencodedBodyDecoder();
         $this->multipart = new MultipartBodyDecoder(schemas: $this->schemas);
@@ -77,7 +85,7 @@ final readonly class RequestValidator
             }
 
             try {
-                $parsed = $this->parameters->parse(
+                $parsed = $this->codecFor($parameter['in'])->parse(
                     name: $parameter['name'],
                     wire: $wire,
                     style: $this->style($parameter['style']),
@@ -165,6 +173,17 @@ final readonly class RequestValidator
         }
 
         return $this->parameters->withoutHeaderWhitespace($wire);
+    }
+
+    /**
+     * A cookie keeps the percent-decoding a header loses: every SAPI decodes
+     * `$_COOKIE`, so an encoded cookie value is one the application receives
+     * decoded too, and reading it raw would disagree with the server the way
+     * decoding a header disagrees with the client.
+     */
+    private function codecFor(string $in): ParameterCodec
+    {
+        return $in === 'header' ? $this->headerParameters : $this->parameters;
     }
 
     /**

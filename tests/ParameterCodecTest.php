@@ -318,4 +318,26 @@ final class ParameterCodecTest
             'kind' => $kind,
         ]);
     }
+
+    /**
+     * The header mode: no encoding on the way out, no decoding on the way in.
+     * The delimiters still delimit — what disappears is the escape for a value
+     * that contains one, which is the whole trade
+     * ({@see ParameterCodec::__construct()}).
+     */
+    public function theVerbatimModeLeavesPercentSequencesAlone(): void
+    {
+        $verbatim = new ParameterCodec(percentEncoded: false);
+
+        Assert::same($verbatim->parse('t', '%C4%8B', ParameterStyle::Simple, explode: false, kind: ParameterKind::Scalar), '%C4%8B');
+        Assert::same($verbatim->serialize('t', 'a b', ParameterStyle::Simple, explode: false), 'a b');
+        Assert::same(
+            $verbatim->parse('t', 'a%2Cb,c', ParameterStyle::Simple, explode: false, kind: ParameterKind::List),
+            ['a%2Cb', 'c'],
+        );
+        // The default mode is unchanged, and is what the path and the query
+        // still use.
+        Assert::same((new ParameterCodec())->parse('t', '%C4%8B', ParameterStyle::Simple, explode: false, kind: ParameterKind::Scalar), "\u{10b}");
+    }
+
 }

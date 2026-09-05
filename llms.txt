@@ -95,6 +95,10 @@ API reference:
 - `Contract::validateRequest(RequestInterface): ValidationResult` —
   parameters per location (style/explode deserialization, schema), JSON
   request bodies (syntax separately from schema).
+- Percent-decoding happens where an encoding exists: path, query (`+` is a
+  space, it is form-encoded content) and cookie. A header value — request or
+  response — is read VERBATIM: `%20` stays three characters. A header value
+  therefore cannot carry its own style delimiter.
 - `Contract::validateExchange(Request, Response): ValidationResult` — both
   sides: request violations plus response status selection, response
   headers (required presence, `simple`-style value decoding and schema in

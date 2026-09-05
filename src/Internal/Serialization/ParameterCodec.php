@@ -15,6 +15,27 @@ namespace Rasuvaeff\OpenApiContract\Internal\Serialization;
 final readonly class ParameterCodec
 {
     /**
+     * Whether values on this wire are percent-encoded.
+     *
+     * A path or a query is built out of RFC 3986 delimiters, so a value
+     * carrying one has to be escaped and RFC 6570 says how; decoding is the
+     * inverse of what every client does. A header field value is none of
+     * that. HTTP reads it as opaque octets, nothing in the wild escapes it,
+     * and percent-decoding one rewrites a value the application will receive
+     * intact: `X-Path: /a%20b` is a literal path to the client that sent it
+     * and to the server that reads it, and `X-Discount: 50%` is not a broken
+     * escape.
+     *
+     * The two mistakes are not symmetric. Decoding a value nobody encoded
+     * corrupts it silently; leaving an encoded value alone only makes a
+     * length or pattern assertion stricter than its author meant. So the
+     * decoding is where an encoding provably exists, and nowhere else. The
+     * price is real and worth naming: a header value cannot carry its own
+     * style delimiter, because there is no longer an escape for it.
+     */
+    public function __construct(private bool $percentEncoded = true) {}
+
+    /**
      * Wire forms a spaceDelimited separator can take. A URI cannot carry a raw
      * space, so conforming traffic percent-encodes it; the raw form is accepted
      * because callers hand us query strings that have not been normalized yet.
@@ -199,12 +220,12 @@ final readonly class ParameterCodec
 
     private function encode(string $value): string
     {
-        return rawurlencode($value);
+        return $this->percentEncoded ? rawurlencode($value) : $value;
     }
 
     private function decode(string $value): string
     {
-        return rawurldecode($value);
+        return $this->percentEncoded ? rawurldecode($value) : $value;
     }
 
     /**

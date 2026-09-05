@@ -34,7 +34,9 @@ final readonly class ResponseValidator
     public function __construct(private SchemaValidator $schemas = new SchemaValidator())
     {
         $this->selector = new ResponseSelector();
-        $this->parameters = new ParameterCodec();
+        // Headers are the only thing this validator deserializes, and a header
+        // field value is not percent-encoded.
+        $this->parameters = new ParameterCodec(percentEncoded: false);
         $this->values = new SchemaValueDecoder();
     }
 
