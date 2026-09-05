@@ -2029,6 +2029,84 @@
             }
         },
         {
+            "name": "encoded.create/part-content-type/1",
+            "document": "zoo",
+            "operationId": "encoded.create",
+            "request": {
+                "method": "POST",
+                "target": "/encoded",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-d406533053786666"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-d406533053786666\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: application/x-openapi-misuse\r\n\r\n\udb8e\ude65\ud99f\udf00\r\n--openapi-d406533053786666\r\nContent-Disposition: form-data; name=\"tag\"\r\nContent-Type: text/plain\r\n\r\n[d\uc29b<\r\n--openapi-d406533053786666--\r\n"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "part-content-type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
+            "name": "encoded.create/part-content-type/2",
+            "document": "zoo",
+            "operationId": "encoded.create",
+            "request": {
+                "method": "POST",
+                "target": "/encoded",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-4409d75c2fc58e8f"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-4409d75c2fc58e8f\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: application/x-openapi-misuse\r\n\r\n\u97dd\r\n--openapi-4409d75c2fc58e8f--\r\n"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "part-content-type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
+            "name": "encoded.create/part-content-type/3",
+            "document": "zoo",
+            "operationId": "encoded.create",
+            "request": {
+                "method": "POST",
+                "target": "/encoded",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-a6fe50edd93b6c00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-a6fe50edd93b6c00\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: application/x-openapi-misuse\r\n\r\n\udbcd\udfa3\u85e8p&\ud8e1\udc4a\r\n--openapi-a6fe50edd93b6c00\r\nContent-Disposition: form-data; name=\"tag\"\r\nContent-Type: text/plain\r\n\r\n\udbb8\udda9\ud97d\udd3e\r\n--openapi-a6fe50edd93b6c00--\r\n"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "part-content-type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
             "name": "encoded.create/valid/1",
             "document": "zoo",
             "operationId": "encoded.create",
