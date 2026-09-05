@@ -94,6 +94,15 @@ final class LeagueDifferentialTest
         yield 'valueless foreign query key' => [new ServerRequest('GET', '/items?limit=1&flag'), true, true];
         yield 'valueless declared query key' => [new ServerRequest('GET', '/items?limit=1&q'), false, false];
 
+        // Both readers now read a header field value as sent. We used to
+        // percent-decode it, so this exact request was ours to accept and
+        // league's to reject — the one live disagreement the generated
+        // differential in property-testing-openapi found (#66).
+        $traced = static fn(string $value): ServerRequestInterface => new ServerRequest('GET', '/items?limit=1', ['X-Trace' => $value]);
+
+        yield 'a header escape is not an escape' => [$traced('%C4%8B%C4%8B%C4%8B'), false, false];
+        yield 'a short header value is read as sent' => [$traced('ab'), true, true];
+
         $part = "--X\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n";
         $upload = static fn(string $payload): ServerRequest => new ServerRequest(
             'POST',
@@ -124,6 +133,7 @@ final class LeagueDifferentialTest
                         'parameters' => [
                             ['name' => 'limit', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer', 'minimum' => 1]],
                             ['name' => 'q', 'in' => 'query', 'required' => false, 'schema' => ['type' => 'string', 'enum' => ['a b']]],
+                            ['name' => 'X-Trace', 'in' => 'header', 'required' => false, 'schema' => ['type' => 'string', 'maxLength' => 8]],
                         ],
                         'responses' => [
                             '200' => ['description' => 'ok', 'content' => ['application/json' => ['schema' => [

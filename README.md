@@ -98,6 +98,17 @@ list. When the request path is declared but no server authority agrees,
 validation reports `request.server.mismatch` instead of
 `request.operation.unknown`.
 
+Parameters are deserialized where an encoding exists and read as sent where
+one does not. A path segment and a query string are built out of RFC 3986
+delimiters, so a value carrying one has to be escaped and RFC 6570 says how:
+both are percent-decoded, and a query is form-encoded content, so `+` is a
+space. A cookie is decoded too, because every SAPI decodes `$_COOKIE`. A
+**header field value is read verbatim** — HTTP treats it as opaque octets,
+nothing in the wild escapes one, and decoding it would rewrite a value the
+application receives intact (`X-Path: /a%20b` is a literal path; `X-Discount:
+50%` is not a broken escape). The price is explicit: a header value cannot
+carry its own style delimiter, because there is no escape left for it.
+
 ### Security schemes
 
 ```php

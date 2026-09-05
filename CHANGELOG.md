@@ -27,6 +27,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verdict reads as a question about this package rather than as an
   unexplained disagreement.
 
+## Unreleased
+
+- **Changed.** A header parameter is read as it was sent, not
+  percent-decoded (#66). OAS says a header uses `style: simple` and simple
+  style is RFC 6570 expansion, which does define an encoding — but HTTP treats
+  a field value as opaque octets, no client in the wild escapes one, and the
+  two mistakes are not symmetric: decoding a value nobody encoded corrupts it
+  silently, while leaving an encoded value alone only makes a length or
+  pattern assertion stricter than its author meant. `X-Path: /a%20b` used to
+  become `/a b`, and `X-Discount: 50%` a broken escape. Decoding now happens
+  where an encoding provably exists — path, query, cookie — and nowhere else.
+  The price is named rather than hidden: a header value can no longer carry
+  its own style delimiter, because there is no escape left for it. The change
+  applies to response headers too, and closes the one live disagreement the
+  generated differential in `property-testing-openapi` found against
+  `league/openapi-psr7-validator` — the two now agree on the same request.
+
 ## 0.6.0 — 2026-09-05
 
 - **Fixed.** OAS 3.0 documents that use a boolean `additionalProperties` no

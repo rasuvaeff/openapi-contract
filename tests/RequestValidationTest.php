@@ -398,6 +398,66 @@ final class RequestValidationTest
     }
 
     /**
+     * A header field value is opaque octets to HTTP, and no client
+     * percent-encodes one. We used to decode it anyway, which rewrote values
+     * the application receives intact — `X-Path: /a%20b` became `/a b`, and a
+     * `50%` discount became a broken escape. It is read as sent now, so the
+     * schema sees the bytes the server sees (#66).
+     *
+     * The path and the query keep their decoding: they are built from RFC 3986
+     * delimiters, so a value carrying one has to be escaped, and decoding is
+     * the inverse of what every client does.
+     */
+    #[DataProvider('verbatimHeaderProvider')]
+    public function readsAHeaderValueAsItWasSent(string $sent, string $expected): void
+    {
+        // `const` admits exactly one string, so accepting the request is a
+        // statement about which one was read — not merely that something of a
+        // permitted shape arrived.
+        $contract = $this->paramContract([
+            'name' => 'X-Trace', 'in' => 'header', 'required' => true,
+            'schema' => ['type' => 'string', 'const' => $expected],
+        ]);
+
+        Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['X-Trace' => $sent]))->isValid());
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function verbatimHeaderProvider(): iterable
+    {
+        yield 'a percent-escape is not an escape' => ['/a%20b', '/a%20b'];
+        yield 'a lone percent is a percent' => ['50%', '50%'];
+        yield 'a plus is a plus' => ['a+b', 'a+b'];
+        yield 'a space is a space' => ['a b', 'a b'];
+        yield 'multibyte percent-escapes stay text' => ['%C4%8B', '%C4%8B'];
+    }
+
+    /**
+     * The price of reading a header as sent, named rather than discovered: the
+     * style's own delimiter no longer has an escape, so a member carrying one
+     * splits. Percent-decoding used to hide this, at the cost of corrupting
+     * every value that was never encoded.
+     */
+    public function aCommaInsideAHeaderMemberCannotBeEscaped(): void
+    {
+        $oneMember = $this->paramContract([
+            'name' => 'X-Tags', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false,
+            'schema' => ['type' => 'array', 'const' => ['a%2Cb']],
+        ]);
+        $twoMembers = $this->paramContract([
+            'name' => 'X-Tags', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false,
+            'schema' => ['type' => 'array', 'const' => ['a', 'b']],
+        ]);
+
+        // The escape is not honoured, so it is not an escape: the value stays
+        // one member and keeps the three characters literally.
+        Assert::true($oneMember->validateRequest(new ServerRequest('GET', '/q', ['X-Tags' => 'a%2Cb']))->isValid());
+        // And a literal comma still separates, which leaves no spelling at all
+        // for a member that contains one.
+        Assert::true($twoMembers->validateRequest(new ServerRequest('GET', '/q', ['X-Tags' => 'a,b']))->isValid());
+    }
+
+    /**
      * An open object cannot tell an undeclared query pair from a stray one, but
      * a pair another parameter declares is certainly not part of it.
      */
