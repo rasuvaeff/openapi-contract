@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Added.** A conformance replay of generated traffic. The differentials in
+  this package have always been fed by a hand-written corpus of a dozen
+  requests, which bounds what they can disagree about — every finding of the
+  0.6.0 wave lived just outside those dozen.
+  `rasuvaeff/property-testing-openapi` builds requests from a document and
+  knows by construction whether each is meant to pass; it depends on this
+  package, so it can never be a dev dependency here, and a recording is the
+  only way its traffic reaches this suite. 274 cases over 19 operations across
+  both OAS versions now replay from
+  `tests/fixtures/generated-corpus/requests.json`, asserting the verdict the
+  case was built for and, when it was built invalid, that the rejection lands
+  where the misuse was planted rather than somewhere convenient. What is
+  recorded is the generator's intent, not our own verdict — a corpus of the
+  latter would have faithfully pinned all four 0.6.0 bugs as correct
+  behaviour. Verified by replaying it on 0.5.1: the `bounded.create` document
+  will not compile and a valid `numeric.create` body is rejected.
+
 ## 0.6.0 — 2026-09-05
 
 - **Fixed.** OAS 3.0 documents that use a boolean `additionalProperties` no
