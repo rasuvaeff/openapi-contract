@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the wild trim it and the value the application receives would not be the
   value the case recorded. No case changed its verdict.
 
+## Unreleased
+
+- **Changed.** The generated corpus gains the three cases that close its one
+  known blind spot: a multipart part sent under a media type its
+  `encoding.contentType` does not allow (290 cases, up from 287). Neglecting
+  that keyword is fail-open — a validator that reads it and ignores it accepts
+  every valid case unchanged — so replaying the corpus against such a validator
+  was green, and no amount of valid traffic could have said otherwise.
+  `property-testing-openapi` can now build the contradiction, and this records
+  it. Verified by making the check fail open again on the working tree: the
+  replay turns red on `encoded.create/part-content-type/1`.
+
 ## 0.7.0 — 2026-09-05
 
 - **Added.** A conformance replay of generated traffic. The differentials in
