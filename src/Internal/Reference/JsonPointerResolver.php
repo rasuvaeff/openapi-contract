@@ -153,6 +153,12 @@ final class JsonPointerResolver
             return $resolved;
         }
         if (!$inSchema) {
+            // Both are carried wherever a Reference Object appears, including
+            // the types that have no `summary` field of their own — the
+            // specification says the override "has no effect" there, and it
+            // has none here either: nothing downstream reads the key, and
+            // telling those types apart would mean teaching the resolver the
+            // whole object model to change nothing.
             return [...$resolved, ...array_intersect_key($siblings, ['summary' => null, 'description' => null])];
         }
         $annotations = array_intersect_key($siblings, array_flip(self::SCHEMA_ANNOTATIONS));
