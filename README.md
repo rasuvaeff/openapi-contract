@@ -369,6 +369,17 @@ REQUIRED `description`, or an `encoding` declared on a media type the
 specification does not apply it to — accepted, because neither changes a
 verdict. Reach for a linter for the rest.
 
+Three divergences from the specification are deliberate and pinned:
+
+| Where | The specification | This package |
+|---|---|---|
+| A percent-encoded delimiter inside a `pipeDelimited` or `spaceDelimited` value | `\|` and space MUST be percent-encoded inside a value, so `?ids=a%7Cb` is the single element `a\|b` | folds the encoded form into the delimiter and reads two elements — which is what a PHP application reading the same query does, and agreeing with the application is the point of a validator. A value containing the delimiter cannot be expressed |
+| A Header Object carrying `name` or `in` | both MUST NOT be specified | ignored, not refused: the header's name comes from the map key either way |
+| `example` and `examples` on the same object | mutually exclusive | both are kept as annotations and handed to consumers; the validator reads neither |
+
+`deepObject` is not among them: `f%5Ba%5D=1` and `f[a]=1` are the same
+parameter here and in PHP's own query parsing.
+
 ## Security
 
 **Declared `security` is not enforced.** Requirements are compiled, and a

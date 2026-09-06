@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Documentation.** Three divergences from the specification are now written
+  down rather than merely true: a percent-encoded delimiter inside a
+  `pipeDelimited`/`spaceDelimited` value is folded into the delimiter, a Header
+  Object carrying `name`/`in` is ignored rather than refused, and `example`
+  with `examples` are both kept instead of being refused as mutually exclusive.
+  No behaviour changed: the first agrees with how a PHP application reads the
+  same query, and changing it would break that agreement to gain agreement with
+  the text.
+
 - **Fixed.** A YAML document under a kilobyte could exhaust memory and die with
   a fatal error rather than an `InvalidContract`. Anchors and aliases expand
   inside the parser, before any budget measures anything, and the byte budget
