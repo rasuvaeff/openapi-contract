@@ -43,6 +43,10 @@ Rules:
   before reaching the backend, a document whose `paths` yield no operation is
   rejected, and an unparsable YAML file is `InvalidContract`, not the parser's
   own exception;
+- `$ref` is resolved only where it is a keyword: never inside `example`, an
+  Example Object's `value`, a Schema Object's `default`/`const`/`enum`, or a
+  specification extension — those hold the author's data and are kept as
+  written (an Example Object reached through `$ref` still resolves);
 - `$ref` siblings follow the declared dialect: 3.0 ignores them everywhere;
   3.1 keeps `summary`/`description` on a Reference Object (overriding the
   referenced ones) and applies a Schema Object's siblings in addition to the

@@ -48,6 +48,26 @@ final class JsonPointerResolver
      */
     private const array SCHEMA_DECODING_KEYWORDS = ['type', 'items', 'properties'];
 
+    /**
+     * Keywords of a Schema Object whose value is the document author's data,
+     * not a schema: `$ref` there is a member of a payload, and resolving it
+     * either refuses a legal document or replaces the author's value with a
+     * piece of the document.
+     *
+     * @var list<string>
+     */
+    private const array SCHEMA_DATA_KEYWORDS = ['const', 'default', 'enum', 'example', 'examples'];
+
+    /**
+     * The same, outside a Schema Object: the `example` a Parameter, Header or
+     * Media Type Object declares, and the `value` of an Example Object. The
+     * Example Object itself is still resolved — `examples: {sample: {$ref:
+     * '#/components/examples/Sample'}}` is a reference and means one.
+     *
+     * @var list<string>
+     */
+    private const array DATA_KEYWORDS = ['example', 'value'];
+
     private int $resolvedNodes = 0;
 
     /**
@@ -109,7 +129,7 @@ final class JsonPointerResolver
 
         /** @var mixed $value */
         foreach ($node as $key => $value) {
-            if (is_array($value)) {
+            if (is_array($value) && !$this->isData($key, $inSchema)) {
                 // A Schema Object is entered through a `schema` key and never
                 // left: everything below one is a schema too.
                 $node[$key] = $this->resolveIn($value, $file, $referenceDepth, $inSchema || $key === 'schema');
@@ -172,6 +192,26 @@ final class JsonPointerResolver
             ...array_intersect_key($resolved, array_flip([...self::SCHEMA_ANNOTATIONS, ...self::SCHEMA_DECODING_KEYWORDS])),
             ...$annotations,
         ];
+    }
+
+    /**
+     * Whether a member holds data rather than document structure, and so is
+     * left exactly as the author wrote it.
+     *
+     * A specification extension is included wherever it appears: no
+     * specification gives `$ref` a meaning inside one, and reading a vendor's
+     * payload as a reference refused documents that merely showed one.
+     */
+    private function isData(int|string $key, bool $inSchema): bool
+    {
+        if (!is_string($key)) {
+            return false;
+        }
+        if (str_starts_with($key, 'x-')) {
+            return true;
+        }
+
+        return in_array($key, $inSchema ? self::SCHEMA_DATA_KEYWORDS : self::DATA_KEYWORDS, strict: true);
     }
 
     /**

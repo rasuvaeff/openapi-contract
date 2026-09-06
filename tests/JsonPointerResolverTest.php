@@ -229,6 +229,43 @@ final class JsonPointerResolverTest
         );
     }
 
+    /**
+     * `$ref` is a keyword only where the specification puts one. Which
+     * members hold data depends on the position: a Schema Object's `default`
+     * is data, the same key elsewhere is not; an Example Object's `value` is
+     * data, the same key inside a schema is not a keyword at all.
+     */
+    #[DataProvider('dataPositionProvider')]
+    public function leavesDataMembersUnresolved(array $node, bool $inSchema, array $expected): void
+    {
+        $resolver = new JsonPointerResolver(document: ['a' => ['type' => 'string']]);
+
+        Assert::same($resolver->resolve($node, inSchema: $inSchema), $expected);
+    }
+
+    /** @return iterable<string, array{array<array-key, mixed>, bool, array<array-key, mixed>}> */
+    public static function dataPositionProvider(): iterable
+    {
+        $pointer = ['$ref' => '#/a'];
+        $target = ['type' => 'string'];
+
+        yield 'example outside a schema' => [['example' => $pointer], false, ['example' => $pointer]];
+        yield 'example inside a schema' => [['example' => $pointer], true, ['example' => $pointer]];
+        yield 'value outside a schema' => [['value' => $pointer], false, ['value' => $pointer]];
+        // `value` is not a schema keyword, so inside a schema it is structure.
+        yield 'value inside a schema' => [['value' => $pointer], true, ['value' => $target]];
+        yield 'default inside a schema' => [['default' => $pointer], true, ['default' => $pointer]];
+        // `default` outside a schema is not a data keyword either.
+        yield 'default outside a schema' => [['default' => $pointer], false, ['default' => $target]];
+        yield 'enum inside a schema' => [['enum' => [$pointer]], true, ['enum' => [$pointer]]];
+        yield 'const inside a schema' => [['const' => $pointer], true, ['const' => $pointer]];
+        yield 'extension outside a schema' => [['x-vendor' => $pointer], false, ['x-vendor' => $pointer]];
+        yield 'extension inside a schema' => [['x-vendor' => $pointer], true, ['x-vendor' => $pointer]];
+        // Structure is still resolved on both sides of the fence.
+        yield 'a schema member is structure' => [['schema' => $pointer], false, ['schema' => $target]];
+        yield 'an examples map is structure' => [['examples' => ['s' => $pointer]], false, ['examples' => ['s' => $target]]];
+    }
+
     public function reportsTheUnsupportedReferenceValue(): void
     {
         try {

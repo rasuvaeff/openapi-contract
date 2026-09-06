@@ -119,9 +119,11 @@ merged by location and name, and an Operation's declaration replaces the Path
 Item's for the same pair, as the specification requires; two declarations of
 the same pair *within* one list are not an error here — the last one wins —
 so a document that declares one twice is validated against its final word. Compiled parameters keep declared `example`/
-`examples` values (with `$ref`s resolved) as annotations: validation ignores
-them, while the generator package feeds them into its deterministic example
-phase. `MatchedOperation` carries the operation and the raw path parameters
+`examples` values as annotations: validation ignores them, while the generator
+package feeds them into its deterministic example phase. An Example Object
+reached through `$ref` is resolved; what an example *contains* is data and is
+kept exactly as written, `$ref`-looking members included — as are a Schema
+Object's `default`/`const`/`enum` and every specification extension. `MatchedOperation` carries the operation and the raw path parameters
 extracted from the URI. Matching honours server base paths,
 prefers concrete paths over templated ones, decodes each segment exactly
 once, and rejects decoded separators that would escape a template slot. A trailing slash is part of the path: `/pets` and `/pets/` are different
