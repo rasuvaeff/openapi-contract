@@ -56,6 +56,26 @@ final class MediaTypeTest
         yield 'json-ish subtype' => ['application/jsonish', false];
     }
 
+    #[DataProvider('specificityProvider')]
+    public function ranksDeclarationsByHowSpecificallyTheyCover(string $declared, string $actual, ?int $expected): void
+    {
+        Assert::same(MediaType::specificity($declared, $actual), $expected);
+    }
+
+    /** @return iterable<string, array{string, string, int|null}> */
+    public static function specificityProvider(): iterable
+    {
+        yield 'exact' => ['application/json', 'application/json', 3];
+        yield 'exact after normalization' => ['Application/JSON; charset=utf-8', 'application/json', 3];
+        yield 'structured suffix wildcard' => ['application/*+json', 'application/vnd.pet+json', 2];
+        yield 'subtype wildcard' => ['application/*', 'application/json', 1];
+        yield 'any' => ['*/*', 'application/json', 0];
+        yield 'any against any' => ['*/*', '*/*', 3];
+        yield 'type mismatch' => ['text/*', 'application/json', null];
+        yield 'suffix wildcard misses a plain subtype' => ['application/*+json', 'application/json', null];
+        yield 'subtype mismatch' => ['application/xml', 'application/json', null];
+    }
+
     #[DataProvider('matchProvider')]
     public function matchesDeclarationsAgainstNormalizedActuals(string $declared, string $actual, bool $expected): void
     {

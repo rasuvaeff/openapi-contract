@@ -356,6 +356,17 @@ final class ResponseValidationTest
         $contract = $this->contentContract(['text/*' => ['schema' => ['type' => 'string']], 'application/json' => ['schema' => ['type' => 'integer']]]);
 
         Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '7'))->isValid());
+
+        // Declared the other way round, the wildcard used to win by being
+        // written first, and the exact declaration below it never ran.
+        $wildcardFirst = $this->contentContract([
+            '*/*' => ['schema' => ['type' => 'string']],
+            'application/json' => ['schema' => ['type' => 'integer']],
+        ]);
+        $exchange = fn(string $body) => $wildcardFirst->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], $body));
+
+        Assert::true($exchange('7')->isValid());
+        Assert::same($exchange('"7"')->violations[0]->code, 'response.body.schema');
     }
 
     public function validatesPresentHeaderValuesAgainstTheirSchema(): void

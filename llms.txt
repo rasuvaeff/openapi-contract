@@ -120,6 +120,9 @@ API reference:
   — validates a response fixture without a request; unknown keys yield one
   `response.operation.unknown` violation. Response selection remains exact,
   then `NXX`, then `default`.
+- a `content` map is matched by specificity, not by key order: exact
+  `type/subtype` > `type/*+suffix` > `type/*` > `*/*`, and only equally
+  specific keys are settled by declaration order;
 - Request body media types: JSON, `application/x-www-form-urlencoded` using
   form parameter semantics, and bounded `multipart/form-data` with JSON/binary
   parts, arrays, and per-property encoding content types and headers. An

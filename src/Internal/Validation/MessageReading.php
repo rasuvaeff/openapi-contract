@@ -57,16 +57,22 @@ trait MessageReading
      */
     private function mediaDefinition(array $content, string $mediaType): ?array
     {
+        $selected = null;
+        $rank = -1;
         foreach ($content as $declared => $definition) {
             if (!is_string($declared) || !is_array($definition)) {
                 continue;
             }
-            if (MediaType::matches($declared, $mediaType)) {
-                return $definition;
+            $specificity = MediaType::specificity($declared, $mediaType);
+            // The most specific declaration wins, and only a tie is settled by
+            // the order the keys happen to be written in.
+            if ($specificity !== null && $specificity > $rank) {
+                $selected = $definition;
+                $rank = $specificity;
             }
         }
 
-        return null;
+        return $selected;
     }
 
     private function mediaTypeOf(MessageInterface $message): string

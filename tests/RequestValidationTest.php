@@ -1048,6 +1048,35 @@ final class RequestValidationTest
         }
     }
 
+    /**
+     * A `content` map is a map, and OpenAPI gives its key order no meaning.
+     * Taking the first key that matched let a `*\/*` entry above an exact one
+     * decide the body's schema, so moving two lines changed what the document
+     * said.
+     */
+    #[DataProvider('mediaTypeSpecificityProvider')]
+    public function selectsTheMostSpecificDeclaredMediaType(array $content, string $body, bool $valid): void
+    {
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/vnd.pet+json'], $body);
+
+        Assert::same($this->bodyContract($content)->validateRequest($request)->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, bool}> */
+    public static function mediaTypeSpecificityProvider(): iterable
+    {
+        $exact = ['application/vnd.pet+json' => ['schema' => ['type' => 'object']]];
+        $suffix = ['application/*+json' => ['schema' => ['type' => 'array']]];
+        $subtype = ['application/*' => ['schema' => ['type' => 'integer']]];
+        $any = ['*/*' => ['schema' => ['type' => 'string']]];
+
+        yield 'exact wins over anything declared before it' => [[...$any, ...$subtype, ...$suffix, ...$exact], '{}', true];
+        yield 'exact still decides what it rejects' => [[...$any, ...$exact], '"a string"', false];
+        yield 'suffix wildcard wins over the subtype wildcard' => [[...$any, ...$subtype, ...$suffix], '[]', true];
+        yield 'subtype wildcard wins over any' => [[...$any, ...$subtype], '7', true];
+        yield 'any applies when nothing more specific is declared' => [$any, '"a string"', true];
+    }
+
     public function matchesTypeWildcardAndSuffixDeclarations(): void
     {
         $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/vnd.pet+json'], '{}');
