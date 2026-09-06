@@ -34,6 +34,7 @@ final class ViolationCodeRegistryTest
         'request.body.unreadable',
         'request.body.unsupported',
         'request.operation.unknown',
+        'request.parameter.duplicate',
         'request.parameter.missing',
         'request.parameter.schema',
         'request.parameter.serialization',

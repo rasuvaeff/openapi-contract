@@ -1066,6 +1066,59 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($request)->isValid());
     }
 
+    /**
+     * `?n=5&n=999` is a well-formed query whose meaning depends on the
+     * runtime: PHP keeps the last occurrence in `parse_str()`, `$_GET` and
+     * every PSR-7 `getQueryParams()`. Reading the first — which this did —
+     * let a request satisfy the contract with one value and hand the
+     * application another.
+     */
+    #[DataProvider('duplicateParameterProvider')]
+    public function reportsAParameterThatOccursMoreThanOnce(array $parameter, string $target, ?string $code): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+            'parameters' => [$parameter],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        $result = $contract->validateRequest(new ServerRequest('GET', $target));
+
+        Assert::same($result->violations[0]->code ?? null, $code);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, string|null}> */
+    public static function duplicateParameterProvider(): iterable
+    {
+        $scalar = ['name' => 'n', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer', 'maximum' => 10]];
+        $list = ['name' => 'tags', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'array', 'items' => ['type' => 'string']]];
+
+        yield 'scalar sent once' => [$scalar, '/q?n=5', null];
+        yield 'scalar sent twice' => [$scalar, '/q?n=5&n=999', 'request.parameter.duplicate'];
+        yield 'scalar sent twice with the same value' => [$scalar, '/q?n=5&n=5', 'request.parameter.duplicate'];
+        yield 'unexploded list sent twice' => [[...$list, 'explode' => false], '/q?tags=a,b&tags=c', 'request.parameter.duplicate'];
+        // Repeating the name is what an exploded list means.
+        yield 'exploded list repeats its name' => [[...$list, 'explode' => true], '/q?tags=a&tags=b', null];
+        yield 'delimited list sent twice' => [
+            [...$list, 'style' => 'pipeDelimited', 'explode' => false],
+            '/q?tags=a|b&tags=c',
+            'request.parameter.duplicate',
+        ];
+    }
+
+    public function reportsADuplicateCookieParameter(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/c' => ['get' => [
+            'parameters' => [['name' => 'sid', 'in' => 'cookie', 'required' => true, 'schema' => ['type' => 'string', 'maxLength' => 3]]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        // PHP keeps the last cookie of a repeated name too.
+        $result = $contract->validateRequest(new ServerRequest('GET', '/c', ['Cookie' => 'sid=abc; sid=abcdef']));
+
+        Assert::same($result->violations[0]->code, 'request.parameter.duplicate');
+        Assert::same($result->violations[0]->message, 'Cookie parameter "sid" occurs more than once');
+    }
+
     public function rejectsMalformedContentEntries(): void
     {
         try {

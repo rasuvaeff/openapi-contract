@@ -439,18 +439,31 @@ final readonly class ParameterCodec
         return $result;
     }
 
-    /** @param list<string> $parts */
+    /**
+     * The single value a name carries, for the styles that admit exactly one.
+     *
+     * A repeated name is refused rather than resolved. Taking the first match
+     * — what this did — let a request satisfy the contract with one value and
+     * hand the application another: PHP reads the last occurrence in
+     * `parse_str()`, `$_GET` and therefore in every PSR-7
+     * `getQueryParams()`, so `?n=5&n=999` validated `5` and the application
+     * acted on `999`. Taking the last instead would agree with PHP and with
+     * nothing else; the request itself is ambiguous, and that is what the
+     * violation says.
+     *
+     * @param list<string> $parts
+     */
     private function valueForName(string $name, array $parts): string
     {
-        $encodedName = $this->encode($name);
-        foreach ($parts as $part) {
-            [$key, $value] = $this->namedPair($part);
-            if ($key === $encodedName) {
-                return $value;
-            }
+        $values = $this->allValuesForName($name, $parts);
+        if (isset($values[1])) {
+            throw new DuplicateParameterValue(sprintf('Parameter "%s" occurs more than once', $name));
+        }
+        if ($values === []) {
+            throw new \InvalidArgumentException(sprintf('Parameter "%s" is missing from serialized value', $name));
         }
 
-        throw new \InvalidArgumentException(sprintf('Parameter "%s" is missing from serialized value', $name));
+        return $values[0];
     }
 
     /**
@@ -459,6 +472,20 @@ final readonly class ParameterCodec
      */
     private function valuesForName(string $name, array $parts): array
     {
+        $values = $this->allValuesForName($name, $parts);
+        if ($values === []) {
+            throw new \InvalidArgumentException(sprintf('Parameter "%s" is missing from serialized value', $name));
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param list<string> $parts
+     * @return list<string>
+     */
+    private function allValuesForName(string $name, array $parts): array
+    {
         $encodedName = $this->encode($name);
         $values = [];
         foreach ($parts as $part) {
@@ -466,10 +493,6 @@ final readonly class ParameterCodec
             if ($key === $encodedName) {
                 $values[] = $value;
             }
-        }
-
-        if ($values === []) {
-            throw new \InvalidArgumentException(sprintf('Parameter "%s" is missing from serialized value', $name));
         }
 
         return $values;
