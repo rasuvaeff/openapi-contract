@@ -8,6 +8,8 @@ use Nyholm\Psr7\Request;
 use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
 use Rasuvaeff\OpenApiContract\Contract;
+use Rasuvaeff\OpenApiContract\ContractException;
+use Rasuvaeff\OpenApiContract\ContractViolation;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\CompiledDocument;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
@@ -792,6 +794,55 @@ final class ContractTest
 
         Assert::true($contract->operations()[0]->parameters[0]['required']);
         Assert::same($contract->validateRequest(new ServerRequest('GET', '/p'))->violations[0]->code, 'request.parameter.missing');
+    }
+
+    /**
+     * Every way this package can refuse an exchange answers to one type, so
+     * "handle anything the contract can throw" does not have to be spelled as
+     * the current list of classes and rechecked on every upgrade.
+     */
+    #[DataProvider('contractFailureProvider')]
+    public function raisesOneTypeForEveryWayAContractCanFail(callable $failure, string $expected): void
+    {
+        try {
+            $failure();
+            Assert::true(actual: false);
+        } catch (ContractException $exception) {
+            Assert::instanceOf($exception, $expected);
+        }
+    }
+
+    /** @return iterable<string, array{callable(): mixed, class-string}> */
+    public static function contractFailureProvider(): iterable
+    {
+        $contract = static fn(): Contract => Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => 'id', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer']]],
+            'responses' => ['200' => []],
+        ]]]]);
+
+        yield 'unsupported version' => [
+            static fn(): Contract => Contract::fromArray(['openapi' => '2.0', 'paths' => ['/h' => []]]),
+            UnsupportedVersion::class,
+        ];
+        yield 'malformed document' => [
+            static fn(): Contract => Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => 'invalid']]]),
+            InvalidContract::class,
+        ];
+        yield 'unsupported serialization' => [
+            static fn(): Contract => Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+                'parameters' => [['name' => 'id', 'in' => 'query', 'style' => 'label']],
+                'responses' => ['200' => []],
+            ]]]]),
+            UnsupportedSerialization::class,
+        ];
+        yield 'unmatched request' => [
+            static fn(): MatchedOperation => $contract()->requireMatch(new ServerRequest('GET', '/nope')),
+            UnknownOperation::class,
+        ];
+        yield 'failed validation' => [
+            static fn(): null => $contract()->validateRequest(new ServerRequest('GET', '/h'))->assertValid(),
+            ContractViolation::class,
+        ];
     }
 
     public function rejectsMalformedResponseContentAndSchemaKeys(): void

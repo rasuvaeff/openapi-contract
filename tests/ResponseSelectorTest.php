@@ -72,17 +72,17 @@ final class ResponseSelectorTest
         yield 'exact numeric key beats string range' => [['200' => ['description' => 'exact'], '2XX' => ['description' => 'range']], 200, '200'];
     }
 
-    public function rejectsInvalidStatus(): void
+    public function selectsNothingForAStatusThatIsNotOne(): void
     {
-        try {
-            (new ResponseSelector())->select([], 99);
-        } catch (InvalidArgumentException $exception) {
-            Assert::same($exception->getMessage(), 'Invalid HTTP status 99');
+        // Not an exception: the two callers want different answers to this —
+        // `Operation::responseFor()` says "not declared", response validation
+        // reports the response as wrong — and neither is served by raising
+        // here, least of all by a bare `InvalidArgumentException`.
+        $responses = ['default' => ['description' => 'any']];
 
-            return;
-        }
-
-        Assert::true(actual: false, message: 'Expected invalid status exception');
+        Assert::null((new ResponseSelector())->select($responses, 99));
+        Assert::null((new ResponseSelector())->select($responses, 600));
+        Assert::same((new ResponseSelector())->select($responses, 100)?->key, 'default');
     }
 
     public function acceptsBoundaryStatusesAndComputesExactRanges(): void

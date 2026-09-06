@@ -9,7 +9,6 @@ use Rasuvaeff\OpenApiContract\Operation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
-use Testo\Expect;
 use Testo\Test;
 
 #[Test]
@@ -47,11 +46,14 @@ final class OperationResponseTest
         Assert::same($operation->responseFor(500), null);
     }
 
-    public function rejectsAnImpossibleStatus(): void
+    public function answersNothingForAnImpossibleStatus(): void
     {
-        Expect::exception(\InvalidArgumentException::class);
-
-        $this->contract()->operation('pets.get')->responseFor(99);
+        // A status that is not an HTTP status is not declared either, and
+        // `?array` is the answer this method already has for that. It used to
+        // raise a bare `InvalidArgumentException` for 99 while answering
+        // `null` for 418.
+        Assert::null($this->contract()->operation('pets.get')->responseFor(99));
+        Assert::null($this->contract()->operation('pets.get')->responseFor(600));
     }
 
     private function contract(): Contract

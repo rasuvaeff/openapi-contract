@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Added.** `ContractException`, the type every exception this package raises
+  implements. "Handle anything the contract can throw" had to be written as
+  the current list of classes and rechecked on every upgrade, or widened to
+  `\InvalidArgumentException`, which catches this package together with
+  everything else on the stack. The concrete parents are unchanged.
+
+- **Fixed.** A status outside 100-599 is a violation
+  (`response.status.invalid`), not a bare `InvalidArgumentException` out of
+  `validateResponse()`, and `Operation::responseFor()` answers `null` for one
+  instead of raising where it answers `null` for an undeclared 418.
+
+- **Fixed.** A body stream that reports it is not finished and then reads
+  nothing is a violation (`request.body.unreadable` /
+  `response.body.unreadable`), like the non-seekable stream and the oversized
+  body next to it. It used to leave the public validate methods as a bare
+  `\RuntimeException`.
+
 - **Fixed.** A `content` map is matched by specificity instead of by the order
   its keys happen to be written in. A `*/*` entry above an exact media type
   used to decide the body's schema, and moving the two lines changed what the

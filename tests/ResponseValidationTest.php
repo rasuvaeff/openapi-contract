@@ -7,13 +7,18 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 use Nyholm\Psr7\Response;
 use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
+use Psr\Http\Message\StreamInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\Understudy\Understudy;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
 use Testo\Test;
+
+use function Rasuvaeff\Understudy\expect;
+use function Rasuvaeff\Understudy\when;
 
 #[Test]
 #[Covers(Contract::class)]
@@ -37,6 +42,50 @@ final class ResponseValidationTest
 
         Assert::true($this->contract()->validateResponse('GET /pets/{id}', $response)->isValid());
         Assert::true($this->contract()->validateResponse('missing', $response)->violations[0]->code === 'response.operation.unknown');
+    }
+
+    public function reportsAResponseStreamThatMakesNoProgressAsAViolation(): void
+    {
+        $stream = Understudy::for(StreamInterface::class);
+        when(static fn(): bool => $stream->isSeekable())->returns(true);
+        when(static fn(): int => $stream->tell())->returns(0);
+        when(static fn(): bool => $stream->eof())->returns(false);
+        when(static fn(): string => $stream->read(8192))->returns('');
+        expect(static fn() => $stream->seek(0));
+        $response = (new Response(200, ['Content-Type' => 'application/json']))->withBody($stream);
+
+        $result = $this->contentContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateExchange(new ServerRequest('GET', '/h'), $response);
+
+        Assert::same($result->violations[0]->code, 'response.body.unreadable');
+        Assert::same($result->violations[0]->message, 'Response body stream could not be read');
+        Assert::same(count($result->violations), 1);
+    }
+
+    public function reportsAStatusThatIsNotAnHttpStatusAsAViolation(): void
+    {
+        $result = $this->contentContract(['application/json' => ['schema' => ['type' => 'object']]])
+            ->validateExchange(new ServerRequest('GET', '/h'), new Response(600));
+
+        Assert::same($result->violations[0]->code, 'response.status.invalid');
+        Assert::same($result->violations[0]->message, 'Response status 600 is not a valid HTTP status code');
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses');
+        Assert::same(count($result->violations), 1);
+
+        // The bounds themselves are statuses like any other: they resolve
+        // against the document, and 100 answers `1XX` here rather than being
+        // called invalid.
+        $ranges = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '1XX' => ['description' => 'informational'],
+            '5XX' => ['description' => 'server'],
+        ]]]]]);
+        $codeFor = static fn(int $status): ?string => $ranges
+            ->validateExchange(new ServerRequest('GET', '/h'), new Response($status))
+            ->violations[0]->code ?? null;
+
+        Assert::null($codeFor(100));
+        Assert::null($codeFor(599));
+        Assert::same($codeFor(99), 'response.status.invalid');
     }
 
     public function refusesNonSeekableResponseBodiesWithoutReadingThem(): void

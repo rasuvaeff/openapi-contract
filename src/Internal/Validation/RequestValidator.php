@@ -291,6 +291,13 @@ final readonly class RequestValidator
 
         try {
             $body = $this->bodyContents($request);
+        } catch (MessageBodyUnreadable) {
+            return [$this->bodyViolation(
+                $matched,
+                'request.body.unreadable',
+                'Request body stream could not be read',
+                'stream that made no progress',
+            )];
         } catch (MessageBodyTooLarge) {
             return [$this->bodyViolation(
                 $matched,

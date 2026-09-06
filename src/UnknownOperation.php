@@ -7,4 +7,4 @@ namespace Rasuvaeff\OpenApiContract;
 /**
  * @api
  */
-final class UnknownOperation extends \InvalidArgumentException {}
+final class UnknownOperation extends \InvalidArgumentException implements ContractException {}

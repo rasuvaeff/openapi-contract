@@ -116,6 +116,27 @@ final class RequestValidationTest
         }
     }
 
+    public function reportsAStreamThatMakesNoProgressAsAViolation(): void
+    {
+        $stream = Understudy::for(StreamInterface::class);
+        when(static fn(): bool => $stream->isSeekable())->returns(true);
+        when(static fn(): int => $stream->tell())->returns(0);
+        when(static fn(): bool => $stream->eof())->returns(false);
+        when(static fn(): string => $stream->read(8192))->returns('');
+        expect(static fn() => $stream->seek(0));
+        $request = (new ServerRequest('POST', '/b', ['Content-Type' => 'application/json']))->withBody($stream);
+
+        // A body that cannot be read is a fact about the message, like a
+        // non-seekable stream and one over the byte budget right next to it.
+        // It used to leave the public validate method as a bare
+        // `\RuntimeException`.
+        $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])->validateRequest($request);
+
+        Assert::same($result->violations[0]->code, 'request.body.unreadable');
+        Assert::same($result->violations[0]->message, 'Request body stream could not be read');
+        Assert::same(count($result->violations), 1);
+    }
+
     public function enforcesTheRequestBodyByteBudgetAndRestoresPosition(): void
     {
         $body = str_repeat(' ', Contract::MAX_MESSAGE_BODY_BYTES + 1);

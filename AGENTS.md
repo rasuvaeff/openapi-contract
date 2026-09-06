@@ -88,8 +88,10 @@ make release-check
 are equivalent by analysis — do not chase them, and re-classify anything new:
 injective key/template concatenations (a reordered or trimmed key that stays
 injective changes nothing observable), unreachable defensive guards kept for
-psalm typing, `explode()` limit bumps where only `[0]` is read, `array_pad`
-on inputs that always split into two parts, throw-order swaps that surface
+psalm typing — including the shape checks in `ResponseValidator`'s header loop,
+which the compiler now rejects at load time and which only a hand-built
+`Operation` can still reach — `explode()` limit bumps where only `[0]` is read,
+`array_pad` on inputs that always split into two parts, throw-order swaps that surface
 the identical message from a later check, opis parser options that gate
 keywords the schema compiler already rejects fail-closed, the DocumentGraph
 filesize pre-check whose removal falls through to the identical post-read
