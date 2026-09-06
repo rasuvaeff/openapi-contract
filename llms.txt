@@ -76,7 +76,17 @@ Rules:
   validates clean — authorization is the application's middleware, not this
   package;
 - `allowReserved` is compiled and exposed on the parameter, never read by
-  validation (an annotation, like `example`/`examples`);
+  validation (after parsing, an encoded reserved character cannot be told from
+  an unencoded one) — it is a hand-off to consumers that render query values,
+  which cannot derive it from the schema;
+- budgets are `Limits`, not constants: `new Limits(documentBytes:,
+  messageBodyBytes:, documentFiles:)` passed to any factory; a budget below 1
+  throws `\InvalidArgumentException`. `*.body.too_large` means the validator
+  declined to read that body, NOT that the message is invalid — raise the
+  budget rather than treating it as a failed verdict;
+- `Operation` is a read model: its constructor is `@internal` (nothing public
+  validates a hand-built operation), and the `CompiledParameter` shape is
+  read-only for consumers — minor releases may add keys to it;
 - a response header declaring the boolean schema `false` fails closed when the
   header is present, as a body declaring it does;
 - root `security` is inherited by operations; explicit `security: []` marks
@@ -96,11 +106,15 @@ Rules:
   deep `$ref` chains and fast rejection of cross-file cycles.
 
 API reference:
-- `Contract::fromArray(array $document): Contract` /
-  `fromJson(string $json, string $source = 'openapi.json')` /
-  `fromFile(string $path)` (YAML via suggested symfony/yaml; multi-file
-  relative `$ref`s under the entry directory) build the immutable compiled
-  contract.
+- `Contract::fromArray(array $document, ?Limits $limits = null): Contract` /
+  `fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null)` /
+  `fromFile(string $path, ?Limits $limits = null)` (YAML via suggested
+  symfony/yaml; multi-file relative `$ref`s under the entry directory) build
+  the immutable compiled contract.
+- `Limits` (readonly): `documentBytes` (default 10 MiB),
+  `messageBodyBytes` (default 1 MiB), `documentFiles` (default 64), with
+  `Limits::DEFAULT_DOCUMENT_BYTES` / `DEFAULT_MESSAGE_BODY_BYTES` /
+  `DEFAULT_DOCUMENT_FILES` as the constants behind them.
 - `Contract::operations(): list<Operation>`;
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
 - `Contract::securitySchemes(): array<string, CompiledSecurityScheme>` —

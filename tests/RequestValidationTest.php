@@ -19,6 +19,7 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
@@ -153,7 +154,7 @@ final class RequestValidationTest
 
     public function enforcesTheRequestBodyByteBudgetAndRestoresPosition(): void
     {
-        $body = str_repeat(' ', Contract::MAX_MESSAGE_BODY_BYTES + 1);
+        $body = str_repeat(' ', Limits::DEFAULT_MESSAGE_BODY_BYTES + 1);
         $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
         $request->getBody()->seek(7);
 
@@ -166,14 +167,45 @@ final class RequestValidationTest
 
     public function acceptsARequestBodyAtTheExactByteBudget(): void
     {
-        $body = '{"x":"' . str_repeat('a', Contract::MAX_MESSAGE_BODY_BYTES - 8) . '"}';
-        Assert::same(strlen($body), Contract::MAX_MESSAGE_BODY_BYTES);
+        $body = '{"x":"' . str_repeat('a', Limits::DEFAULT_MESSAGE_BODY_BYTES - 8) . '"}';
+        Assert::same(strlen($body), Limits::DEFAULT_MESSAGE_BODY_BYTES);
         $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
 
         $result = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object']]])
             ->validateRequest($request);
 
         Assert::true($result->isValid());
+    }
+
+    public function readsARequestBodyOverTheDefaultBudgetWhenTheCallerRaisesIt(): void
+    {
+        $body = '{"x":"' . str_repeat('a', Limits::DEFAULT_MESSAGE_BODY_BYTES) . '"}';
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        $result = $this->bodyContract(
+            ['application/json' => ['schema' => ['type' => 'object']]],
+            new Limits(messageBodyBytes: 2 * Limits::DEFAULT_MESSAGE_BODY_BYTES),
+        )->validateRequest($request);
+
+        Assert::true($result->isValid());
+    }
+
+    /**
+     * The budget is the caller's policy, so the diagnostic has to name the
+     * budget in force rather than the default it was configured away from.
+     */
+    public function reportsTheConfiguredBudgetWhenARequestBodyExceedsIt(): void
+    {
+        $request = new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"x":"aa"}');
+
+        $result = $this->bodyContract(
+            ['application/json' => ['schema' => ['type' => 'object']]],
+            new Limits(messageBodyBytes: 4),
+        )->validateRequest($request);
+
+        Assert::same($result->violations[0]->code, 'request.body.too_large');
+        Assert::same($result->violations[0]->message, 'Request body exceeds 4 bytes');
+        Assert::same(count($result->violations), 1);
     }
 
     public function reportsUnknownOperationWithoutCascadingErrors(): void
@@ -870,7 +902,7 @@ final class RequestValidationTest
         // Contract through a call graph that attributes the mutant elsewhere.
         foreach ([
             fn(): mixed => $contract->validateRequest(new ServerRequest('GET', '/q?q=x')),
-            fn(): mixed => (new RequestValidator())->validate(
+            fn(): mixed => (new RequestValidator(new Limits()))->validate(
                 $contract->match(new ServerRequest('GET', '/q?q=x')) ?? throw new \LogicException('No operation matched'),
                 new ServerRequest('GET', '/q?q=x'),
                 SchemaDialect::OpenApi31,
@@ -1664,7 +1696,7 @@ final class RequestValidationTest
         );
 
         try {
-            (new RequestValidator())->validate(
+            (new RequestValidator(new Limits()))->validate(
                 new MatchedOperation($operation, []),
                 new ServerRequest('GET', '/n?ids=1'),
                 SchemaDialect::OpenApi31,
@@ -1702,12 +1734,12 @@ final class RequestValidationTest
     }
 
     /** @param array<array-key, mixed> $content */
-    private function bodyContract(array $content): Contract
+    private function bodyContract(array $content, ?Limits $limits = null): Contract
     {
         return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
             'requestBody' => ['required' => true, 'content' => $content],
             'responses' => ['204' => []],
-        ]]]]);
+        ]]]], $limits);
     }
 
     private function contract(): Contract

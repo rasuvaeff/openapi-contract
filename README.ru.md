@@ -98,6 +98,30 @@ same-document ссылки. Документы ограничены бюджет
 depth, глубина `$ref`, общий node budget, а для многофайловых документов —
 общие на весь граф бюджеты числа файлов и байтов.
 
+#### Бюджеты
+
+`Limits` несёт бюджеты, которые задаёт вызывающая сторона; его принимает
+каждая фабрика:
+
+```php
+use Rasuvaeff\OpenApiContract\Limits;
+
+$contract = Contract::fromFile('openapi.yaml', new Limits(
+    documentBytes: 40 * 1024 * 1024,   // по умолчанию 10 MiB
+    messageBodyBytes: 8 * 1024 * 1024, // по умолчанию 1 MiB
+    documentFiles: 256,                // по умолчанию 64
+));
+```
+
+Бюджет — это политика, а не вердикт. Тело больше `messageBodyBytes` даёт
+`request.body.too_large` / `response.body.too_large`, и этот код означает, что
+валидатор отказался читать тело, — а не что сообщение признано неверным. Гейт,
+отвергающий по `isValid()`, иначе отверг бы трафик, который никто не проверял:
+приложению с законно большими телами следует поднять бюджет, а не читать это
+нарушение как отказ. Дефолты малы намеренно — неограниченное чтение внутри
+middleware это denial of service. Бюджет меньше 1 отвергается
+`\InvalidArgumentException`.
+
 ### Операции и matching
 
 ```php
@@ -117,11 +141,17 @@ $declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [.
 ```
 
 Identity операции — `operationId`, если он есть, иначе стабильный
-`METHOD /path`. Скомпилированные параметры несут `allowReserved` как
-аннотацию, наравне с `example`/`examples`: валидация его не читает, потому что
-значение, оставившее reserved-символ незакодированным, неотличимо от
+`METHOD /path`. `Operation` — это read model: контракт собирается компиляцией
+документа, а конструктор помечен `@internal` — ни один публичный путь не
+валидирует собранную руками операцию, и шейпы, которые конструктор принимает,
+это выход компилятора, а не проверяемый вход. Шейп `CompiledParameter`,
+который импортирует потребитель, для него доступен на чтение, и минорный
+релиз может добавить в него ключи. Скомпилированные параметры несут
+`allowReserved` именно для таких потребителей: валидация его не читает, потому
+что значение, оставившее reserved-символ незакодированным, неотличимо от
 разделителя, на который оно похоже, — пакет читает такой query ровно так же,
-как его прочитает SAPI. Параметры Path Item и Operation
+как его прочитает SAPI, — а потребитель, который рендерит значение query, не
+выведет его из схемы и без него не решит, кодировать ли reserved-символы. Параметры Path Item и Operation
 сливаются по паре «location + name», и объявление операции заменяет
 объявление Path Item для той же пары, как требует спека; одна и та же пара,
 объявленная дважды *внутри* одного списка, отвергается: параметр уникален по
@@ -277,8 +307,10 @@ type по-прежнему даёт `request.body.media_type` / `response.body.m
 исходная позиция восстанавливается, в том числе при ошибке чтения. Если body
 нужно проверить, но stream не поддерживает seek, validator не читает его и
 возвращает `request.body.non_seekable` или `response.body.non_seekable`.
-Body больше `Contract::MAX_MESSAGE_BODY_BYTES` (1 MiB) даёт соответствующее
-нарушение `request.body.too_large` или `response.body.too_large`.
+Body больше настроенного `messageBodyBytes` (по умолчанию 1 MiB) даёт
+соответствующее нарушение `request.body.too_large` или
+`response.body.too_large` — оно говорит, что тело не читали, а не что оно
+неверно.
 `ValidationResultFormatter` выводит все нарушения в стабильном порядке и
 ограничивает поля, глубину, число элементов и expected/actual. Значение
 печатается только там, где его имя можно проверить: body редактируется
@@ -310,7 +342,7 @@ instance path равен `$`; параметр печатается, но каж
 | `request.body.decode` | form- или multipart-тело не декодируется как объявлено |
 | `request.body.schema` | тело не удовлетворяет схеме |
 | `request.body.unsupported` | не-JSON и не-form media type несёт схему, которую нельзя проверить на недекодированном payload |
-| `request.body.too_large` | тело больше `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `request.body.too_large` | тело больше настроенного `messageBodyBytes`, поэтому не читалось |
 | `request.body.non_seekable` | поток тела нельзя перемотать, поэтому он не вычитывается |
 | `request.body.unreadable` | поток тела сообщает, что не закончился, и читает пусто |
 | `response.operation.unknown` | `validateResponse()` получил ключ операции, которого нет в контракте |
@@ -325,7 +357,7 @@ instance path равен `$`; параметр печатается, но каж
 | `response.body.json` | JSON-тело ответа не парсится |
 | `response.body.schema` | тело ответа не удовлетворяет схеме |
 | `response.body.unsupported` | то же, что `request.body.unsupported`, на стороне ответа |
-| `response.body.too_large` | тело ответа больше `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `response.body.too_large` | тело ответа больше настроенного `messageBodyBytes`, поэтому не читалось |
 | `response.body.non_seekable` | поток тела ответа нельзя перемотать |
 | `response.body.unreadable` | поток тела ответа сообщает, что не закончился, и читает пусто |
 

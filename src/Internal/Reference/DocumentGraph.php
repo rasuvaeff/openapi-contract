@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Reference;
 
-use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 
 /**
  * Loads and caches the files of a multi-file OpenAPI document under one
@@ -24,7 +24,7 @@ final class DocumentGraph
 
     private function __construct(private readonly string $root, private readonly string $entryPath, private readonly int $maximumFiles, private int $remainingBytes) {}
 
-    public static function open(string $path, int $maximumFiles = 64, int $maximumBytes = Contract::MAX_DOCUMENT_BYTES): self
+    public static function open(string $path, int $maximumFiles = Limits::DEFAULT_DOCUMENT_FILES, int $maximumBytes = Limits::DEFAULT_DOCUMENT_BYTES): self
     {
         if ($maximumFiles < 1) {
             throw new \InvalidArgumentException('Maximum file count must be positive');

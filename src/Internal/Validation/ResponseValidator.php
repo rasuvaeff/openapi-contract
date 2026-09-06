@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\ResponseInterface;
-use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
 use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
@@ -14,6 +13,7 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
@@ -32,7 +32,7 @@ final readonly class ResponseValidator
     private SchemaValueDecoder $values;
 
     /** @see RequestValidator::__construct() for why only this one is injected. */
-    public function __construct(private SchemaValidator $schemas = new SchemaValidator())
+    public function __construct(private Limits $limits, private SchemaValidator $schemas = new SchemaValidator())
     {
         $this->selector = new ResponseSelector();
         // Headers are the only thing this validator deserializes, and a header
@@ -118,7 +118,7 @@ final readonly class ResponseValidator
         }
 
         try {
-            $body = $this->bodyContents($response);
+            $body = $this->bodyContents($response, $this->limits->messageBodyBytes);
         } catch (MessageBodyUnreadable) {
             $violations[] = new Violation(
                 code: 'response.body.unreadable',
@@ -139,9 +139,9 @@ final readonly class ResponseValidator
                 location: 'body',
                 instancePath: '$',
                 specPointer: $basePointer . '/content',
-                expected: sprintf('body up to %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+                expected: sprintf('body up to %d bytes', $this->limits->messageBodyBytes),
                 actual: 'body exceeds validation byte budget',
-                message: sprintf('Response body exceeds %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+                message: sprintf('Response body exceeds %d bytes', $this->limits->messageBodyBytes),
             );
 
             return new ValidationResult($violations);

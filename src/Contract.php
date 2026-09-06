@@ -41,9 +41,6 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
  */
 final readonly class Contract
 {
-    public const int MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
-    public const int MAX_MESSAGE_BODY_BYTES = 1024 * 1024;
-
     private RequestValidator $requests;
 
     private ResponseValidator $responses;
@@ -56,28 +53,30 @@ final readonly class Contract
         private SchemaDialect $dialect,
         private array $operations,
         private array $securitySchemes,
+        Limits $limits,
     ) {
         // One schema validator for the contract, so the compilation of a
         // schema is paid once and not once per validated message. Both
         // directions share it: a request and a response schema differ by the
         // direction the cache key already carries.
         $schemas = new SchemaValidator();
-        $this->requests = new RequestValidator($schemas);
-        $this->responses = new ResponseValidator($schemas);
+        $this->requests = new RequestValidator($limits, $schemas);
+        $this->responses = new ResponseValidator($limits, $schemas);
     }
 
     /** @param array<string, mixed> $document */
-    public static function fromArray(array $document): self
+    public static function fromArray(array $document, ?Limits $limits = null): self
     {
         $compiled = (new DocumentCompiler())->compile($document);
 
-        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes);
+        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits ?? new Limits());
     }
 
-    public static function fromJson(string $json, string $source = 'openapi.json'): self
+    public static function fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null): self
     {
-        if (strlen($json) > self::MAX_DOCUMENT_BYTES) {
-            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $source, self::MAX_DOCUMENT_BYTES));
+        $limits ??= new Limits();
+        if (strlen($json) > $limits->documentBytes) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds %d bytes', $source, $limits->documentBytes));
         }
 
         try {
@@ -90,7 +89,7 @@ final readonly class Contract
         }
 
         /** @var array<string, mixed> $document */
-        return self::fromArray($document);
+        return self::fromArray($document, $limits);
     }
 
     /**
@@ -98,12 +97,13 @@ final readonly class Contract
      * may reference sibling files with relative $refs; every referenced file
      * must stay inside the entry file's directory tree.
      */
-    public static function fromFile(string $path): self
+    public static function fromFile(string $path, ?Limits $limits = null): self
     {
-        $graph = DocumentGraph::open($path);
+        $limits ??= new Limits();
+        $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes);
         $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph);
 
-        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes);
+        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
     }
 
     /** @return list<Operation> */
