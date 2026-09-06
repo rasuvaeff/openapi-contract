@@ -18,6 +18,8 @@ use Testo\Test;
 
 #[Test]
 #[Covers(ParameterCodec::class)]
+#[Covers(ParameterKind::class)]
+#[Covers(ParameterStyle::class)]
 final class ParameterCodecTest
 {
     #[DataProvider('examplesProvider')]
@@ -80,24 +82,30 @@ final class ParameterCodecTest
             explode: $case['explode'],
         );
 
-        Classify::cover(condition: $case['label'] === 'simple scalar', label: 'simple scalar', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'simple list exploded', label: 'simple list exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'simple list unexploded', label: 'simple list unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'simple object exploded', label: 'simple object exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'simple object unexploded', label: 'simple object unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'label list exploded', label: 'label list exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'label list unexploded', label: 'label list unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'matrix list exploded', label: 'matrix list exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'matrix list unexploded', label: 'matrix list unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'matrix object exploded', label: 'matrix object exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'matrix object unexploded', label: 'matrix object unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'form list exploded', label: 'form list exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'form list unexploded', label: 'form list unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'form object exploded', label: 'form object exploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'form object unexploded', label: 'form object unexploded', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'space delimited list', label: 'space delimited list', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'pipe delimited list', label: 'pipe delimited list', minPercent: 3.0);
-        Classify::cover(condition: $case['label'] === 'deep object', label: 'deep object', minPercent: 3.0);
+        // Eighteen branches drawn uniformly expect about 5.6% each, and 1000
+        // runs put one standard deviation at 0.7 points: a 3.0 gate sat three
+        // and a half of them away, which is a flake per few hundred runs
+        // across eighteen gates. The gate is here to catch a branch that stops
+        // being produced at all — the branches themselves are pinned by
+        // `everySupportedStyleAndExplodeCombinationRoundTripsExamples()`.
+        Classify::cover(condition: $case['label'] === 'simple scalar', label: 'simple scalar', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'simple list exploded', label: 'simple list exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'simple list unexploded', label: 'simple list unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'simple object exploded', label: 'simple object exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'simple object unexploded', label: 'simple object unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'label list exploded', label: 'label list exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'label list unexploded', label: 'label list unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'matrix list exploded', label: 'matrix list exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'matrix list unexploded', label: 'matrix list unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'matrix object exploded', label: 'matrix object exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'matrix object unexploded', label: 'matrix object unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'form list exploded', label: 'form list exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'form list unexploded', label: 'form list unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'form object exploded', label: 'form object exploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'form object unexploded', label: 'form object unexploded', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'space delimited list', label: 'space delimited list', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'pipe delimited list', label: 'pipe delimited list', minPercent: 2.0);
+        Classify::cover(condition: $case['label'] === 'deep object', label: 'deep object', minPercent: 2.0);
         Assert::same(
             $codec->parse(
                 name: $case['name'],
@@ -108,6 +116,74 @@ final class ParameterCodecTest
             ),
             $case['value'],
         );
+    }
+
+    /**
+     * Known-good tuples run before the random phase. Without them the
+     * eighteen branches are reached only when the generator happens to draw
+     * them, and a regression in one of the rarer combinations waits on luck.
+     *
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function everySupportedStyleAndExplodeCombinationRoundTripsExamples(): iterable
+    {
+        $scalar = 'abc';
+        $list = ['red', 'blue'];
+        $object = ['role' => 'admin', 'name' => 'Ada'];
+
+        yield 'simple scalar' => [self::exampleCase('simple scalar', $scalar, ParameterStyle::Simple, explode: false, kind: ParameterKind::Scalar)];
+        yield 'simple list exploded' => [self::exampleCase('simple list exploded', $list, ParameterStyle::Simple, explode: true, kind: ParameterKind::List)];
+        yield 'simple list unexploded' => [self::exampleCase('simple list unexploded', $list, ParameterStyle::Simple, explode: false, kind: ParameterKind::List)];
+        yield 'simple object exploded' => [self::exampleCase('simple object exploded', $object, ParameterStyle::Simple, explode: true, kind: ParameterKind::Object)];
+        yield 'simple object unexploded' => [self::exampleCase('simple object unexploded', $object, ParameterStyle::Simple, explode: false, kind: ParameterKind::Object)];
+        yield 'label list exploded' => [self::exampleCase('label list exploded', $list, ParameterStyle::Label, explode: true, kind: ParameterKind::List)];
+        yield 'label list unexploded' => [self::exampleCase('label list unexploded', $list, ParameterStyle::Label, explode: false, kind: ParameterKind::List)];
+        yield 'matrix list exploded' => [self::exampleCase('matrix list exploded', $list, ParameterStyle::Matrix, explode: true, kind: ParameterKind::List)];
+        yield 'matrix list unexploded' => [self::exampleCase('matrix list unexploded', $list, ParameterStyle::Matrix, explode: false, kind: ParameterKind::List)];
+        yield 'matrix object exploded' => [self::exampleCase('matrix object exploded', $object, ParameterStyle::Matrix, explode: true, kind: ParameterKind::Object)];
+        yield 'matrix object unexploded' => [self::exampleCase('matrix object unexploded', $object, ParameterStyle::Matrix, explode: false, kind: ParameterKind::Object)];
+        yield 'form list exploded' => [self::exampleCase('form list exploded', $list, ParameterStyle::Form, explode: true, kind: ParameterKind::List)];
+        yield 'form list unexploded' => [self::exampleCase('form list unexploded', $list, ParameterStyle::Form, explode: false, kind: ParameterKind::List)];
+        yield 'form object exploded' => [self::exampleCase('form object exploded', $object, ParameterStyle::Form, explode: true, kind: ParameterKind::Object)];
+        yield 'form object unexploded' => [self::exampleCase('form object unexploded', $object, ParameterStyle::Form, explode: false, kind: ParameterKind::Object)];
+        yield 'space delimited list' => [self::exampleCase('space delimited list', $list, ParameterStyle::SpaceDelimited, explode: false, kind: ParameterKind::List)];
+        yield 'pipe delimited list' => [self::exampleCase('pipe delimited list', $list, ParameterStyle::PipeDelimited, explode: false, kind: ParameterKind::List)];
+        yield 'deep object' => [self::exampleCase('deep object', $object, ParameterStyle::DeepObject, explode: true, kind: ParameterKind::Object)];
+    }
+
+    /**
+     * @param string|array<string, string>|list<string> $value
+     * @return array<string, mixed>
+     */
+    public static function exampleCase(
+        string $label,
+        string|array $value,
+        ParameterStyle $style,
+        bool $explode,
+        ParameterKind $kind,
+    ): array {
+        return [
+            'label' => $label,
+            'name' => $kind === ParameterKind::Object ? 'user' : 'tags',
+            'value' => $value,
+            'style' => $style,
+            'explode' => $explode,
+            'kind' => $kind,
+        ];
+    }
+
+    /**
+     * The edges of the generator's own space: one element, the largest list it
+     * draws, a repeated value, and elements at the maximum length.
+     *
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function formListRoundTripExamples(): iterable
+    {
+        yield 'single element' => [['a']];
+        yield 'largest list' => [['a', 'b', 'c', 'd', 'e']];
+        yield 'repeated value' => [['ab', 'ab']];
+        yield 'longest elements' => [['abcX', 'YZab']];
     }
 
     /**

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Internal.** The body decoders, the value decoder, the message-reading
+  trait and the response selection value object are named in `#[Covers]` at
+  last. Infection is fed by those attributes, so an unlisted class gets no
+  mutants at all: roughly 470 of them — every regression the two body decoders
+  could suffer — were invisible to the gate. The suite gained the cases those
+  mutants asked for; the measured MSI is back above the gate on the honest
+  population.
+
+- **Internal.** The parameter codec's property tests gained the example phase
+  they were missing: the eighteen style/explode combinations now run
+  deterministically before the random phase instead of waiting on the
+  generator to draw them, and the eighteen `Classify::cover` gates sit at a
+  threshold their own distribution can actually hold.
+
 - **Added.** The complete set of `Violation` codes is written down — in both
   READMEs and `llms.txt` — with a test that pins it against what the source
   actually emits, so a new or renamed code is a deliberate edit rather than a
