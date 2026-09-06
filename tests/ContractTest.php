@@ -1128,6 +1128,64 @@ final class ContractTest
         yield '3.1 POST' => ['3.1.0', 'POST', false];
     }
 
+    /**
+     * A parameter is unique by name and location. Declared twice inside one
+     * list it is an ambiguity nobody can resolve — reading the last silently
+     * dropped whichever declaration was stricter. Across the two lists the
+     * Operation's declaration replacing the Path Item's is the specification's
+     * own rule and stays.
+     */
+    #[DataProvider('duplicateDeclarationProvider')]
+    public function rejectsAParameterDeclaredTwiceInOneList(array $paths, ?string $message, int $compiled = 0): void
+    {
+        try {
+            $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => $paths]);
+            Assert::null($message);
+            Assert::same(count($contract->operations()[0]->parameters), $compiled);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), $message);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string|null, 2?: int}> */
+    public static function duplicateDeclarationProvider(): iterable
+    {
+        $strict = ['name' => 'n', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'integer', 'maximum' => 5]];
+        $loose = ['name' => 'n', 'in' => 'query', 'schema' => ['type' => 'string']];
+
+        yield 'twice in the operation list' => [
+            ['/q' => ['get' => ['parameters' => [$strict, $loose], 'responses' => ['204' => []]]]],
+            'Duplicate OpenAPI parameter "n" in query of operation GET /q',
+        ];
+        yield 'twice in the path item list' => [
+            ['/q' => ['parameters' => [$strict, $loose], 'get' => ['responses' => ['204' => []]]]],
+            'Duplicate OpenAPI parameter "n" in query of path item "/q"',
+        ];
+        // Header names are case-insensitive, so these are the same parameter.
+        yield 'twice under different header casings' => [
+            ['/q' => ['get' => ['parameters' => [
+                ['name' => 'X-Trace', 'in' => 'header', 'schema' => ['type' => 'string']],
+                ['name' => 'x-trace', 'in' => 'header', 'schema' => ['type' => 'string']],
+            ], 'responses' => ['204' => []]]]],
+            'Duplicate OpenAPI parameter "x-trace" in header of operation GET /q',
+        ];
+        // The specification's own override: same name, the Operation wins.
+        yield 'the operation overrides the path item' => [
+            ['/q' => ['parameters' => [$strict], 'get' => ['parameters' => [$loose], 'responses' => ['204' => []]]]],
+            null,
+            1,
+        ];
+        // Same name, different locations: two parameters, not a duplicate.
+        yield 'the same name in two locations' => [
+            ['/q' => ['get' => ['parameters' => [
+                $strict,
+                ['name' => 'n', 'in' => 'header', 'schema' => ['type' => 'string']],
+            ], 'responses' => ['204' => []]]]],
+            null,
+            2,
+        ];
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {
@@ -1267,8 +1325,7 @@ final class ContractTest
             'parameters' => [
                 ['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'integer', 'minimum' => 2]],
                 ['name' => 'q', 'in' => 'header', 'required' => true, 'allowReserved' => true, 'schema' => ['type' => 'string']],
-                ['name' => 'X-Trace', 'in' => 'header', 'schema' => ['type' => 'string']],
-                ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'schema' => ['type' => 'string']],
+                ['name' => 'X-Trace', 'in' => 'header', 'required' => true, 'schema' => ['type' => 'string']],
             ],
             'responses' => ['200' => []],
         ]]]]);
@@ -1276,7 +1333,7 @@ final class ContractTest
         Assert::same($contract->operations()[0]->parameters, [
             ['name' => 'q', 'in' => 'query', 'required' => false, 'style' => 'form', 'explode' => true, 'allowReserved' => false, 'schema' => ['type' => 'integer', 'minimum' => 2], 'specPointer' => '/paths/~1h/get/parameters/0'],
             ['name' => 'q', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => true, 'schema' => ['type' => 'string'], 'specPointer' => '/paths/~1h/get/parameters/1'],
-            ['name' => 'x-trace', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => false, 'schema' => ['type' => 'string'], 'specPointer' => '/paths/~1h/get/parameters/3'],
+            ['name' => 'X-Trace', 'in' => 'header', 'required' => true, 'style' => 'simple', 'explode' => false, 'allowReserved' => false, 'schema' => ['type' => 'string'], 'specPointer' => '/paths/~1h/get/parameters/2'],
         ]);
     }
 

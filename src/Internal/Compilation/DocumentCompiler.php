@@ -303,13 +303,38 @@ final readonly class DocumentCompiler
         // but they live at different pointers; the merged position is not one
         // a reader can find in their document.
         $sources = [
-            sprintf('/paths/%s/parameters', $this->escapePointer($pathString)) => array_values($path),
-            sprintf('/paths/%s/%s/parameters', $this->escapePointer($pathString), $method) => array_values($operation),
+            [
+                sprintf('/paths/%s/parameters', $this->escapePointer($pathString)),
+                sprintf('path item "%s"', $pathString),
+                array_values($path),
+            ],
+            [
+                sprintf('/paths/%s/%s/parameters', $this->escapePointer($pathString), $method),
+                sprintf('operation %s %s', strtoupper($method), $pathString),
+                array_values($operation),
+            ],
         ];
         $result = [];
-        foreach ($sources as $pointer => $declarations) {
+        foreach ($sources as [$pointer, $label, $declarations]) {
+            // A parameter is unique by name and location. Across the two lists
+            // the Operation's declaration replaces the Path Item's, which is
+            // what the specification prescribes; twice inside ONE list it is
+            // an ambiguity nobody can resolve, and reading the last silently
+            // dropped whichever declaration was stricter.
+            $declared = [];
             foreach (array_keys($declarations) as $index) {
-                $result = [...$result, ...$this->parameter($declarations[$index], $resolver, sprintf('%s/%d', $pointer, $index))];
+                foreach ($this->parameter($declarations[$index], $resolver, sprintf('%s/%d', $pointer, $index)) as $key => $parameter) {
+                    if (in_array($key, $declared, strict: true)) {
+                        throw new InvalidContract(sprintf(
+                            'Duplicate OpenAPI parameter "%s" in %s of %s',
+                            $parameter['name'],
+                            $parameter['in'],
+                            $label,
+                        ));
+                    }
+                    $declared[] = $key;
+                    $result[$key] = $parameter;
+                }
             }
         }
 

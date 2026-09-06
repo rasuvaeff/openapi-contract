@@ -123,9 +123,11 @@ value that leaves a reserved character unencoded cannot be told from the
 delimiter it looks like — the package reads such a query exactly as the SAPI
 does. A Path Item's parameters and an Operation's are
 merged by location and name, and an Operation's declaration replaces the Path
-Item's for the same pair, as the specification requires; two declarations of
-the same pair *within* one list are not an error here — the last one wins —
-so a document that declares one twice is validated against its final word. Compiled parameters keep declared `example`/
+Item's for the same pair, as the specification requires; the same pair
+declared twice *within* one list is rejected, because a parameter is unique by
+name and location and reading either declaration would silently drop the
+other. Header names compare case-insensitively, so `X-Trace` and `x-trace` are
+one parameter. Compiled parameters keep declared `example`/
 `examples` values as annotations: validation ignores them, while the generator
 package feeds them into its deterministic example phase. An Example Object
 reached through `$ref` is resolved; what an example *contains* is data and is
