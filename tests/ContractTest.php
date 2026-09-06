@@ -714,6 +714,86 @@ final class ContractTest
         }
     }
 
+    /**
+     * The same document, read under the two dialects, has to mean two
+     * different things: 3.0 ignores what sits next to a `$ref`, 3.1 applies
+     * it in addition to what the reference brings.
+     */
+    #[DataProvider('refSiblingProvider')]
+    public function readsRefSiblingsByDialect(string $version, string $query, bool $valid): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => $version,
+            'paths' => ['/n' => ['get' => [
+                'parameters' => [['name' => 'n', 'in' => 'query', 'schema' => ['$ref' => '#/components/schemas/Count', 'maximum' => 10]]],
+                'responses' => ['204' => []],
+            ]]],
+            'components' => ['schemas' => ['Count' => ['type' => 'integer', 'minimum' => 1]]],
+        ]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/n?' . $query))->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function refSiblingProvider(): iterable
+    {
+        yield '3.1 within both bounds' => ['3.1.0', 'n=5', true];
+        yield '3.1 breaks the sibling maximum' => ['3.1.0', 'n=20', false];
+        yield '3.1 breaks the referenced minimum' => ['3.1.0', 'n=0', false];
+        // 3.0 ignores the sibling entirely, so only the referenced bound holds.
+        yield '3.0 ignores the sibling maximum' => ['3.0.3', 'n=20', true];
+        yield '3.0 keeps the referenced minimum' => ['3.0.3', 'n=0', false];
+    }
+
+    /**
+     * A body schema is reached by descending into a `schema` key rather than
+     * by being handed to the resolver as one, so the two positions have to
+     * agree about what a sibling means.
+     */
+    public function readsRefSiblingsOfABodySchemaTheSameWay(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/b' => ['post' => [
+                'requestBody' => ['required' => true, 'content' => ['application/json' => [
+                    'schema' => ['$ref' => '#/components/schemas/Count', 'maximum' => 10],
+                ]]],
+                'responses' => ['204' => []],
+            ]]],
+            'components' => ['schemas' => ['Count' => ['type' => 'integer', 'minimum' => 1]]],
+        ]);
+        $post = static fn(string $body): Request => new Request('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($post('5'))->isValid());
+        Assert::same($contract->validateRequest($post('20'))->violations[0]->code, 'request.body.schema');
+        Assert::same($contract->validateRequest($post('0'))->violations[0]->code, 'request.body.schema');
+    }
+
+    /**
+     * A Parameter Object reached through a reference is not a Schema Object,
+     * and reading it as one would apply its siblings instead of ignoring them
+     * — here, quietly making a required parameter optional.
+     */
+    public function ignoresSiblingsOfAParameterReference(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/p' => ['get' => [
+                'parameters' => [['$ref' => '#/components/parameters/Id', 'required' => false, 'description' => 'mine']],
+                'responses' => ['204' => []],
+            ]]],
+            'components' => ['parameters' => ['Id' => [
+                'name' => 'id',
+                'in' => 'query',
+                'required' => true,
+                'schema' => ['type' => 'integer'],
+            ]]],
+        ]);
+
+        Assert::true($contract->operations()[0]->parameters[0]['required']);
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/p'))->violations[0]->code, 'request.parameter.missing');
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {

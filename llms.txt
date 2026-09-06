@@ -30,6 +30,10 @@ Rules:
   before reaching the backend, a document whose `paths` yield no operation is
   rejected, and an unparsable YAML file is `InvalidContract`, not the parser's
   own exception;
+- `$ref` siblings follow the declared dialect: 3.0 ignores them everywhere;
+  3.1 keeps `summary`/`description` on a Reference Object (overriding the
+  referenced ones) and applies a Schema Object's siblings in addition to the
+  reference, compiling `{$ref: X, maximum: 10}` to the matching `allOf`;
 - OpenAPI 3.0 and 3.1 use separate schema compilation paths (3.0 `nullable`
   and boolean exclusive bounds are normalized; 3.1 rides the 2020-12 base
   dialect);
