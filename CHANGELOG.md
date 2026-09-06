@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.8.0 — 2026-09-06
+
+Three review passes over the package in one day, closing eighteen findings.
+Nothing in the public API changed shape — `bc-check` against v0.7.0 is clean —
+but a great deal changed in what the package *says* about a document or an
+exchange, which is why this is a minor rather than a patch. Read the entries
+below before upgrading: several of them turn a document that used to compile
+into one that does not, and one of them turns a request that used to pass into
+a violation.
+
 
 - **Changed.** The refusal of a document without `paths` says why: a 3.1
   document may legally declare only `webhooks` or `components`, and it is this
