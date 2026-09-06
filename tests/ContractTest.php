@@ -551,6 +551,222 @@ final class ContractTest
         }
     }
 
+    public function reportsAYamlParseFailureAsAContractError(): void
+    {
+        $base = tempnam(sys_get_temp_dir(), 'openapi-');
+        if ($base === false) {
+            throw new \RuntimeException('Unable to allocate temporary file');
+        }
+        $path = $base . '.yaml';
+        file_put_contents($path, "openapi: '3.1.0'\npaths: [unclosed\n");
+
+        try {
+            Contract::fromFile($path);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            // The parser is symfony/yaml, an optional dependency; its
+            // `ParseException` used to leave `fromFile()` as itself.
+            Assert::same($exception->getMessage(), sprintf('OpenAPI YAML document "%s" is not valid YAML', basename($path)));
+            Assert::true($exception->getPrevious() instanceof \Throwable);
+        } finally {
+            unlink($path);
+            unlink($base);
+        }
+    }
+
+    public function rejectsAMalformedRequestBodyDeclaration(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => 'invalid',
+                'responses' => ['204' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            // The response side has always rejected the same shape. A body
+            // declaration read as "there is no body" made the two directions
+            // disagree about one document.
+            Assert::same($exception->getMessage(), 'OpenAPI requestBody of operation POST /b must be an object');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => 'invalid'],
+                'responses' => ['204' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI content of requestBody of operation POST /b must be an object');
+        }
+    }
+
+    public function rejectsParametersThatAreNotALIstOfDeclarations(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/p' => [
+                'parameters' => 'invalid',
+                'get' => ['responses' => ['204' => []]],
+            ]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI parameters of path item "/p" must be a list');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/p' => ['get' => [
+                'parameters' => ['id' => ['name' => 'id', 'in' => 'query']],
+                'responses' => ['204' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI parameters of operation GET /p must be a list');
+        }
+    }
+
+    #[DataProvider('nonBooleanFlagProvider')]
+    public function rejectsANonBooleanFlag(array $document, string $message): void
+    {
+        try {
+            Contract::fromArray($document);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), $message);
+        }
+    }
+
+    public static function nonBooleanFlagProvider(): iterable
+    {
+        $operation = static fn(array $fields): array => ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'responses' => ['200' => []],
+            ...$fields,
+        ]]]];
+
+        yield 'parameter required' => [
+            $operation(['parameters' => [['name' => 'id', 'in' => 'query', 'required' => 'true']]]),
+            'OpenAPI required of parameter "id" must be a boolean',
+        ];
+        yield 'parameter explode' => [
+            $operation(['parameters' => [['name' => 'id', 'in' => 'query', 'explode' => 'yes']]]),
+            'OpenAPI explode of parameter "id" must be a boolean',
+        ];
+        yield 'parameter allowReserved' => [
+            $operation(['parameters' => [['name' => 'id', 'in' => 'query', 'allowReserved' => 1]]]),
+            'OpenAPI allowReserved of parameter "id" must be a boolean',
+        ];
+        yield 'response header required' => [
+            ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+                '200' => ['headers' => ['X-R' => ['required' => 'true']]],
+            ]]]]],
+            'OpenAPI required of header "X-R" of response "200" of operation GET /h must be a boolean',
+        ];
+        yield 'request body required' => [
+            ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['required' => 'true', 'content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+                'responses' => ['204' => []],
+            ]]]],
+            'OpenAPI required of requestBody of operation POST /b must be a boolean',
+        ];
+    }
+
+    public function rejectsSchemasTheBackendCouldNeverBeHanded(): void
+    {
+        // YAML spells both, and every route to the backend goes through
+        // `json_encode`, which cannot express either. Discovering that on the
+        // first request that used the schema made a document defect a raw
+        // `JsonException` out of a validate call.
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+                'parameters' => [['name' => 'n', 'in' => 'query', 'schema' => ['type' => 'number', 'multipleOf' => NAN]]],
+                'responses' => ['200' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::string($exception->getMessage())->contains('OpenAPI parameter schema cannot be encoded for validation');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => ['application/json' => ['schema' => ['type' => 'number', 'maximum' => INF]]]],
+                'responses' => ['204' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::string($exception->getMessage())->contains('OpenAPI schema of media type "application/json" of requestBody of operation POST /b cannot be encoded for validation');
+        }
+    }
+
+    public function rejectsAMalformedEncodingHeaderSchema(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => ['multipart/form-data' => [
+                    'schema' => ['type' => 'object', 'properties' => ['file' => ['type' => 'string']]],
+                    'encoding' => ['file' => ['headers' => ['X-Trace' => ['schema' => [['type' => 'string']]]]]],
+                ]]],
+                'responses' => ['204' => []],
+            ]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same(
+                $exception->getMessage(),
+                'OpenAPI schema of header "X-Trace" of encoding "file" of media type "multipart/form-data" of requestBody of operation POST /b must be an object',
+            );
+        }
+    }
+
+    public function rejectsMalformedResponseContentAndSchemaKeys(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+                '200' => ['content' => [0 => ['schema' => ['type' => 'string']], 'application/json' => []]],
+            ]]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI content keys of response "200" of operation GET /h must be media type strings');
+        }
+
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+                '200' => ['content' => ['application/json' => ['schema' => ['type' => 'object', 0 => 'malformed']]]],
+            ]]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema keys of media type "application/json" of response "200" of operation GET /h must be strings');
+        }
+    }
+
+    /**
+     * Strictness is about shapes this package cannot read, not about
+     * declarations that read fine and constrain nothing: a Media Type Object
+     * without a schema, the unconstrained boolean schema, and a Header Object
+     * that only has to be present all still compile.
+     */
+    public function compilesReadableDeclarationsThatConstrainNothing(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
+            '200' => [
+                'headers' => ['X-Any' => ['required' => true]],
+                'content' => ['application/json' => [], 'text/plain' => ['schema' => true]],
+            ],
+            '404' => ['content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+        ]]]]]);
+
+        $operation = $contract->operations()[0];
+        Assert::same(array_keys($operation->responses), [200, 404]);
+        Assert::same($operation->responseFor(404)['key'], '404');
+        Assert::same($operation->responseFor(200)['definition']['headers'], ['X-Any' => ['required' => true]]);
+    }
+
+    public function rejectsADocumentThatDeclaresNoOperation(): void
+    {
+        try {
+            Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/a' => [], 'x-internal' => ['get' => ['responses' => ['200' => []]]]]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document declares no operations');
+        }
+    }
+
     public function keepsJsonFilesOnTheJsonLoadingPath(): void
     {
         $base = tempnam(sys_get_temp_dir(), 'openapi-');

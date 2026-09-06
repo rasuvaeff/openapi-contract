@@ -63,9 +63,7 @@ final readonly class DocumentCompiler
             /** @var array<array-key, mixed> $pathItem */
             $pathItem = $resolver->resolve($pathItem);
             $pathServers = $this->servers($pathItem['servers'] ?? null, $rootServers);
-            /** @var mixed $pathParametersValue */
-            $pathParametersValue = $pathItem['parameters'] ?? null;
-            $pathParameters = is_array($pathParametersValue) ? $pathParametersValue : [];
+            $pathParameters = $this->parameterList($pathItem['parameters'] ?? null, sprintf('path item "%s"', $pathString));
             foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
                 if (!array_key_exists($method, $pathItem)) {
                     continue;
@@ -88,8 +86,8 @@ final readonly class DocumentCompiler
                 if (isset($operations[$key])) {
                     throw new InvalidContract(sprintf('Duplicate operation identity "%s"', $key));
                 }
-                /** @var mixed $rawParameters */
-                $rawParameters = $raw['parameters'] ?? null;
+                $where = sprintf('operation %s %s', strtoupper($method), $pathString);
+                $rawParameters = $this->parameterList($raw['parameters'] ?? null, $where);
                 $normalizedTemplate = preg_replace('/\{[^{}]+\}/', '{}', $pathString);
                 if (!is_string($normalizedTemplate)) {
                     throw new \LogicException('Path template normalization failed');
@@ -104,7 +102,7 @@ final readonly class DocumentCompiler
                     ));
                 }
                 $templates[$templateKey] = $pathString;
-                $parameters = $this->parameters($pathParameters, is_array($rawParameters) ? $rawParameters : [], $resolver, $pathString, $method);
+                $parameters = $this->parameters($pathParameters, $rawParameters, $resolver, $pathString, $method);
                 $this->assertPathParameters($pathString, $parameters);
                 $servers = $this->servers($raw['servers'] ?? null, $pathServers);
                 $operations[$key] = new Operation(
@@ -113,8 +111,8 @@ final readonly class DocumentCompiler
                     method: strtoupper($method),
                     path: $pathString,
                     parameters: $parameters,
-                    requestBody: $this->resolvedObject($raw['requestBody'] ?? null, $resolver),
-                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver),
+                    requestBody: $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
+                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
                     serverBases: array_map(static fn(array $server): string => $server['base'], $servers),
                     security: array_key_exists('security', $raw)
                         ? $this->securityRequirements($raw['security'], $schemeNames)
@@ -122,6 +120,14 @@ final readonly class DocumentCompiler
                     servers: $servers,
                 );
             }
+        }
+
+        if ($operations === []) {
+            // `paths` was non-empty, so the document meant to declare
+            // something. A contract with no operation answers `UnknownOperation`
+            // to every request, which reads as "this request is wrong" when what
+            // is wrong is the document.
+            throw new InvalidContract('OpenAPI document declares no operations');
         }
 
         return new CompiledDocument(dialect: $dialect, operations: array_values($operations), securitySchemes: $securitySchemes);
@@ -305,6 +311,14 @@ final readonly class DocumentCompiler
         $explodeValue = $raw['explode'] ?? null;
         $style = is_string($styleValue) ? $styleValue : ($in === 'query' || $in === 'cookie' ? 'form' : 'simple');
         $this->assertSupportedStyle($name, $in, $style, $raw);
+        // A flag written as the string "true" used to read as its default,
+        // which made a required parameter optional — the one-bit form of a
+        // declaration that says something wrong ending up weaker than one that
+        // says nothing.
+        $position = sprintf('parameter "%s"', $name);
+        $this->assertBoolean($raw['required'] ?? null, $position, 'required');
+        $this->assertBoolean($explodeValue, $position, 'explode');
+        $this->assertBoolean($raw['allowReserved'] ?? null, $position, 'allowReserved');
         /** @var CompiledParameter $parameter */
         $parameter = [
             'name' => $name,
@@ -401,10 +415,26 @@ final readonly class DocumentCompiler
         }
     }
 
-    /** @return array<array-key, mixed> */
-    private function resolvedObject(mixed $value, JsonPointerResolver $resolver): array
+    /**
+     * The Request Body Object an operation declares, resolved and checked.
+     *
+     * A declaration this compiler cannot read is rejected here rather than
+     * folded into "no body declared": the response side has always been
+     * fail-closed about the same shapes, and a document cannot mean one thing
+     * in one direction and nothing in the other.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function requestBody(mixed $value, JsonPointerResolver $resolver, string $where): array
     {
-        return is_array($value) ? $resolver->resolve($value) : [];
+        if ($value === null) {
+            return [];
+        }
+        $body = $resolver->resolve($this->object($value, sprintf('requestBody of %s', $where)));
+        $this->assertBoolean($body['required'] ?? null, sprintf('requestBody of %s', $where), 'required');
+        $this->assertContent($body['content'] ?? null, sprintf('requestBody of %s', $where));
+
+        return $body;
     }
 
     /** @return array<string, mixed> */
@@ -422,13 +452,14 @@ final readonly class DocumentCompiler
                 throw new InvalidContract('OpenAPI schema keys must be strings');
             }
         }
+        $this->assertEncodable($schema, 'OpenAPI parameter schema');
 
         /** @var array<string, mixed> $schema */
         return $schema;
     }
 
     /** @return array<array-key, mixed> */
-    private function resolvedResponses(mixed $value, JsonPointerResolver $resolver): array
+    private function resolvedResponses(mixed $value, JsonPointerResolver $resolver, string $where): array
     {
         if (!is_array($value) || $value === []) {
             throw new InvalidContract('Operation responses must be an object');
@@ -439,10 +470,148 @@ final readonly class DocumentCompiler
             if (!is_array($response)) {
                 throw new InvalidContract(sprintf('Response "%s" must be an object', (string) $key));
             }
-            $result[$key] = $resolver->resolve($response);
+            $resolved = $resolver->resolve($response);
+            $position = sprintf('response "%s" of %s', (string) $key, $where);
+            $this->assertContent($resolved['content'] ?? null, $position);
+            $this->assertHeaders($resolved['headers'] ?? null, $position);
+            $result[$key] = $resolved;
         }
 
         return $result;
+    }
+
+    /**
+     * The `parameters` a Path Item or an Operation declares. A value that is
+     * not a list of declarations used to be read as an empty one, which turned
+     * a malformed document into a weaker contract than a silent one.
+     *
+     * @return list<mixed>
+     */
+    private function parameterList(mixed $value, string $where): array
+    {
+        if ($value === null) {
+            return [];
+        }
+        if (!is_array($value) || !array_is_list($value)) {
+            throw new InvalidContract(sprintf('OpenAPI parameters of %s must be a list', $where));
+        }
+
+        return $value;
+    }
+
+    /**
+     * Every Media Type Object a `content` map declares, down to the schemas
+     * the validators read out of it: a shape checked here cannot surprise a
+     * validator halfway through a request.
+     */
+    private function assertContent(mixed $content, string $where): void
+    {
+        if ($content === null) {
+            return;
+        }
+        /** @var mixed $definition */
+        foreach ($this->object($content, sprintf('content of %s', $where)) as $mediaType => $definition) {
+            if (!is_string($mediaType)) {
+                throw new InvalidContract(sprintf('OpenAPI content keys of %s must be media type strings', $where));
+            }
+            $position = sprintf('media type "%s" of %s', $mediaType, $where);
+            $media = $this->object($definition, $position);
+            $this->assertSchema($media['schema'] ?? null, $position);
+            $this->assertEncoding($media['encoding'] ?? null, $position);
+        }
+    }
+
+    /** Encoding Objects, and the Header Objects they declare for a multipart part. */
+    private function assertEncoding(mixed $encoding, string $where): void
+    {
+        if ($encoding === null) {
+            return;
+        }
+        /** @var mixed $declaration */
+        foreach ($this->object($encoding, sprintf('encoding of %s', $where)) as $property => $declaration) {
+            if (!is_string($property)) {
+                throw new InvalidContract(sprintf('OpenAPI encoding keys of %s must be property name strings', $where));
+            }
+            $position = sprintf('encoding "%s" of %s', $property, $where);
+            $this->assertHeaders($this->object($declaration, $position)['headers'] ?? null, $position);
+        }
+    }
+
+    private function assertHeaders(mixed $headers, string $where): void
+    {
+        if ($headers === null) {
+            return;
+        }
+        /** @var mixed $header */
+        foreach ($this->object($headers, sprintf('headers of %s', $where)) as $name => $header) {
+            if (!is_string($name)) {
+                throw new InvalidContract(sprintf('OpenAPI header names of %s must be strings', $where));
+            }
+            $position = sprintf('header "%s" of %s', $name, $where);
+            $declaration = $this->object($header, $position);
+            $this->assertBoolean($declaration['required'] ?? null, $position, 'required');
+            $this->assertSchema($declaration['schema'] ?? null, $position);
+        }
+    }
+
+    /**
+     * A Schema Object as the validators may read it: absent, one of the two
+     * boolean schemas, or a keyword map. A list — the shape `schema: []`
+     * decodes to — is none of those, and used to reach the value decoder at
+     * request time, where it left as a bare `InvalidArgumentException` in one
+     * direction and as "nothing declared" in the other.
+     */
+    private function assertSchema(mixed $schema, string $where): void
+    {
+        if ($schema === null || is_bool($schema)) {
+            return;
+        }
+        $object = $this->object($schema, sprintf('schema of %s', $where));
+        foreach (array_keys($object) as $key) {
+            if (!is_string($key)) {
+                throw new InvalidContract(sprintf('OpenAPI schema keys of %s must be strings', $where));
+            }
+        }
+        $this->assertEncodable($object, sprintf('OpenAPI schema of %s', $where));
+    }
+
+    /**
+     * A schema the validation backend can be handed at all. Everything on the
+     * way to it — the compilation cache key, the directional rewrite, the
+     * backend's own parse — goes through `json_encode`, which cannot express
+     * `NAN`/`INF` (YAML spells both) or a malformed UTF-8 string. Discovering
+     * that on the first request that happens to use the schema turned a
+     * document defect into a raw `JsonException` out of a validate call.
+     *
+     * @param array<array-key, mixed> $schema
+     */
+    private function assertEncodable(array $schema, string $where): void
+    {
+        try {
+            json_encode($schema, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new InvalidContract(sprintf('%s cannot be encoded for validation: %s', $where, $exception->getMessage()), $exception->getCode(), previous: $exception);
+        }
+    }
+
+    private function assertBoolean(mixed $value, string $where, string $field): void
+    {
+        if ($value !== null && !is_bool($value)) {
+            throw new InvalidContract(sprintf('OpenAPI %s of %s must be a boolean', $field, $where));
+        }
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private function object(mixed $value, string $where): array
+    {
+        if (!is_array($value) || ($value !== [] && array_is_list($value))) {
+            throw new InvalidContract(sprintf('OpenAPI %s must be an object', $where));
+        }
+
+        /** @var array<array-key, mixed> $value */
+        return $value;
     }
 
     /**

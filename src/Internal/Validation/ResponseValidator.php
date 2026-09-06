@@ -96,7 +96,7 @@ final readonly class ResponseValidator
         }
 
         $content = $definition['content'] ?? null;
-        if (!is_array($content) || $content === []) {
+        if (!is_array($content)) {
             return new ValidationResult($violations);
         }
 
@@ -172,13 +172,13 @@ final readonly class ResponseValidator
         }
         /** @var mixed $schemaValue */
         $schemaValue = $mediaDefinition['schema'] ?? null;
-        $schema = is_array($schemaValue) && !array_is_list($schemaValue) ? $schemaValue : null;
-        if (is_array($schema) && !array_is_list($schema)) {
-            /** @var array<string, mixed> $schema */
-            $schemaValid = $this->schemas->isValid($value, $schema, $dialect, direction: 'response');
-        } else {
-            $schemaValid = !$this->declaresNothingValid($mediaDefinition);
-        }
+        // Read exactly as the request side reads it: a declaration neither
+        // side can make sense of is a contract error in both, where it used to
+        // raise here and pass silently there.
+        $schema = $this->values->schema($schemaValue);
+        $schemaValid = $schema === null
+            ? !$this->declaresNothingValid($mediaDefinition)
+            : $this->schemas->isValid($value, $schema, $dialect, direction: 'response');
         if (!$schemaValid) {
             $violations[] = new Violation(
                 code: 'response.body.schema',

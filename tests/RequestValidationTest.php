@@ -1031,12 +1031,21 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($request)->isValid());
     }
 
-    public function skipsMalformedContentEntriesWhenMatching(): void
+    public function rejectsMalformedContentEntries(): void
     {
-        $result = $this->bodyContract([0 => ['schema' => ['type' => 'string']], 'application/json' => ['schema' => ['type' => 'object']]])
-            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+        try {
+            $this->bodyContract([0 => ['schema' => ['type' => 'string']], 'application/json' => ['schema' => ['type' => 'object']]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI content keys of requestBody of operation POST /b must be media type strings');
+        }
 
-        Assert::true($result->isValid());
+        try {
+            $this->bodyContract(['application/json' => 'invalid']);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI media type "application/json" of requestBody of operation POST /b must be an object');
+        }
     }
 
     public function matchesTypeWildcardAndSuffixDeclarations(): void
@@ -1166,19 +1175,38 @@ final class RequestValidationTest
     public function rejectsMalformedBodySchemas(): void
     {
         try {
-            $this->bodyContract(['application/json' => ['schema' => [['type' => 'string']]]])
-                ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+            $this->bodyContract(['application/json' => ['schema' => [['type' => 'string']]]]);
             Assert::true(actual: false);
-        } catch (\InvalidArgumentException $exception) {
-            Assert::same($exception->getMessage(), 'Schema must be an object');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema of media type "application/json" of requestBody of operation POST /b must be an object');
         }
 
         try {
-            $this->bodyContract(['application/json' => ['schema' => [0 => ['type' => 'string'], 'a' => 1]]])
-                ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{}'));
+            $this->bodyContract(['application/json' => ['schema' => [0 => ['type' => 'string'], 'a' => 1]]]);
             Assert::true(actual: false);
-        } catch (\InvalidArgumentException $exception) {
-            Assert::same($exception->getMessage(), 'Schema keys must be strings');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema keys of media type "application/json" of requestBody of operation POST /b must be strings');
+        }
+    }
+
+    /**
+     * A schema nested inside a parameter schema is read where the value is
+     * decoded, not where the document is compiled, so an unreadable one still
+     * has to leave as a contract error rather than as a deserialization
+     * violation blamed on the request.
+     */
+    public function reportsAnUnreadableNestedParameterSchemaAsAContractError(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/n' => ['get' => [
+            'parameters' => [['name' => 'ids', 'in' => 'query', 'schema' => ['type' => 'array', 'items' => [['type' => 'string']]]]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        try {
+            $contract->validateRequest(new ServerRequest('GET', '/n?ids=1'));
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'Schema must be an object');
         }
     }
 
