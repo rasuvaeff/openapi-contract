@@ -325,6 +325,15 @@ may be reworded in any release, so pin codes rather than text.
 | `response.body.non_seekable` | the response body stream cannot be rewound |
 | `response.body.unreadable` | the response body stream reports more data and then reads none |
 
+Where the strictness stops is deliberate: this package checks what a verdict
+about a message depends on, and does not check what only affects
+documentation. A missing `url` on a server, a security scheme without the
+fields its type requires, an operation without `responses` — all refused,
+because validation cannot proceed without them. A Response Object without its
+REQUIRED `description`, or an `encoding` declared on a media type the
+specification does not apply it to — accepted, because neither changes a
+verdict. Reach for a linter for the rest.
+
 ## Security
 
 **Declared `security` is not enforced.** Requirements are compiled, and a

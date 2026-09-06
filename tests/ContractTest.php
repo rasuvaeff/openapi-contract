@@ -1186,6 +1186,29 @@ final class ContractTest
         ];
     }
 
+    /**
+     * A 3.1 document may legally declare only `webhooks` or `components`.
+     * Refusing it is right — this package validates path operations, and such
+     * a document declares none — but the message used to read as if the
+     * document were malformed.
+     */
+    public function saysWhyADocumentWithoutPathsIsRefused(): void
+    {
+        try {
+            Contract::fromArray([
+                'openapi' => '3.1.0',
+                'webhooks' => ['newPet' => ['post' => ['responses' => ['200' => []]]]],
+            ]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same(
+                $exception->getMessage(),
+                'OpenAPI document must contain a non-empty paths object: this package validates path operations, '
+                . 'and a document declaring only webhooks or components has none',
+            );
+        }
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {
