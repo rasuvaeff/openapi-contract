@@ -984,6 +984,94 @@ final class ContractTest
         Assert::string($rendered)->contains('/admin/export');
     }
 
+    /**
+     * `$ref` is a keyword only where the specification puts one. Inside an
+     * `example`, an Example Object's `value`, a Schema Object's data
+     * keywords, and a specification extension, it is a member of the author's
+     * payload — resolving it refused documents that merely showed one, and
+     * replaced the example the document declared with a piece of the document
+     * itself.
+     */
+    #[DataProvider('dataPositionProvider')]
+    public function leavesARefInsideDataExactlyAsWritten(array $document, callable $read, mixed $expected): void
+    {
+        $contract = Contract::fromArray($document);
+
+        Assert::same($read($contract), $expected);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, callable(Contract): mixed, mixed}> */
+    public static function dataPositionProvider(): iterable
+    {
+        $leak = ['components' => ['schemas' => ['Leak' => ['type' => 'string', 'x-secret' => 'internal']]]];
+        $pointer = ['$ref' => '#/components/schemas/Leak'];
+        $parameter = static fn(array $extra): array => ['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'object'], ...$extra]],
+            'responses' => ['204' => []],
+        ]]]] + $leak;
+
+        yield 'a parameter example' => [
+            $parameter(['example' => $pointer]),
+            static fn(Contract $c): mixed => $c->operations()[0]->parameters[0]['example'],
+            $pointer,
+        ];
+        yield "an example object's value" => [
+            $parameter(['examples' => ['sample' => ['value' => $pointer]]]),
+            static fn(Contract $c): mixed => $c->operations()[0]->parameters[0]['examples'],
+            ['sample' => ['value' => $pointer]],
+        ];
+        yield 'a schema default' => [
+            ['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+                'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'object', 'default' => $pointer]]],
+                'responses' => ['204' => []],
+            ]]]] + $leak,
+            static fn(Contract $c): mixed => $c->operations()[0]->parameters[0]['schema']['default'],
+            $pointer,
+        ];
+        yield 'a media type example' => [
+            ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => ['application/json' => ['schema' => ['type' => 'object'], 'example' => $pointer]]],
+                'responses' => ['204' => []],
+            ]]]] + $leak,
+            static fn(Contract $c): mixed => $c->operations()[0]->requestBody['content']['application/json']['example'],
+            $pointer,
+        ];
+        // Not a pointer this package could resolve even if it tried: a
+        // document that merely shows such a payload used to be refused.
+        yield 'a remote-looking pointer in an example' => [
+            $parameter(['example' => ['$ref' => 'https://example.test/thing']]),
+            static fn(Contract $c): mixed => $c->operations()[0]->parameters[0]['example'],
+            ['$ref' => 'https://example.test/thing'],
+        ];
+        yield 'a specification extension' => [
+            ['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+                'x-config' => ['$ref' => 'https://vendor.test/config.json'],
+                'responses' => ['204' => []],
+            ]]]],
+            static fn(Contract $c): mixed => $c->operations()[0]->key,
+            'GET /q',
+        ];
+    }
+
+    /**
+     * The other half of the rule: an Example Object reached through `$ref` is
+     * a reference and stays one.
+     */
+    public function resolvesAnExampleObjectReachedThroughARef(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/q' => ['get' => [
+                'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'string'],
+                    'examples' => ['sample' => ['$ref' => '#/components/examples/Sample']]]],
+                'responses' => ['204' => []],
+            ]]],
+            'components' => ['examples' => ['Sample' => ['summary' => 's', 'value' => 'hello']]],
+        ]);
+
+        Assert::same($contract->operations()[0]->parameters[0]['examples'], ['sample' => ['summary' => 's', 'value' => 'hello']]);
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {

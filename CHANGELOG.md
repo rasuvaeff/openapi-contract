@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** `$ref` is resolved only where it is a keyword. The resolver walked
+  every array and read any map carrying a `$ref` member as a reference, so a
+  document that merely *showed* such a payload — in an `example`, in an Example
+  Object's `value`, in a Schema Object's `default`, or in a specification
+  extension — was refused; and where the pointer did resolve, the example the
+  document declared was silently replaced by a piece of the document. Those
+  positions carry the author's data and are now left exactly as written. An
+  Example Object reached through `$ref` is still a reference and still
+  resolves.
+
 - **Fixed.** A response header declaring the boolean schema `false` fails
   closed when the header arrives, as a body declaring it always has. It used to
   read as "no schema here" and assert presence only.
