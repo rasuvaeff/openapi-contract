@@ -4,18 +4,29 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Response;
 
+use Rasuvaeff\OpenApiContract\InvalidContract;
+
 /**
  * @internal
  */
 final readonly class ResponseSelector
 {
     /**
+     * The Response Object a status resolves to, or `null` when the responses
+     * declare none for it.
+     *
+     * A status that is not an HTTP status at all resolves to nothing rather
+     * than raising: the two callers want different answers to it — a public
+     * `responseFor()` says "not declared", and response validation says the
+     * *response* is wrong, which is a violation — and neither is served by an
+     * exception raised here.
+     *
      * @param array<array-key, mixed> $responses
      */
     public function select(array $responses, int $status): ?SelectedResponse
     {
         if ($status < 100 || $status > 599) {
-            throw new \InvalidArgumentException(sprintf('Invalid HTTP status %d', $status));
+            return null;
         }
 
         if (array_key_exists($status, $responses)) {
@@ -42,7 +53,7 @@ final readonly class ResponseSelector
     private function selected(string $key, mixed $definition): SelectedResponse
     {
         if (!is_array($definition)) {
-            throw new \InvalidArgumentException(sprintf('Response "%s" must be an object', $key));
+            throw new InvalidContract(sprintf('Response "%s" must be an object', $key));
         }
 
         if ($key === '') {

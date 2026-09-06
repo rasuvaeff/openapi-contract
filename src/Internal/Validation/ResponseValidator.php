@@ -45,7 +45,23 @@ final readonly class ResponseValidator
         ResponseInterface $response,
         SchemaDialect $dialect,
     ): ValidationResult {
-        $selected = $this->selector->select($matched->operation->responses, $response->getStatusCode());
+        $status = $response->getStatusCode();
+        if ($status < 100 || $status > 599) {
+            // The contract is fine and the response is not: a PSR-7
+            // implementation that does not police its status code is a bad
+            // message, which is what a violation is for.
+            return new ValidationResult([new Violation(
+                code: 'response.status.invalid',
+                operation: $matched->operation->key,
+                location: 'status',
+                instancePath: '$',
+                specPointer: sprintf('/paths/%s/%s/responses', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+                expected: 'HTTP status between 100 and 599',
+                actual: $status,
+                message: sprintf('Response status %d is not a valid HTTP status code', $status),
+            )]);
+        }
+        $selected = $this->selector->select($matched->operation->responses, $status);
         if (!$selected instanceof SelectedResponse) {
             return new ValidationResult([new Violation(
                 code: 'response.status.mismatch',
@@ -102,6 +118,19 @@ final readonly class ResponseValidator
 
         try {
             $body = $this->bodyContents($response);
+        } catch (MessageBodyUnreadable) {
+            $violations[] = new Violation(
+                code: 'response.body.unreadable',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content',
+                expected: 'readable body stream',
+                actual: 'stream that made no progress',
+                message: 'Response body stream could not be read',
+            );
+
+            return new ValidationResult($violations);
         } catch (MessageBodyTooLarge) {
             $violations[] = new Violation(
                 code: 'response.body.too_large',

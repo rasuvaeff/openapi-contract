@@ -7,7 +7,7 @@ namespace Rasuvaeff\OpenApiContract;
 /**
  * @api
  */
-final class ContractViolation extends \RuntimeException
+final class ContractViolation extends \RuntimeException implements ContractException
 {
     public static function fromResult(ValidationResult $result): self
     {

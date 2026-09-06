@@ -15,6 +15,10 @@ Rules:
   references, ambiguous templates, malformed shapes (`InvalidContract`), and
   parameter `content`/unsupported styles (`UnsupportedSerialization`) fail
   closed at load time;
+- every exception implements `ContractException`: `InvalidContract` (base of
+  `UnsupportedVersion`/`UnsupportedSerialization`), `UnknownOperation`,
+  `ContractViolation`; the concrete parents stay `\InvalidArgumentException`
+  and `\RuntimeException`;
 - `fromFile()` resolves relative `$ref`s to sibling JSON/YAML files inside
   the entry file's directory tree; absolute paths, URI schemes,
   percent-encoded paths, traversal, and symlink escapes are rejected before

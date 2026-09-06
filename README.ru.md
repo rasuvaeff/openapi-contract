@@ -45,7 +45,15 @@ $contract = Contract::fromFile('openapi.yaml'); // нужен symfony/yaml
 `UnsupportedVersion`; неизвестный JSON Schema dialect, remote-ссылки,
 неоднозначные path templates, дубли operation identity и малформенные формы
 документа — `InvalidContract`; parameter `content` и неподдержанные styles —
-`UnsupportedSerialization`. Каждый placeholder в path template обязан иметь
+`UnsupportedSerialization`.
+
+Каждое исключение пакета реализует `ContractException`, так что пакет можно
+поймать одним типом: `InvalidContract` (и под ним `UnsupportedVersion`,
+`UnsupportedSerialization`), `UnknownOperation` и `ContractViolation`. Базовые
+классы остались прежними — `\InvalidArgumentException` и `\RuntimeException`,
+поэтому существующие catch продолжают работать.
+
+Каждый placeholder в path template обязан иметь
 effective-параметр `in: path` с тем же именем и явным `required: true`; лишние
 path-параметры отвергаются при компиляции контракта.
 

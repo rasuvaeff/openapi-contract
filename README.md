@@ -46,6 +46,14 @@ Loading fails closed: unsupported OpenAPI versions throw
 ambiguous path templates, duplicate operation identities, and malformed
 document shapes throw `InvalidContract`, and parameter `content`
 serialization or unsupported styles throw `UnsupportedSerialization`.
+
+Every exception this package raises implements `ContractException`, so a
+caller can catch the package as one type: `InvalidContract` (with
+`UnsupportedVersion` and `UnsupportedSerialization` under it),
+`UnknownOperation` and `ContractViolation`. The concrete base classes stay
+what they were — `\InvalidArgumentException` and `\RuntimeException` — so
+existing catches keep working.
+
 Every path-template placeholder must have an effective `in: path` parameter
 with the same name and explicit `required: true`; extra path parameters are
 rejected while compiling the contract.

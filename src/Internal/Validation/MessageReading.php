@@ -37,7 +37,7 @@ trait MessageReading
                         break;
                     }
 
-                    throw new \RuntimeException('Body stream did not make progress while reading');
+                    throw new MessageBodyUnreadable();
                 }
                 $contents .= $chunk;
                 if (strlen($contents) > Contract::MAX_MESSAGE_BODY_BYTES) {
