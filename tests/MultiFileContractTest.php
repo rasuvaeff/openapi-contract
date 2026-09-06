@@ -9,12 +9,14 @@ use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
 use Testo\Test;
 
 #[Test]
+#[Covers(Contract::class)]
 #[Covers(DocumentGraph::class)]
 #[Covers(JsonPointerResolver::class)]
 final class MultiFileContractTest
@@ -238,6 +240,34 @@ final class MultiFileContractTest
                 'Unresolvable $ref "schemas.json#/Missing" in OpenAPI document "components/a.json"',
             );
             Assert::false(str_contains($exception->getMessage(), $root));
+        } finally {
+            $this->remove($root);
+        }
+    }
+
+    public function passesTheCallersBudgetsIntoTheDocumentGraph(): void
+    {
+        $root = $this->workspace();
+
+        try {
+            $this->write($root, 'entry.json', $this->entryWithParameterSchemaRef('shared.json#/A'));
+            $this->write($root, 'shared.json', '{"A": {"type": "integer"}}');
+
+            Assert::same(count(Contract::fromFile($root . '/entry.json')->operations()), 1);
+
+            try {
+                Contract::fromFile($root . '/entry.json', new Limits(documentFiles: 1));
+                Assert::true(actual: false, message: 'Expected the configured file budget to refuse the graph');
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), 'OpenAPI document graph exceeds the budget of 1 files');
+            }
+
+            try {
+                Contract::fromFile($root . '/entry.json', new Limits(documentBytes: 1));
+                Assert::true(actual: false, message: 'Expected the configured byte budget to refuse the graph');
+            } catch (InvalidContract $exception) {
+                Assert::string($exception->getMessage())->contains('exceeds the shared byte budget');
+            }
         } finally {
             $this->remove($root);
         }

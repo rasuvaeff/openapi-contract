@@ -98,6 +98,30 @@ Documents are bounded: byte size, JSON depth, `$ref` depth, a shared node
 budget, and — for multi-file documents — file-count and byte budgets shared
 across the whole reference graph.
 
+#### Budgets
+
+`Limits` carries the budgets that are the caller's to set, and every factory
+takes one:
+
+```php
+use Rasuvaeff\OpenApiContract\Limits;
+
+$contract = Contract::fromFile('openapi.yaml', new Limits(
+    documentBytes: 40 * 1024 * 1024,   // default 10 MiB
+    messageBodyBytes: 8 * 1024 * 1024, // default 1 MiB
+    documentFiles: 256,                // default 64
+));
+```
+
+A budget is a policy, not a verdict. A body over `messageBodyBytes` is
+reported as `request.body.too_large` / `response.body.too_large`, and that
+code says the validator declined to read the body — not that the message was
+found wrong. A gate that rejects on `isValid()` would therefore reject traffic
+it never judged, so an application whose bodies are legitimately larger raises
+the budget instead of reading the violation as a failure. The defaults are
+small on purpose: an unbounded read inside a middleware is a denial of
+service. A budget below 1 is refused with `\InvalidArgumentException`.
+
 ### Operations and matching
 
 ```php
@@ -117,11 +141,17 @@ $declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [.
 ```
 
 `Operation` identity is the `operationId` when present, otherwise the stable
-`METHOD /path` fallback. Compiled parameters carry `allowReserved` as an
-annotation, like `example`/`examples`: validation does not read it, because a
-value that leaves a reserved character unencoded cannot be told from the
-delimiter it looks like — the package reads such a query exactly as the SAPI
-does. A Path Item's parameters and an Operation's are
+`METHOD /path` fallback. `Operation` is a read model: a contract is built by
+compiling a document, and the constructor is `@internal` — nothing public
+validates a hand-built operation, and the shapes that constructor takes are
+the compiler's output rather than a checked input. The `CompiledParameter`
+shape a consumer imports is read-only for it, and a minor release may add keys
+to it. Compiled parameters carry `allowReserved` for those consumers:
+validation never reads it, because a value that leaves a reserved character
+unencoded cannot be told from the delimiter it looks like — the package reads
+such a query exactly as the SAPI does — while a consumer that renders a query
+value cannot derive it from the schema and needs it to decide whether reserved
+characters are percent-encoded. A Path Item's parameters and an Operation's are
 merged by location and name, and an Operation's declaration replaces the Path
 Item's for the same pair, as the specification requires; the same pair
 declared twice *within* one list is rejected, because a parameter is unique by
@@ -275,8 +305,9 @@ Body validation reads seekable PSR-7 streams from the beginning and restores
 their original position, including when reading fails. A body that needs
 validation but is non-seekable is not consumed: it produces
 `request.body.non_seekable` or `response.body.non_seekable` instead.
-Bodies larger than `Contract::MAX_MESSAGE_BODY_BYTES` (1 MiB) produce the
-corresponding `request.body.too_large` or `response.body.too_large` violation.
+Bodies larger than the configured `messageBodyBytes` (1 MiB by default)
+produce the corresponding `request.body.too_large` or `response.body.too_large`
+violation, which says the body was not read rather than that it was wrong.
 `ValidationResultFormatter` renders every violation in stable order with
 bounded fields, depth, item counts, and expected/actual values. A value is
 rendered only where its name can be checked: a body is redacted wholesale —
@@ -306,7 +337,7 @@ may be reworded in any release, so pin codes rather than text.
 | `request.body.decode` | a form or multipart body cannot be decoded as declared |
 | `request.body.schema` | the body does not satisfy its schema |
 | `request.body.unsupported` | a non-JSON, non-form media type carries a schema no undecoded payload can be judged against |
-| `request.body.too_large` | the body exceeds `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `request.body.too_large` | the body is over the configured `messageBodyBytes`, so it was not read |
 | `request.body.non_seekable` | the body stream cannot be rewound, so it is not consumed |
 | `request.body.unreadable` | the body stream reports more data and then reads none |
 | `response.operation.unknown` | `validateResponse()` was given an operation key the contract does not have |
@@ -321,7 +352,7 @@ may be reworded in any release, so pin codes rather than text.
 | `response.body.json` | a JSON response body does not parse |
 | `response.body.schema` | the response body does not satisfy its schema |
 | `response.body.unsupported` | as `request.body.unsupported`, on the response side |
-| `response.body.too_large` | the response body exceeds `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `response.body.too_large` | the response body is over the configured `messageBodyBytes`, so it was not read |
 | `response.body.non_seekable` | the response body stream cannot be rewound |
 | `response.body.unreadable` | the response body stream reports more data and then reads none |
 

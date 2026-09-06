@@ -16,6 +16,7 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\Understudy\Understudy;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -120,7 +121,7 @@ final class ResponseValidationTest
 
     public function enforcesTheResponseBodyByteBudgetAndRestoresPosition(): void
     {
-        $body = str_repeat(' ', Contract::MAX_MESSAGE_BODY_BYTES + 1);
+        $body = str_repeat(' ', Limits::DEFAULT_MESSAGE_BODY_BYTES + 1);
         $response = new Response(200, ['Content-Type' => 'application/json'], $body);
         $response->getBody()->seek(11);
 
@@ -131,6 +132,34 @@ final class ResponseValidationTest
         Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/content');
         Assert::same(count($result->violations), 1);
         Assert::same($response->getBody()->tell(), 11);
+    }
+
+    public function readsAResponseBodyOverTheDefaultBudgetWhenTheCallerRaisesIt(): void
+    {
+        $body = '{"x":"' . str_repeat('a', Limits::DEFAULT_MESSAGE_BODY_BYTES) . '"}';
+        $response = new Response(200, ['Content-Type' => 'application/json'], $body);
+
+        $result = $this->contentContract(
+            ['application/json' => ['schema' => ['type' => 'object']]],
+            new Limits(messageBodyBytes: 2 * Limits::DEFAULT_MESSAGE_BODY_BYTES),
+        )->validateExchange(new ServerRequest('GET', '/h'), $response);
+
+        Assert::true($result->isValid());
+    }
+
+    public function reportsTheConfiguredBudgetWhenAResponseBodyExceedsIt(): void
+    {
+        $response = new Response(200, ['Content-Type' => 'application/json'], '{"a":1}');
+
+        $result = $this->contentContract(
+            ['application/json' => ['schema' => ['type' => 'object']]],
+            new Limits(messageBodyBytes: 3),
+        )->validateExchange(new ServerRequest('GET', '/h'), $response);
+
+        Assert::same($result->violations[0]->code, 'response.body.too_large');
+        Assert::same($result->violations[0]->expected, 'body up to 3 bytes');
+        Assert::same($result->violations[0]->message, 'Response body exceeds 3 bytes');
+        Assert::same(count($result->violations), 1);
     }
 
     public function reportsStatusHeaderMediaAndSchemaViolations(): void
@@ -623,11 +652,11 @@ final class ResponseValidationTest
     }
 
     /** @param array<array-key, mixed> $content */
-    private function contentContract(array $content): Contract
+    private function contentContract(array $content, ?Limits $limits = null): Contract
     {
         return Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
             '200' => ['content' => $content],
-        ]]]]]);
+        ]]]]], $limits);
     }
 
     private function contract(): Contract

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\RequestInterface;
-use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\DuplicateParameterValue;
@@ -13,6 +12,7 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
@@ -48,7 +48,7 @@ final readonly class RequestValidator
      * as parameters, so a caller cannot hand in a decoder that does not use
      * the same validator.
      */
-    public function __construct(private SchemaValidator $schemas = new SchemaValidator())
+    public function __construct(private Limits $limits, private SchemaValidator $schemas = new SchemaValidator())
     {
         $this->parameters = new ParameterCodec();
         $this->headerParameters = new ParameterCodec(percentEncoded: false);
@@ -302,7 +302,7 @@ final readonly class RequestValidator
         }
 
         try {
-            $body = $this->bodyContents($request);
+            $body = $this->bodyContents($request, $this->limits->messageBodyBytes);
         } catch (MessageBodyUnreadable) {
             return [$this->bodyViolation(
                 $matched,
@@ -314,7 +314,7 @@ final readonly class RequestValidator
             return [$this->bodyViolation(
                 $matched,
                 'request.body.too_large',
-                sprintf('Request body exceeds %d bytes', Contract::MAX_MESSAGE_BODY_BYTES),
+                sprintf('Request body exceeds %d bytes', $this->limits->messageBodyBytes),
                 'body exceeds validation byte budget',
             )];
         }

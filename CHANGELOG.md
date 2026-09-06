@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.0 — 2026-09-06
+
+The three decisions a 1.0 tag would have frozen, settled while they are still
+cheap to settle. Two of them narrow the public surface, which is why this is a
+minor: `roave/backward-compatibility-check` reports both, deliberately.
+
+- **Changed.** `Operation::__construct()` is `@internal`; the class stays
+  `@api`. `Operation` is the compiled read model a contract exposes — nothing
+  public validates a hand-built one (`Contract` is built from a document, the
+  validators are internal), so the constructor was a promise with no product
+  behind it. The shapes it accepts are the compiler's output, not a checked
+  input.
+- **Changed.** `Contract::MAX_DOCUMENT_BYTES` and
+  `Contract::MAX_MESSAGE_BODY_BYTES` are gone, replaced by
+  `Limits::DEFAULT_DOCUMENT_BYTES`, `Limits::DEFAULT_MESSAGE_BODY_BYTES` and
+  `Limits::DEFAULT_DOCUMENT_FILES`. The values are unchanged.
+- **Added.** `Limits` — the budgets a caller may set, accepted by
+  `fromArray()`, `fromJson()` and `fromFile()` as an optional last argument:
+  `documentBytes`, `messageBodyBytes`, `documentFiles`. A budget below 1
+  throws `\InvalidArgumentException`. Previously a response over 1 MiB could
+  not be validated at all, with no way to raise the ceiling.
+- **Changed.** `request.body.too_large` and `response.body.too_large` are
+  documented for what they are: a policy refusal — the validator declined to
+  read that body — rather than a verdict that the message is invalid. A gate
+  rejecting on `isValid()` would otherwise reject traffic it never judged. The
+  codes and the two-state `ValidationResult` are unchanged; the budget is now
+  the caller's to raise.
+- **Changed.** The `CompiledParameter` shape declares its variance: read-only
+  for consumers, and open to new keys in a minor release. `allowReserved` is
+  documented as what it is — a hand-off to consumers that render query values,
+  which cannot derive it from the schema — rather than as an annotation
+  nobody reads.
+
 ## 0.8.0 — 2026-09-06
 
 Three review passes over the package in one day, closing eighteen findings.

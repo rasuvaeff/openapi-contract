@@ -14,6 +14,7 @@ use Rasuvaeff\OpenApiContract\Internal\Compilation\CompiledDocument;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
@@ -470,11 +471,28 @@ final class ContractTest
         }
     }
 
+    public function refusesADocumentOverTheConfiguredByteBudget(): void
+    {
+        $json = '{"openapi":"3.1.0","paths":{"/h":{"get":{"responses":{"200":{}}}}}}';
+
+        try {
+            Contract::fromJson($json, 'tiny.json', new Limits(documentBytes: 10));
+            Assert::true(actual: false, message: 'Expected the configured document budget to refuse the document');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document "tiny.json" exceeds 10 bytes');
+        }
+
+        Assert::same(
+            Contract::fromJson($json, 'tiny.json', new Limits(documentBytes: strlen($json)))->operations()[0]->path,
+            '/h',
+        );
+    }
+
     public function acceptsADocumentAtTheExactByteBudget(): void
     {
         $json = '{"openapi":"3.1.0","paths":{"/h":{"get":{"responses":{"200":{}}}}}}';
-        $json .= str_repeat(' ', Contract::MAX_DOCUMENT_BYTES - strlen($json));
-        Assert::same(strlen($json), Contract::MAX_DOCUMENT_BYTES);
+        $json .= str_repeat(' ', Limits::DEFAULT_DOCUMENT_BYTES - strlen($json));
+        Assert::same(strlen($json), Limits::DEFAULT_DOCUMENT_BYTES);
 
         Assert::same(Contract::fromJson($json)->operations()[0]->path, '/h');
 

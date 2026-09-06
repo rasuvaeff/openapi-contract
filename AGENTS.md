@@ -8,7 +8,7 @@ A framework-neutral OpenAPI contract validator for complete PSR-7 exchanges,
 in namespace `Rasuvaeff\OpenApiContract`, published as
 `rasuvaeff/openapi-contract` (0.x). The feasibility phase is closed — the
 backend decision and the executable corpus status are recorded in
-[FEASIBILITY.md](FEASIBILITY.md). The public API (`Contract`, `Operation`,
+[FEASIBILITY.md](FEASIBILITY.md). The public API (`Contract`, `Limits`, `Operation`,
 `MatchedOperation`, `ValidationResult`, `Violation`,
 `ValidationResultFormatter`) is documented in README EN/RU and `llms.txt`;
 milestone types stay under `Internal\` and carry `@internal` — never let one
@@ -78,6 +78,18 @@ make release-check
   they are the only thing that catches this package agreeing with itself while
   disagreeing with every other reader of the same document. Moving them out of
   the default suite would take them out of CI.
+- **`Operation` is an output type.** Its constructor is `@internal`: nothing
+  public validates a hand-built operation, and the shapes it takes are the
+  compiler's output rather than a checked input. The package's own tests still
+  build one by hand to reach the validators' defensive branches — that is an
+  internal seam, not a supported path, and it is why those branches stay.
+  `CompiledParameter` is a read shape whose variance is declared: consumers
+  read it, minors may add keys to it.
+- **A budget is a policy, not a verdict.** `Limits` carries them and every
+  factory takes one. `*.body.too_large` says the validator declined to read a
+  body; it must never be reworded into a claim that the message is wrong, and
+  a third `ValidationResult` state is deliberately not the answer — it would
+  change what `isValid() === false` means for every existing consumer.
 - `examples/` is part of the public contract; every listed script must run.
 - CI actions stay SHA-pinned with read-only permissions and checkout
   credentials disabled.
