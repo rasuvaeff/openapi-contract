@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Reference;
 
+use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 
@@ -22,9 +23,9 @@ final class DocumentGraph
     /** @var array<string, array<string, mixed>> */
     private array $documents = [];
 
-    private function __construct(private readonly string $root, private readonly string $entryPath, private readonly int $maximumFiles, private int $remainingBytes) {}
+    private function __construct(private readonly string $root, private readonly string $entryPath, private readonly int $maximumFiles, private int $remainingBytes, private int $remainingNodes) {}
 
-    public static function open(string $path, int $maximumFiles = Limits::DEFAULT_DOCUMENT_FILES, int $maximumBytes = Limits::DEFAULT_DOCUMENT_BYTES): self
+    public static function open(string $path, int $maximumFiles = Limits::DEFAULT_DOCUMENT_FILES, int $maximumBytes = Limits::DEFAULT_DOCUMENT_BYTES, int $maximumNodes = Limits::DEFAULT_DOCUMENT_NODES): self
     {
         if ($maximumFiles < 1) {
             throw new \InvalidArgumentException('Maximum file count must be positive');
@@ -32,12 +33,15 @@ final class DocumentGraph
         if ($maximumBytes < 1) {
             throw new \InvalidArgumentException('Maximum byte budget must be positive');
         }
+        if ($maximumNodes < 1) {
+            throw new \InvalidArgumentException('Maximum node budget must be positive');
+        }
         $canonical = realpath($path);
         if ($canonical === false || !is_file($canonical)) {
             throw new InvalidContract(sprintf('OpenAPI document "%s" is not readable', $path));
         }
 
-        $graph = new self(\dirname($canonical), $canonical, $maximumFiles, $maximumBytes);
+        $graph = new self(\dirname($canonical), $canonical, $maximumFiles, $maximumBytes, $maximumNodes);
         $graph->document($canonical);
 
         return $graph;
@@ -76,8 +80,16 @@ final class DocumentGraph
             throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds the shared byte budget', $display));
         }
         $this->remainingBytes -= strlen($contents);
+        $parsed = $this->parse($canonicalPath, $display, $contents);
+        // Bytes are what the file weighs; nodes are what it expands into, and
+        // YAML anchors make the two unrelated.
+        $nodes = DocumentNodes::within($parsed, $this->remainingNodes);
+        if ($nodes === null) {
+            throw new InvalidContract(sprintf('OpenAPI document "%s" exceeds the shared node budget', $display));
+        }
+        $this->remainingNodes -= $nodes;
 
-        return $this->documents[$canonicalPath] = $this->parse($canonicalPath, $display, $contents);
+        return $this->documents[$canonicalPath] = $parsed;
     }
 
     /**

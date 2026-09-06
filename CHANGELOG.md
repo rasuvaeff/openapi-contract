@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Fixed.** A YAML document under a kilobyte could exhaust memory and die with
+  a fatal error rather than an `InvalidContract`. Anchors and aliases expand
+  inside the parser, before any budget measures anything, and the byte budget
+  measures the file; the reference resolver's own budget counts only the nodes
+  it descends into, and it rightly does not descend into data — which is where
+  an alias is just as welcome. Nine levels of anchors in an `enum` turned 772
+  bytes into 387 million nodes. Documents are now measured by what they expand
+  into, at every entry point and shared across a multi-file graph.
+- **Added.** `Limits::$documentNodes` (default 5 000 000, constant
+  `Limits::DEFAULT_DOCUMENT_NODES`) — the budget above. It sits above what any
+  document within `documentBytes` can hold, so it refuses amplification without
+  refusing size. Counting stops at the budget, so an oversized document costs
+  the budget rather than its own size.
+- **Changed.** The message-reading trait joined the mutation gate's coverage
+  map: it was in no `#[Covers]`, and so produced no mutants at all — the body
+  reading loop, its byte-budget comparison included, was outside the gate. The
+  package's own `AGENTS.md` names that as the symptom.
+
 ## 0.9.0 — 2026-09-06
 
 The three decisions a 1.0 tag would have frozen, settled while they are still

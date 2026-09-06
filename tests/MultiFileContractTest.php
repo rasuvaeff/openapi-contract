@@ -245,6 +245,43 @@ final class MultiFileContractTest
         }
     }
 
+    /**
+     * A YAML file that weighs a few hundred bytes and expands into millions of
+     * nodes: the byte budget cannot see it, and the resolver's own budget
+     * never counts it, because the anchor is used where the resolver rightly
+     * stops — inside `enum`, which is data.
+     */
+    public function refusesAYamlDocumentThatExpandsPastTheNodeBudget(): void
+    {
+        $root = $this->workspace();
+
+        try {
+            $yaml = "openapi: 3.1.0\n";
+            $yaml .= "x-anchors:\n  a0: &a0 [\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\",\"i\"]\n";
+            for ($level = 1; $level <= 5; $level++) {
+                $previous = '*a' . ($level - 1);
+                $yaml .= sprintf("  a%d: &a%d [%s]\n", $level, $level, implode(',', array_fill(0, 9, $previous)));
+            }
+            $yaml .= "paths:\n  /h:\n    get:\n      parameters:\n        - name: q\n          in: query\n          schema:\n            type: string\n            enum: *a5\n";
+            $yaml .= "      responses:\n        '200':\n          description: ok\n";
+            $this->write($root, 'bomb.yaml', $yaml);
+
+            Assert::true(strlen($yaml) < 1024);
+
+            try {
+                // 9^6 nodes out of under a kilobyte: the budget is what the
+                // document expands into, and counting stops at it, so the
+                // refusal costs the budget rather than the expansion.
+                Contract::fromFile($root . '/bomb.yaml', new Limits(documentNodes: 100_000));
+                Assert::true(actual: false, message: 'Expected the node budget to refuse the expanded document');
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), 'OpenAPI document "bomb.yaml" exceeds the shared node budget');
+            }
+        } finally {
+            $this->remove($root);
+        }
+    }
+
     public function passesTheCallersBudgetsIntoTheDocumentGraph(): void
     {
         $root = $this->workspace();
@@ -260,6 +297,13 @@ final class MultiFileContractTest
                 Assert::true(actual: false, message: 'Expected the configured file budget to refuse the graph');
             } catch (InvalidContract $exception) {
                 Assert::same($exception->getMessage(), 'OpenAPI document graph exceeds the budget of 1 files');
+            }
+
+            try {
+                Contract::fromFile($root . '/entry.json', new Limits(documentNodes: 2));
+                Assert::true(actual: false, message: 'Expected the configured node budget to refuse the graph');
+            } catch (InvalidContract $exception) {
+                Assert::string($exception->getMessage())->contains('exceeds the shared node budget');
             }
 
             try {

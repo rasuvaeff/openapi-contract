@@ -12,6 +12,7 @@ use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
 use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyTooLarge;
 use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyUnreadable;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageReading;
 use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
@@ -29,6 +30,7 @@ use function Rasuvaeff\Understudy\when;
 #[Test]
 #[Covers(Contract::class)]
 #[Covers(ResponseValidator::class)]
+#[Covers(MessageReading::class)]
 #[Covers(SelectedResponse::class)]
 #[Covers(MessageBodyTooLarge::class)]
 #[Covers(MessageBodyUnreadable::class)]

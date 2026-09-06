@@ -94,9 +94,12 @@ absolute paths, URI schemes, percent-encoded paths, traversal, and symlink
 escapes are rejected before any read, and resolution errors report paths
 relative to the document root. `fromArray()` and `fromJson()` have no
 trusted filesystem root and accept same-document references only.
-Documents are bounded: byte size, JSON depth, `$ref` depth, a shared node
-budget, and — for multi-file documents — file-count and byte budgets shared
-across the whole reference graph.
+Documents are bounded: byte size, JSON depth, `$ref` depth, the number of
+nodes a document expands into, a reference-resolution budget, and — for
+multi-file documents — file-count, byte and node budgets shared across the
+whole reference graph. The node budget is the one that bounds YAML: anchors
+and aliases produce nodes out of no bytes at all, so a file well inside the
+byte budget can still expand into hundreds of millions of nodes.
 
 #### Budgets
 
@@ -110,6 +113,7 @@ $contract = Contract::fromFile('openapi.yaml', new Limits(
     documentBytes: 40 * 1024 * 1024,   // default 10 MiB
     messageBodyBytes: 8 * 1024 * 1024, // default 1 MiB
     documentFiles: 256,                // default 64
+    documentNodes: 20_000_000,         // default 5 000 000
 ));
 ```
 
