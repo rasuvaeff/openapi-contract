@@ -13,6 +13,7 @@ use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
@@ -364,6 +365,12 @@ final readonly class ResponseValidator
             );
             /** @var mixed $value */
             $value = $this->values->coerce($parsed, $schema);
+        } catch (InvalidContract $exception) {
+            // A declaration this package cannot read is the document's defect,
+            // not the response's; `InvalidContract` extends
+            // `InvalidArgumentException`, so without this it would be reported
+            // as a header the response failed to serialize.
+            throw $exception;
         } catch (\InvalidArgumentException) {
             return [new Violation(
                 code: 'response.header.serialization',

@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 
 /**
  * @internal
@@ -68,6 +69,9 @@ final readonly class FormUrlencodedBodyDecoder
                     kind: $kind,
                 );
                 $result[$name] = $this->values->coerce($parsed, $property);
+            } catch (InvalidContract $exception) {
+                // The document, not the body: see RequestValidator::validate().
+                throw $exception;
             } catch (\InvalidArgumentException $exception) {
                 throw new BodyDecodingFailed(sprintf('Form property "%s" cannot be deserialized', $name), $exception->getCode(), previous: $exception);
             }

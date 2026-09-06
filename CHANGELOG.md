@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A Schema Object is checked all the way down where the document is
+  compiled, not on the first message that happens to reach a subschema. An
+  `items` or `properties` member the package cannot read used to survive
+  compilation and then surface as `response.header.serialization` or
+  `request.body.decode` — the document's defect blamed on the traffic, and
+  answered differently depending on which of four places read it first. The
+  three validators that still catch a deserialization failure now re-throw
+  `InvalidContract` before turning it into a violation, for the one path left:
+  an `Operation` built by hand rather than compiled.
+
 - **Fixed.** A parameter name that occurs more than once, where its style
   admits a single value, is `request.parameter.duplicate` instead of the first
   occurrence. `?n=5&n=999` is a well-formed query whose meaning depends on the

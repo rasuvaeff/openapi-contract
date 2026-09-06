@@ -1638,20 +1638,37 @@ final class RequestValidationTest
     }
 
     /**
-     * A schema nested inside a parameter schema is read where the value is
-     * decoded, not where the document is compiled, so an unreadable one still
-     * has to leave as a contract error rather than as a deserialization
-     * violation blamed on the request.
+     * A subschema an `Operation` was handed directly — not compiled from a
+     * document, where the shape is now checked — is still a contract error
+     * when the decoder reaches it, never a deserialization violation blamed
+     * on the request.
      */
-    public function reportsAnUnreadableNestedParameterSchemaAsAContractError(): void
+    public function reportsAnUnreadableNestedSchemaOfAHandBuiltOperationAsAContractError(): void
     {
-        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/n' => ['get' => [
-            'parameters' => [['name' => 'ids', 'in' => 'query', 'schema' => ['type' => 'array', 'items' => [['type' => 'string']]]]],
-            'responses' => ['204' => []],
-        ]]]]);
+        $operation = new Operation(
+            key: 'GET /n',
+            operationId: null,
+            method: 'GET',
+            path: '/n',
+            parameters: [[
+                'name' => 'ids',
+                'in' => 'query',
+                'required' => true,
+                'style' => 'form',
+                'explode' => false,
+                'allowReserved' => false,
+                'schema' => ['type' => 'array', 'items' => [['type' => 'string']]],
+                'specPointer' => '/paths/~1n/get/parameters/0',
+            ]],
+            responses: ['204' => []],
+        );
 
         try {
-            $contract->validateRequest(new ServerRequest('GET', '/n?ids=1'));
+            (new RequestValidator())->validate(
+                new MatchedOperation($operation, []),
+                new ServerRequest('GET', '/n?ids=1'),
+                SchemaDialect::OpenApi31,
+            );
             Assert::true(actual: false);
         } catch (InvalidContract $exception) {
             Assert::same($exception->getMessage(), 'Schema must be an object');

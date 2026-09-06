@@ -61,7 +61,9 @@ rejected while compiling the contract.
 Declarations are read strictly rather than leniently. A `requestBody`,
 `parameters`, `content`, `encoding`, `headers` or Schema Object whose shape
 this package cannot read is `InvalidContract` at load time, not a silently
-unchecked part of the contract; a boolean field written as a string
+unchecked part of the contract — and the check reaches every subschema, so an
+unreadable `items` or `properties` member is refused where it is written rather
+than on the first message that reads it; a boolean field written as a string
 (`required: "true"`) is rejected instead of falling back to its default; a
 schema carrying a value JSON cannot encode (YAML's `.nan` and `.inf`) is
 rejected before it can reach the validation backend; a document whose `paths`

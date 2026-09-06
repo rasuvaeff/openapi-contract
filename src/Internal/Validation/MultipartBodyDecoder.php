@@ -9,6 +9,7 @@ use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 
 /**
  * @internal
@@ -291,6 +292,9 @@ final readonly class MultipartBodyDecoder
             );
             /** @var mixed $value */
             $value = $this->values->coerce($parsed, $schema);
+        } catch (InvalidContract $exception) {
+            // The document, not the part: see RequestValidator::validate().
+            throw $exception;
         } catch (\InvalidArgumentException $exception) {
             throw new BodyDecodingFailed(sprintf('Multipart property "%s" header "%s" cannot be deserialized', $property, $name), $exception->getCode(), previous: $exception);
         }

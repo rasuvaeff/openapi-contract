@@ -22,6 +22,15 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
  */
 final readonly class DocumentCompiler
 {
+    /** Keywords whose value is one subschema. @var list<string> */
+    private const array SINGLE_SUBSCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not'];
+
+    /** Keywords whose value is a list of subschemas. @var list<string> */
+    private const array SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf'];
+
+    /** Keywords whose value is a map of subschemas. @var list<string> */
+    private const array SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'properties'];
+
     /** @param array<string, mixed> $document */
     public function compile(array $document, ?DocumentGraph $graph = null): CompiledDocument
     {
@@ -453,6 +462,7 @@ final readonly class DocumentCompiler
             }
         }
         $this->assertEncodable($schema, 'OpenAPI parameter schema');
+        $this->assertSchemaShape($schema, 'parameter schema');
 
         /** @var array<string, mixed> $schema */
         return $schema;
@@ -567,12 +577,68 @@ final readonly class DocumentCompiler
             return;
         }
         $object = $this->object($schema, sprintf('schema of %s', $where));
-        foreach (array_keys($object) as $key) {
+        // Encoding first bounds the depth of what follows: `json_encode`
+        // refuses a structure deeper than 512 levels, so the recursive walk
+        // below cannot be handed one that would exhaust the stack.
+        $this->assertEncodable($object, sprintf('OpenAPI schema of %s', $where));
+        $this->assertSchemaShape($object, $where);
+    }
+
+    /**
+     * Every subschema the validators will read, checked where the document is
+     * compiled rather than on the first message that happens to reach it.
+     *
+     * A nested `items` or `properties` member used to be read lazily, inside a
+     * validator, where an unreadable one surfaced as "this message cannot be
+     * deserialized" — the document's defect blamed on the traffic.
+     *
+     * @param array<array-key, mixed> $schema
+     */
+    private function assertSchemaShape(array $schema, string $where): void
+    {
+        foreach (array_keys($schema) as $key) {
             if (!is_string($key)) {
                 throw new InvalidContract(sprintf('OpenAPI schema keys of %s must be strings', $where));
             }
         }
-        $this->assertEncodable($object, sprintf('OpenAPI schema of %s', $where));
+        foreach (self::SINGLE_SUBSCHEMA_KEYWORDS as $keyword) {
+            if (array_key_exists($keyword, $schema)) {
+                $this->assertSubschema($schema[$keyword], sprintf('%s of %s', $keyword, $where));
+            }
+        }
+        foreach (self::SUBSCHEMA_LIST_KEYWORDS as $keyword) {
+            if (!array_key_exists($keyword, $schema)) {
+                continue;
+            }
+            $members = $schema[$keyword];
+            if (!is_array($members) || !array_is_list($members)) {
+                throw new InvalidContract(sprintf('OpenAPI %s of %s must be a list of schemas', $keyword, $where));
+            }
+            foreach (array_keys($members) as $index) {
+                $this->assertSubschema($members[$index], sprintf('%s[%d] of %s', $keyword, $index, $where));
+            }
+        }
+        foreach (self::SUBSCHEMA_MAP_KEYWORDS as $keyword) {
+            if (!array_key_exists($keyword, $schema)) {
+                continue;
+            }
+            // A member name is whatever the document wrote — PHP turns a
+            // numeric-string key into an integer, and that is a legal name,
+            // so only the member's own shape is checked here.
+            /** @var mixed $member */
+            foreach ($this->object($schema[$keyword], sprintf('%s of %s', $keyword, $where)) as $name => $member) {
+                $this->assertSubschema($member, sprintf('%s "%s" of %s', $keyword, (string) $name, $where));
+            }
+        }
+    }
+
+    private function assertSubschema(mixed $schema, string $where): void
+    {
+        if (is_bool($schema)) {
+            return;
+        }
+
+        $this->assertSchemaShape($this->object($schema, $where), $where);
     }
 
     /**
