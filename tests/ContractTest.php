@@ -18,6 +18,7 @@ use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
 use Rasuvaeff\OpenApiContract\UnsupportedVersion;
+use Rasuvaeff\OpenApiContract\ValidationResultFormatter;
 use Rasuvaeff\OpenApiContract\Violation;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -934,6 +935,53 @@ final class ContractTest
         ]]]]);
 
         Assert::same(count($contract->operations()), 1);
+    }
+
+    /**
+     * RFC 3986 makes `/pets` and `/pets/` different resources. Trimming both
+     * ends of both sides let a document declaring both compile and then
+     * answer both requests with the same operation, leaving the other
+     * unreachable.
+     */
+    #[DataProvider('trailingSlashProvider')]
+    public function readsATrailingSlashAsPartOfThePath(string $target, ?string $expected): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [
+            '/pets' => ['get' => ['operationId' => 'noSlash', 'responses' => ['200' => []]]],
+            '/pets/' => ['get' => ['operationId' => 'withSlash', 'responses' => ['200' => []]]],
+        ]]);
+
+        Assert::same($contract->match(new ServerRequest('GET', $target))?->operation->key, $expected);
+    }
+
+    /** @return iterable<string, array{string, string|null}> */
+    public static function trailingSlashProvider(): iterable
+    {
+        yield 'without the slash' => ['/pets', 'noSlash'];
+        yield 'with the slash' => ['/pets/', 'withSlash'];
+        yield 'repeated slashes are not the same path' => ['/pets//', null];
+        yield 'a doubled leading slash is not the same path' => ['//pets', null];
+    }
+
+    /**
+     * The diagnostic for an unmatched request used to carry the whole URI,
+     * query string included, and print it verbatim — while the redaction that
+     * guards `actual` found the credential *inside* that same value and
+     * redacted the line below it.
+     */
+    public function keepsTheQueryStringOutOfTheDiagnostic(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/pets' => ['get' => [
+            'responses' => ['200' => []],
+        ]]]]);
+
+        $result = $contract->validateRequest(new ServerRequest('GET', 'https://api.test/admin/export?api_key=SECRET&token=T0K3N'));
+        $rendered = (new ValidationResultFormatter())->format($result);
+
+        Assert::same($result->violations[0]->instancePath, '/admin/export');
+        Assert::false(str_contains($rendered, 'SECRET'));
+        Assert::false(str_contains($rendered, 'T0K3N'));
+        Assert::string($rendered)->contains('/admin/export');
     }
 
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
