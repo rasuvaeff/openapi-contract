@@ -103,6 +103,14 @@ Rules:
 - `format: date-time` (and the other supported formats) are asserted, not
   treated as annotations — a pinned divergence from
   league/openapi-psr7-validator;
+- three pinned divergences from the specification: a percent-encoded `|` or
+  space inside a `pipeDelimited`/`spaceDelimited` value is folded into the
+  delimiter (as PHP's own query parsing does, so `?ids=a%7Cb` is two elements
+  here and one per the spec — a value containing the delimiter cannot be
+  expressed); a Header Object carrying `name`/`in` is ignored rather than
+  refused; `example` and `examples` together are both kept instead of being
+  refused as mutually exclusive. `deepObject` is NOT one of them —
+  `f%5Ba%5D=1` and `f[a]=1` agree with PHP;
 - multi-file resolution is differentially tested against cebe/php-openapi
   (dev-only oracle, OAS 3.0): pinned divergences are the depth budget on
   deep `$ref` chains and fast rejection of cross-file cycles.
