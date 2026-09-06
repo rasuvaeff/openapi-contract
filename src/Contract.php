@@ -42,9 +42,30 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
  */
 final readonly class Contract
 {
+    /**
+     * Not a path segment: `{` cannot appear in a bucket key built from a
+     * literal, so no route can collide with the always-scanned bucket.
+     */
+    private const string ANY_FIRST_SEGMENT = '{*}';
+
     private RequestValidator $requests;
 
     private ResponseValidator $responses;
+
+    /**
+     * Routes bucketed by method, by how many segments they have, and by their
+     * first segment when that segment is a literal. Each is a property
+     * {@see matchPath()} checks before anything else — counts must be equal, a
+     * literal must equal the decoded request segment — so a bucket miss skips
+     * exactly the work that would have been thrown away. Routes whose first
+     * segment is templated sit under `*` and are always scanned. Order inside a
+     * bucket does not matter: candidates are sorted by a comparator that ends
+     * on the operation key, and keys are unique, so the winner never depends on
+     * the order they were collected in.
+     *
+     * @var array<string, array<int, array<string, list<array{0: Operation, 1: array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}, 2: int, 3: string}>>>>
+     */
+    private array $routes;
 
     /**
      * @param list<Operation> $operations
@@ -63,6 +84,17 @@ final readonly class Contract
         $schemas = new SchemaValidator();
         $this->requests = new RequestValidator($limits, $schemas);
         $this->responses = new ResponseValidator($limits, $schemas);
+        $routes = [];
+        foreach ($operations as $operation) {
+            foreach ($operation->servers as $baseIndex => $server) {
+                $base = $server['base'];
+                // Bases are '/'-canonical at compile time: rtrimmed or the bare '/'.
+                $route = $base === '/' ? $operation->path : $base . $operation->path;
+                $parts = $this->segments($route);
+                $routes[$operation->method][count($parts)][$this->bucket($parts)][] = [$operation, $server, $baseIndex, $route];
+            }
+        }
+        $this->routes = $routes;
     }
 
     /** @param array<string, mixed> $document */
@@ -165,25 +197,23 @@ final readonly class Contract
         $port = $request->getUri()->getPort() ?? $this->defaultPort($scheme);
         $serverMismatch = false;
         $candidates = [];
-        foreach ($this->operations as $operation) {
-            if ($operation->method !== $method) {
+        $requestParts = $this->segments($path);
+        $buckets = $this->routes[$method][count($requestParts)] ?? [];
+        $candidateRoutes = [
+            ...$buckets[self::ANY_FIRST_SEGMENT] ?? [],
+            ...$buckets[rawurldecode($requestParts[1] ?? '')] ?? [],
+        ];
+        foreach ($candidateRoutes as [$operation, $server, $baseIndex, $route]) {
+            $matched = $this->matchPath($route, $path);
+            if ($matched === null) {
                 continue;
             }
-            foreach ($operation->servers as $baseIndex => $server) {
-                $base = $server['base'];
-                // Bases are '/'-canonical at compile time: rtrimmed or the bare '/'.
-                $route = $base === '/' ? $operation->path : $base . $operation->path;
-                $matched = $this->matchPath($route, $path);
-                if ($matched === null) {
-                    continue;
-                }
-                if (!$this->authorityMatches($server, $scheme, $host, $port)) {
-                    $serverMismatch = true;
+            if (!$this->authorityMatches($server, $scheme, $host, $port)) {
+                $serverMismatch = true;
 
-                    continue;
-                }
-                $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
+                continue;
             }
+            $candidates[] = [$operation, $matched, substr_count($operation->path, '{'), strlen($route), $route, $baseIndex];
         }
         /** @var list<array{0: Operation, 1: array<string, string>, 2: int, 3: int, 4: string, 5: int}> $candidates */
         usort($candidates, static function (array $a, array $b): int {
@@ -337,6 +367,21 @@ final readonly class Contract
     /**
      * @return array<string, string>|null
      */
+    /**
+     * The bucket a route belongs to: its first segment when that segment is a
+     * literal, and the always-scanned one when it is templated or absent. A
+     * literal first segment is compared to the decoded request segment
+     * verbatim, which is what makes the bucket safe to skip.
+     *
+     * @param list<string> $routeParts
+     */
+    private function bucket(array $routeParts): string
+    {
+        $first = $routeParts[1] ?? null;
+
+        return $first === null || str_contains($first, '{') ? self::ANY_FIRST_SEGMENT : $first;
+    }
+
     private function matchPath(string $route, string $requestPath): ?array
     {
         $routeParts = $this->segments($route);

@@ -20,6 +20,38 @@ use Testo\Test;
 #[Covers(DocumentCompiler::class)]
 final class ServerMatchingTest
 {
+    /**
+     * Routes are bucketed by their first segment when it is a literal, so the
+     * bucket a request lands in has to agree with what matching would have
+     * done: a templated first segment is always in play, a literal one is
+     * compared decoded, and a server base is part of the route it prefixes.
+     */
+    public function matchesRegardlessOfHowRoutesAreBucketed(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'servers' => [['url' => '/api']], 'paths' => [
+            '/{tenant}/items' => ['get' => [
+                'parameters' => [['name' => 'tenant', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]],
+                'responses' => ['200' => []],
+            ]],
+            '/admin/items' => ['get' => ['responses' => ['200' => []]]],
+            '/rés/{id}' => ['get' => [
+                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]],
+                'responses' => ['200' => []],
+            ]],
+        ]]);
+
+        // The concrete path wins over the templated one although both are in
+        // play for the same request.
+        Assert::same($contract->requireMatch(new Request('GET', '/api/admin/items'))->operation->path, '/admin/items');
+        Assert::same($contract->requireMatch(new Request('GET', '/api/acme/items'))->operation->path, '/{tenant}/items');
+        Assert::same($contract->requireMatch(new Request('GET', '/api/acme/items'))->pathParameters, ['tenant' => 'acme']);
+        // A percent-encoded literal first segment is bucketed by its decoded
+        // form, which is the form matching compares.
+        Assert::same($contract->requireMatch(new Request('GET', '/api/r%C3%A9s/7'))->operation->path, '/rés/{id}');
+        // The base is part of the route: without it nothing matches.
+        Assert::null($contract->match(new Request('GET', '/admin/items')));
+    }
+
     public function selectsTheOperationOfTheMatchingHost(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => [

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Changed.** Matching indexes routes by method, segment count and first
+  literal segment instead of scanning every operation and every one of its
+  servers on each request. On a thousand-operation document a validated request
+  went from 0.83 ms to 0.006 ms, and the cost no longer grows with the
+  document. Selection is unchanged by construction: each key is a property
+  `matchPath()` checks before anything else, and candidates are ordered by a
+  comparator that ends on the unique operation key, so the winner never
+  depended on the order they were collected in.
+- **Added.** Two examples: `gate-a-request.php` (the shape a PSR-15 middleware
+  takes, over a multi-file document) and `budgets.php` (`Limits`, and why
+  `*.body.too_large` is a refusal to read rather than a verdict).
 - **Documentation.** Three divergences from the specification are now written
   down rather than merely true: a percent-encoded delimiter inside a
   `pipeDelimited`/`spaceDelimited` value is folded into the delimiter, a Header
