@@ -8,6 +8,7 @@ use Psr\Http\Message\RequestInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
+use Rasuvaeff\OpenApiContract\Internal\Serialization\DuplicateParameterValue;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
@@ -112,6 +113,17 @@ final readonly class RequestValidator
                 // extends `InvalidArgumentException`, so without this it would
                 // be reported as a deserialization violation.
                 throw $exception;
+            } catch (DuplicateParameterValue) {
+                $violations[] = new Violation(
+                    code: 'request.parameter.duplicate',
+                    operation: $matched->operation->key,
+                    location: $parameter['in'],
+                    instancePath: $parameter['name'],
+                    specPointer: $pointer,
+                    expected: 'a single value',
+                    actual: $wire,
+                    message: sprintf('%s parameter "%s" occurs more than once', ucfirst($parameter['in']), $parameter['name']),
+                );
             } catch (\InvalidArgumentException) {
                 $violations[] = new Violation(
                     code: 'request.parameter.serialization',

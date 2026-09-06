@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A parameter name that occurs more than once, where its style
+  admits a single value, is `request.parameter.duplicate` instead of the first
+  occurrence. `?n=5&n=999` is a well-formed query whose meaning depends on the
+  runtime — PHP keeps the last occurrence in `parse_str()`, `$_GET` and every
+  PSR-7 `getQueryParams()`, Go keeps the first, Node keeps both — so reading
+  the first let a request satisfy the contract with one value and hand the
+  application another, which is a silent bypass of every scalar assertion.
+  Exploded lists are untouched: repeating the name is what that style means.
+
 - **Internal.** The body decoders, the value decoder, the message-reading
   trait and the response selection value object are named in `#[Covers]` at
   last. Infection is fed by those attributes, so an unlisted class gets no

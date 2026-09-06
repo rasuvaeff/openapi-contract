@@ -137,6 +137,10 @@ API reference:
   — validates a response fixture without a request; unknown keys yield one
   `response.operation.unknown` violation. Response selection remains exact,
   then `NXX`, then `default`.
+- a parameter name occurring more than once where its style admits one value
+  is `request.parameter.duplicate`, not a value: which occurrence the
+  application reads is a property of the runtime (PHP last, Go first, Node
+  both). Exploded lists are unaffected;
 - a `content` map is matched by specificity, not by key order: exact
   `type/subtype` > `type/*+suffix` > `type/*` > `*/*`, and only equally
   specific keys are settled by declaration order;
@@ -175,7 +179,8 @@ API reference:
 - Violation codes (complete set; the code is the stable contract, the
   formatter's message text is a diagnostic that may be reworded):
   `request.operation.unknown`, `request.server.mismatch`,
-  `request.parameter.missing`, `request.parameter.serialization`,
+  `request.parameter.duplicate`, `request.parameter.missing`,
+  `request.parameter.serialization`,
   `request.parameter.schema`, `request.body.missing`,
   `request.body.media_type`, `request.body.json`, `request.body.decode`,
   `request.body.schema`, `request.body.unsupported`, `request.body.too_large`,

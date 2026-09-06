@@ -224,6 +224,13 @@ to `text/plain` for primitives, `application/octet-stream` for binary strings,
 Unsupported styles, malformed boundaries, duplicate scalar parts, and invalid
 part content fail closed as `request.body.decode`.
 
+A parameter name that occurs more than once, where its style admits a single
+value, is a violation rather than a value. `?n=5&n=999` is a well-formed query
+whose meaning depends on the runtime — PHP keeps the last occurrence, Go the
+first, Node both — so reading either one would let a request satisfy the
+contract with one value and hand the application another. An exploded list is
+untouched: repeating the name is what that style means.
+
 A `content` map is matched by specificity, not by the order its keys were
 written in: an exact `type/subtype` wins over `type/*+suffix`, which wins over
 `type/*`, which wins over `*/*`; only equally specific keys are settled by
@@ -272,6 +279,7 @@ may be reworded in any release, so pin codes rather than text.
 | `request.operation.unknown` | no operation matches the request |
 | `request.server.mismatch` | the path matches, but no declared server does |
 | `request.parameter.missing` | a `required` parameter is absent |
+| `request.parameter.duplicate` | a name carries more than one value where its style admits one |
 | `request.parameter.serialization` | a parameter value cannot be deserialized in its style |
 | `request.parameter.schema` | a parameter value does not satisfy its schema |
 | `request.body.missing` | a `required` body is empty |

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Tests;
 
+use Rasuvaeff\OpenApiContract\Internal\Serialization\DuplicateParameterValue;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
@@ -17,6 +18,7 @@ use Testo\Data\DataProvider;
 use Testo\Test;
 
 #[Test]
+#[Covers(DuplicateParameterValue::class)]
 #[Covers(ParameterCodec::class)]
 #[Covers(ParameterKind::class)]
 #[Covers(ParameterStyle::class)]
@@ -223,6 +225,39 @@ final class ParameterCodecTest
                 [1, self::case('deep object', $object, ParameterStyle::DeepObject, explode: true, kind: ParameterKind::Object)],
             ]),
         ];
+    }
+
+    /**
+     * A name that carries two values is ambiguous on the wire, and which one
+     * the application reads is a property of its runtime, not of the request:
+     * PHP keeps the last, Go the first, Node both. The codec refuses instead
+     * of picking.
+     */
+    #[DataProvider('duplicateWireProvider')]
+    public function refusesANameThatCarriesMoreThanOneValue(string $wire, ParameterStyle $style, bool $explode, ParameterKind $kind, bool $refused): void
+    {
+        $codec = new ParameterCodec();
+
+        try {
+            $codec->parse('n', $wire, $style, $explode, $kind);
+            Assert::false($refused);
+        } catch (DuplicateParameterValue $exception) {
+            Assert::true($refused);
+            Assert::same($exception->getMessage(), 'Parameter "n" occurs more than once');
+        }
+    }
+
+    /** @return iterable<string, array{string, ParameterStyle, bool, ParameterKind, bool}> */
+    public static function duplicateWireProvider(): iterable
+    {
+        yield 'form scalar once' => ['n=5', ParameterStyle::Form, false, ParameterKind::Scalar, false];
+        yield 'form scalar twice' => ['n=5&n=999', ParameterStyle::Form, false, ParameterKind::Scalar, true];
+        yield 'form scalar three times' => ['n=5&n=6&n=7', ParameterStyle::Form, false, ParameterKind::Scalar, true];
+        yield 'unexploded list twice' => ['n=a,b&n=c', ParameterStyle::Form, false, ParameterKind::List, true];
+        // The exploded list is the one style where the repetition is the point.
+        yield 'exploded list twice' => ['n=a&n=b', ParameterStyle::Form, true, ParameterKind::List, false];
+        yield 'pipe delimited twice' => ['n=a|b&n=c', ParameterStyle::PipeDelimited, false, ParameterKind::List, true];
+        yield 'matrix scalar twice' => [';n=1;n=2', ParameterStyle::Matrix, false, ParameterKind::Scalar, true];
     }
 
     public function serializesExactWireFormats(): void
