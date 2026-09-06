@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Changed.** The refusal of a document without `paths` says why: a 3.1
+  document may legally declare only `webhooks` or `components`, and it is this
+  package that has nothing to validate, not the document that is malformed.
+  The README now also draws the line the package draws — it checks what a
+  verdict about a message depends on, and leaves what only affects
+  documentation to a linter.
+
 - **Fixed.** The same parameter declared twice inside one `parameters` list is
   rejected. A parameter is unique by name and location, and reading the last
   declaration silently dropped whichever was stricter — a document could

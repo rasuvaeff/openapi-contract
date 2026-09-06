@@ -60,7 +60,13 @@ final readonly class DocumentCompiler
         $dialect = str_starts_with($version, '3.0.') ? SchemaDialect::OpenApi30 : SchemaDialect::OpenApi31;
         $this->assertDocumentDialect($document, $dialect);
         if (!isset($document['paths']) || !is_array($document['paths']) || $document['paths'] === []) {
-            throw new InvalidContract('OpenAPI document must contain a non-empty paths object');
+            // A 3.1 document may legally carry only `webhooks` or `components`
+            // — it is the *validator* that has nothing to work with, not the
+            // document that is malformed, and the message should say which.
+            throw new InvalidContract(
+                'OpenAPI document must contain a non-empty paths object: this package validates path operations, '
+                . 'and a document declaring only webhooks or components has none',
+            );
         }
 
         $resolver = new JsonPointerResolver($document, $dialect, graph: $graph);
