@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A `content` map is matched by specificity instead of by the order
+  its keys happen to be written in. A `*/*` entry above an exact media type
+  used to decide the body's schema, and moving the two lines changed what the
+  document said — while OpenAPI gives a map's key order no meaning at all.
+  Exact `type/subtype` now wins over `type/*+suffix`, which wins over `type/*`,
+  which wins over `*/*`; only equally specific keys fall back to declaration
+  order.
+
 - **Fixed.** `$ref` siblings are read by the dialect the document declares and
   by the position the node sits in. Every reference used to be merged with its
   siblings winning, which is not what any of the four cases says: OAS 3.0

@@ -205,6 +205,12 @@ to `text/plain` for primitives, `application/octet-stream` for binary strings,
 Unsupported styles, malformed boundaries, duplicate scalar parts, and invalid
 part content fail closed as `request.body.decode`.
 
+A `content` map is matched by specificity, not by the order its keys were
+written in: an exact `type/subtype` wins over `type/*+suffix`, which wins over
+`type/*`, which wins over `*/*`; only equally specific keys are settled by
+declaration order. Declaring a wildcard above an exact media type therefore
+says the same thing as declaring it below one.
+
 A declared non-JSON media type on either side (`text/plain`, `text/csv`,
 `application/octet-stream`, ...) is validated as far as its schema allows:
 without a schema the body is opaque and passes; with a string-typed schema

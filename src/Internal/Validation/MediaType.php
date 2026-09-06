@@ -30,17 +30,38 @@ final readonly class MediaType
      */
     public static function matches(string $declared, string $actual): bool
     {
+        return self::specificity($declared, $actual) !== null;
+    }
+
+    /**
+     * How specifically a declared `content` key covers an actual media type,
+     * or `null` when it does not cover it at all; a larger answer is the more
+     * specific declaration.
+     *
+     * A `content` map is a map, and OpenAPI gives no meaning to the order its
+     * keys were written in. Taking the first key that matched meant a `*\/*`
+     * entry above an exact one decided the body's schema, and moving the two
+     * lines changed what the document said.
+     */
+    public static function specificity(string $declared, string $actual): ?int
+    {
         $declared = self::normalize($declared);
-        if ($declared === $actual || $declared === '*/*') {
-            return true;
+        if ($declared === $actual) {
+            return 3;
+        }
+        if ($declared === '*/*') {
+            return 0;
         }
         [$declaredType, $declaredSubtype] = array_pad(explode('/', $declared, 2), 2, '');
         [$actualType, $actualSubtype] = array_pad(explode('/', $actual, 2), 2, '');
         if ($declaredType !== $actualType) {
-            return false;
+            return null;
+        }
+        if ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json')) {
+            return 2;
         }
 
-        return $declaredSubtype === '*' || ($declaredSubtype === '*+json' && str_ends_with($actualSubtype, '+json'));
+        return $declaredSubtype === '*' ? 1 : null;
     }
 
     /**
