@@ -62,6 +62,15 @@ that answers `UnknownOperation` to every request; and a YAML file that does
 not parse is reported as `InvalidContract`, never as the parser's own
 exception type.
 
+`$ref` siblings are read by the dialect the document declares. In 3.0 they are
+ignored everywhere — the specification says a Reference Object's added
+properties "SHALL be ignored", and a 3.0 Schema Object holds a Reference
+Object rather than a 2020-12 schema. In 3.1 a Reference Object keeps only
+`summary` and `description`, which override the referenced ones, while a
+Schema Object's siblings apply *in addition* to what the reference brings, as
+2020-12 requires: `{$ref: Count, maximum: 10}` asserts both `Count` and the
+maximum, and compiles to the corresponding `allOf`.
+
 `fromFile()` also resolves relative `$ref`s to sibling JSON/YAML files.
 Every referenced file must stay inside the entry file's directory tree:
 absolute paths, URI schemes, percent-encoded paths, traversal, and symlink

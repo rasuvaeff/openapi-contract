@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Reference;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 
 /**
@@ -16,6 +17,37 @@ use Rasuvaeff\OpenApiContract\InvalidContract;
  */
 final class JsonPointerResolver
 {
+    /**
+     * Keywords that assert nothing about an instance, plus the two OAS reads
+     * directionally. They are lifted to the top of a merged Schema Object so a
+     * `$ref` carrying assertion siblings still reads as one declaration to
+     * everything that looks at a schema without evaluating it — the
+     * directional rewrite, and the parameter decoder deciding whether a wire
+     * value is a scalar, a list or an object.
+     */
+    private const array SCHEMA_ANNOTATIONS = [
+        '$comment',
+        'default',
+        'deprecated',
+        'description',
+        'example',
+        'examples',
+        'externalDocs',
+        'readOnly',
+        'title',
+        'writeOnly',
+        'xml',
+    ];
+
+    /**
+     * Assertions lifted from the *referenced* schema alongside them. Asserting
+     * one of these twice asserts nothing new — the referenced schema is a
+     * member of the conjunction already — but the decoder reads them off the
+     * top of the node, and a value decoded as the wrong shape fails a check it
+     * should have passed.
+     */
+    private const array SCHEMA_DECODING_KEYWORDS = ['type', 'items', 'properties'];
+
     private int $resolvedNodes = 0;
 
     /**
@@ -23,6 +55,7 @@ final class JsonPointerResolver
      */
     public function __construct(
         private readonly array $document,
+        private readonly SchemaDialect $dialect = SchemaDialect::OpenApi31,
         private readonly int $maximumReferenceDepth = 32,
         private readonly int $maximumResolvedNodes = 100_000,
         private readonly ?DocumentGraph $graph = null,
@@ -37,12 +70,14 @@ final class JsonPointerResolver
 
     /**
      * @param array<array-key, mixed> $node
+     * @param bool $inSchema whether the node sits in a Schema Object position;
+     *        `$ref` means different things there and in a Reference Object one
      *
      * @return array<array-key, mixed>
      */
-    public function resolve(array $node, int $referenceDepth = 0): array
+    public function resolve(array $node, int $referenceDepth = 0, bool $inSchema = false): array
     {
-        return $this->resolveIn($node, $this->graph?->entryPath() ?? '', $referenceDepth);
+        return $this->resolveIn($node, $this->graph?->entryPath() ?? '', $referenceDepth, $inSchema);
     }
 
     /**
@@ -50,7 +85,7 @@ final class JsonPointerResolver
      *
      * @return array<array-key, mixed>
      */
-    private function resolveIn(array $node, string $file, int $referenceDepth): array
+    private function resolveIn(array $node, string $file, int $referenceDepth, bool $inSchema): array
     {
         if (++$this->resolvedNodes > $this->maximumResolvedNodes) {
             throw new InvalidContract(sprintf(
@@ -67,20 +102,70 @@ final class JsonPointerResolver
 
             $resolved = $this->lookup($targetFile, $fragment, $reference, $file);
             if ($targetFile !== $file) {
-                $resolved = $this->resolveIn($resolved, $targetFile, $referenceDepth);
+                $resolved = $this->resolveIn($resolved, $targetFile, $referenceDepth, $inSchema);
             }
-            unset($node['$ref']);
-            $node = [...$resolved, ...$node];
+            $node = $this->merge($node, $resolved, $inSchema);
         }
 
         /** @var mixed $value */
         foreach ($node as $key => $value) {
             if (is_array($value)) {
-                $node[$key] = $this->resolveIn($value, $file, $referenceDepth);
+                // A Schema Object is entered through a `schema` key and never
+                // left: everything below one is a schema too.
+                $node[$key] = $this->resolveIn($value, $file, $referenceDepth, $inSchema || $key === 'schema');
             }
         }
 
         return $node;
+    }
+
+    /**
+     * What a node with a `$ref` means once the reference is resolved. The
+     * answer differs along two axes, and reading every node by the 3.1 Schema
+     * Object rule made the other three wrong in the fail-open direction — a
+     * sibling `type` replaced the referenced constraint instead of being
+     * ignored or applied on top of it.
+     *
+     * | | 3.0 | 3.1 |
+     * |---|---|---|
+     * | Reference Object | siblings ignored | siblings ignored, `summary`/`description` override |
+     * | Schema Object | siblings ignored (JSON Reference) | siblings apply *in addition* (2020-12 applicator) |
+     *
+     * The 3.1 Schema Object case is a conjunction, not an override, so it
+     * compiles to `allOf` — with the referenced schema whole in one member and
+     * the asserting siblings in the other. Annotations and the keywords the
+     * decoder reads are lifted to the top so the node still looks like one
+     * schema to everything that inspects it without evaluating it.
+     *
+     * @param array<array-key, mixed> $node
+     * @param array<array-key, mixed> $resolved
+     *
+     * @return array<array-key, mixed>
+     */
+    private function merge(array $node, array $resolved, bool $inSchema): array
+    {
+        $siblings = $node;
+        unset($siblings['$ref']);
+        if ($this->dialect === SchemaDialect::OpenApi30 || $siblings === []) {
+            // OAS 3.0.4: "This object cannot be extended with additional
+            // properties, and any properties added SHALL be ignored" — and a
+            // 3.0 Schema Object holds a Reference Object, not a 2020-12 schema.
+            return $resolved;
+        }
+        if (!$inSchema) {
+            return [...$resolved, ...array_intersect_key($siblings, ['summary' => null, 'description' => null])];
+        }
+        $annotations = array_intersect_key($siblings, array_flip(self::SCHEMA_ANNOTATIONS));
+        $assertions = array_diff_key($siblings, $annotations);
+        if ($assertions === []) {
+            return [...$resolved, ...$annotations];
+        }
+
+        return [
+            'allOf' => [$resolved, $assertions],
+            ...array_intersect_key($resolved, array_flip([...self::SCHEMA_ANNOTATIONS, ...self::SCHEMA_DECODING_KEYWORDS])),
+            ...$annotations,
+        ];
     }
 
     /**

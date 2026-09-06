@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
@@ -101,6 +102,130 @@ final class JsonPointerResolverTest
 
         Assert::same($resolver->resolve(['$ref' => '#/t']), ['p' => 1, 'q' => 2]);
         Assert::same($resolver->resolve(['m' => 1, 'n' => 2]), ['m' => 1, 'n' => 2]);
+    }
+
+    public function ignoresSiblingsOfAReferenceUnderOpenApi30(): void
+    {
+        // OAS 3.0.4, Reference Object: "This object cannot be extended with
+        // additional properties, and any properties added SHALL be ignored" —
+        // and a 3.0 Schema Object holds a Reference Object, not a 2020-12
+        // schema, so the rule is the same in both positions.
+        $resolver = new JsonPointerResolver(
+            document: ['a' => ['type' => 'string', 'description' => 'referenced']],
+            dialect: SchemaDialect::OpenApi30,
+        );
+        $node = ['$ref' => '#/a', 'type' => 'integer', 'description' => 'mine'];
+
+        Assert::same($resolver->resolve($node), ['type' => 'string', 'description' => 'referenced']);
+        Assert::same($resolver->resolve($node, inSchema: true), ['type' => 'string', 'description' => 'referenced']);
+    }
+
+    public function keepsOnlySummaryAndDescriptionOnA31ReferenceObject(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['a' => ['description' => 'referenced', 'required' => true]]);
+
+        Assert::same(
+            $resolver->resolve(['$ref' => '#/a', 'description' => 'mine', 'summary' => 'short', 'required' => false]),
+            ['description' => 'mine', 'required' => true, 'summary' => 'short'],
+        );
+    }
+
+    public function appliesSchemaSiblingsInAdditionUnderOpenApi31(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['a' => [
+            'type' => 'object',
+            'properties' => ['id' => ['type' => 'integer']],
+            'readOnly' => true,
+        ]]);
+
+        // Annotations alone read as one schema; nothing is asserted twice.
+        Assert::same(
+            $resolver->resolve(['$ref' => '#/a', 'title' => 'mine'], inSchema: true),
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']], 'readOnly' => true, 'title' => 'mine'],
+        );
+
+        // An asserting sibling is a conjunction, not an override: 2020-12
+        // makes `$ref` an applicator, so both constrain the instance.
+        $conjunction = $resolver->resolve(['$ref' => '#/a', 'additionalProperties' => false, 'title' => 'mine'], inSchema: true);
+        Assert::same($conjunction['allOf'], [
+            ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']], 'readOnly' => true],
+            ['additionalProperties' => false],
+        ]);
+        // Lifted so the node still reads as one schema to the directional
+        // rewrite and to the parameter decoder.
+        Assert::same($conjunction['type'], 'object');
+        Assert::same($conjunction['properties'], ['id' => ['type' => 'integer']]);
+        Assert::true($conjunction['readOnly']);
+        Assert::same($conjunction['title'], 'mine');
+        Assert::false(array_key_exists('$ref', $conjunction));
+    }
+
+    public function keepsAChainedReferenceInsideTheConjunction(): void
+    {
+        $resolver = new JsonPointerResolver(document: [
+            'a' => ['$ref' => '#/b'],
+            'b' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+        ]);
+
+        // Only what the merged node needs at the top is lifted. Lifting the
+        // reference too would restart the merge from a node that already
+        // carries the conjunction, and nest it inside itself.
+        Assert::same($resolver->resolve(['$ref' => '#/a', 'additionalProperties' => false], inSchema: true), [
+            'allOf' => [
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+                ['additionalProperties' => false],
+            ],
+        ]);
+
+        // A reference that carries an asserting sibling of its own is a
+        // conjunction in its own right, and stays one inside this member.
+        $nested = new JsonPointerResolver(document: [
+            'a' => ['$ref' => '#/b', 'minProperties' => 1],
+            'b' => ['type' => 'object'],
+        ]);
+        Assert::same($nested->resolve(['$ref' => '#/a', 'additionalProperties' => false], inSchema: true), [
+            'allOf' => [
+                ['allOf' => [['type' => 'object'], ['minProperties' => 1]], 'type' => 'object'],
+                ['additionalProperties' => false],
+            ],
+        ]);
+    }
+
+    public function entersSchemaModeThroughASchemaKeyOnly(): void
+    {
+        $resolver = new JsonPointerResolver(document: [
+            's' => ['type' => 'integer'],
+            'p' => ['name' => 'id', 'in' => 'query', 'required' => true],
+        ]);
+
+        Assert::same(
+            $resolver->resolve(['content' => ['application/json' => ['schema' => ['$ref' => '#/s', 'maximum' => 10]]]]),
+            ['content' => ['application/json' => ['schema' => [
+                'allOf' => [['type' => 'integer'], ['maximum' => 10]],
+                'type' => 'integer',
+            ]]]],
+        );
+
+        // Everywhere else the node is a Reference Object, whose added
+        // properties the specification says SHALL be ignored — reading one as
+        // a Schema Object here would quietly make this parameter optional.
+        Assert::same(
+            $resolver->resolve(['parameters' => [['$ref' => '#/p', 'required' => false]]]),
+            ['parameters' => [['name' => 'id', 'in' => 'query', 'required' => true]]],
+        );
+
+        // Schema mode is entered once and never left: a subschema is reached
+        // through keys of its own, none of them spelled `schema`, and at every
+        // depth below the one that entered it.
+        $conjunction = ['allOf' => [['type' => 'integer'], ['maximum' => 10]], 'type' => 'integer'];
+        Assert::same(
+            $resolver->resolve(['schema' => ['type' => 'array', 'items' => ['$ref' => '#/s', 'maximum' => 10]]]),
+            ['schema' => ['type' => 'array', 'items' => $conjunction]],
+        );
+        Assert::same(
+            $resolver->resolve(['schema' => ['type' => 'object', 'properties' => ['n' => ['$ref' => '#/s', 'maximum' => 10]]]]),
+            ['schema' => ['type' => 'object', 'properties' => ['n' => $conjunction]]],
+        );
     }
 
     public function reportsTheUnsupportedReferenceValue(): void

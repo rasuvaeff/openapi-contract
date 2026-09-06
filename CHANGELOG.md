@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** `$ref` siblings are read by the dialect the document declares and
+  by the position the node sits in. Every reference used to be merged with its
+  siblings winning, which is not what any of the four cases says: OAS 3.0
+  ignores added properties on a Reference Object — and a 3.0 Schema Object
+  *is* one — while 3.1 keeps only `summary`/`description` on a Reference
+  Object and makes a Schema Object's siblings apply in addition to the
+  reference, as JSON Schema 2020-12 requires of an applicator. A sibling
+  `type` next to a `$ref` used to silently replace the referenced constraint
+  in a 3.0 document; it is ignored now, and in 3.1 `{$ref: X, maximum: 10}`
+  compiles to the conjunction of both instead of dropping whichever the merge
+  overwrote.
+
 - **Fixed.** A declaration this package cannot read is now rejected where it
   is written, instead of being read as "there is nothing to check here". A
   `requestBody` that is not an object used to compile to no body at all while

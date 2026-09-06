@@ -35,7 +35,7 @@ final readonly class DocumentCompiler
             throw new InvalidContract('OpenAPI document must contain a non-empty paths object');
         }
 
-        $resolver = new JsonPointerResolver($document, graph: $graph);
+        $resolver = new JsonPointerResolver($document, $dialect, graph: $graph);
         $rootServers = $this->servers($document['servers'] ?? null);
         $securitySchemes = (new SecuritySchemeCompiler())->compile($document['components'] ?? null, $dialect, $resolver);
         $schemeNames = array_keys($securitySchemes);
@@ -446,7 +446,7 @@ final readonly class DocumentCompiler
         if (!is_array($value) || array_is_list($value)) {
             throw new InvalidContract('OpenAPI parameter schema must be an object');
         }
-        $schema = $resolver->resolve($value);
+        $schema = $resolver->resolve($value, inSchema: true);
         foreach (array_keys($schema) as $key) {
             if (!is_string($key)) {
                 throw new InvalidContract('OpenAPI schema keys must be strings');
