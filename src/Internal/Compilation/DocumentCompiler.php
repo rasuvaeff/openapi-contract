@@ -22,6 +22,25 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
  */
 final readonly class DocumentCompiler
 {
+    /**
+     * Header parameters both specifications tell a consumer to ignore: HTTP
+     * gives these three a meaning of their own, and OpenAPI describes them
+     * elsewhere — content negotiation by the `content` map, authentication by
+     * the security schemes.
+     *
+     * @var list<string>
+     */
+    private const array IGNORED_HEADER_PARAMETERS = ['accept', 'authorization', 'content-type'];
+
+    /**
+     * Methods for which OAS 3.0 says `requestBody` "SHALL be ignored by
+     * consumers". 3.1 permits it instead ("does not have well-defined
+     * semantics and SHOULD be avoided"), so the rule is dialect-gated.
+     *
+     * @var list<string>
+     */
+    private const array BODYLESS_METHODS_IN_30 = ['delete', 'get', 'head'];
+
     /** Keywords whose value is one subschema. @var list<string> */
     private const array SINGLE_SUBSCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not'];
 
@@ -120,7 +139,9 @@ final readonly class DocumentCompiler
                     method: strtoupper($method),
                     path: $pathString,
                     parameters: $parameters,
-                    requestBody: $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
+                    requestBody: $dialect === SchemaDialect::OpenApi30 && in_array($method, self::BODYLESS_METHODS_IN_30, strict: true)
+                        ? []
+                        : $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
                     serverBases: array_map(static fn(array $server): string => $server['base'], $servers),
                     security: array_key_exists('security', $raw)
@@ -309,6 +330,14 @@ final readonly class DocumentCompiler
         $in = $raw['in'] ?? null;
         if (!is_string($name) || $name === '' || !is_string($in) || !in_array($in, ['path', 'query', 'header', 'cookie'], strict: true)) {
             throw new InvalidContract('OpenAPI parameter must have a valid name and location');
+        }
+        if ($in === 'header' && in_array(strtolower($name), self::IGNORED_HEADER_PARAMETERS, strict: true)) {
+            // "the parameter definition SHALL be ignored" — both dialects, in
+            // the same words. Enforcing it turned a conforming request into
+            // three violations, and a document that declares `Authorization`
+            // as a header parameter (a common habit) into one that demands the
+            // header everywhere.
+            return [];
         }
         /** @var mixed $schemaValue */
         $schemaValue = $raw['schema'] ?? null;

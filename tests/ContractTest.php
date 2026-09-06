@@ -1072,6 +1072,62 @@ final class ContractTest
         Assert::same($contract->operations()[0]->parameters[0]['examples'], ['sample' => ['summary' => 's', 'value' => 'hello']]);
     }
 
+    /**
+     * Both specifications, in the same words: "If `in` is `"header"` and the
+     * `name` field is `"Accept"`, `"Content-Type"` or `"Authorization"`, the
+     * parameter definition SHALL be ignored." HTTP gives those three a meaning
+     * of their own, and OpenAPI describes them elsewhere.
+     */
+    #[DataProvider('ignoredHeaderProvider')]
+    public function ignoresTheHeaderParametersTheSpecificationReserves(string $name, bool $ignored): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => $name, 'in' => 'header', 'required' => true, 'schema' => ['type' => 'integer']]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        Assert::same($contract->operations()[0]->parameters === [], $ignored);
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/h'))->isValid(), $ignored);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function ignoredHeaderProvider(): iterable
+    {
+        yield 'Accept' => ['Accept', true];
+        yield 'Content-Type' => ['Content-Type', true];
+        yield 'Authorization' => ['Authorization', true];
+        yield 'any case spelling' => ['authorization', true];
+        yield 'a header of the same family that is not reserved' => ['Accept-Language', false];
+        yield 'an ordinary header' => ['X-Trace', false];
+    }
+
+    /**
+     * The dialects disagree, so the package follows each: OAS 3.0 says
+     * `requestBody` on GET, HEAD and DELETE "SHALL be ignored by consumers",
+     * while 3.1 permits it and only advises against it.
+     */
+    #[DataProvider('bodylessMethodProvider')]
+    public function readsARequestBodyOnABodylessMethodByDialect(string $version, string $method, bool $valid): void
+    {
+        $contract = Contract::fromArray(['openapi' => $version, 'paths' => ['/g' => [strtolower($method) => [
+            'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => ['type' => 'object']]]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        Assert::same($contract->validateRequest(new ServerRequest($method, '/g'))->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function bodylessMethodProvider(): iterable
+    {
+        yield '3.0 GET' => ['3.0.3', 'GET', true];
+        yield '3.0 HEAD' => ['3.0.3', 'HEAD', true];
+        yield '3.0 DELETE' => ['3.0.3', 'DELETE', true];
+        yield '3.0 POST is unaffected' => ['3.0.3', 'POST', false];
+        yield '3.1 GET is validated' => ['3.1.0', 'GET', false];
+        yield '3.1 POST' => ['3.1.0', 'POST', false];
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {
