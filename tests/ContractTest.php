@@ -847,6 +847,95 @@ final class ContractTest
         ];
     }
 
+    /**
+     * A subschema is checked where the document is compiled, not on the first
+     * message that reaches it. Read lazily, an unreadable `items` surfaced as
+     * "this response header cannot be deserialized" or "this form property
+     * cannot be deserialized" — the document's defect blamed on the traffic.
+     */
+    #[DataProvider('malformedSubschemaProvider')]
+    public function rejectsAnUnreadableSubschemaWhereItIsWritten(array $document, string $message): void
+    {
+        try {
+            Contract::fromArray($document);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), $message);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function malformedSubschemaProvider(): iterable
+    {
+        $broken = [['type' => 'string']];
+        $response = static fn(array $definition): array => ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'responses' => ['200' => $definition],
+        ]]]];
+        $body = static fn(array $schema): array => ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+            'requestBody' => ['content' => ['application/json' => ['schema' => $schema]]],
+            'responses' => ['204' => []],
+        ]]]];
+
+        yield 'items of a parameter schema' => [
+            ['openapi' => '3.1.0', 'paths' => ['/q' => ['get' => [
+                'parameters' => [['name' => 'ids', 'in' => 'query', 'schema' => ['type' => 'array', 'items' => $broken]]],
+                'responses' => ['204' => []],
+            ]]]],
+            'OpenAPI items of parameter schema must be an object',
+        ];
+        yield 'items of a response header schema' => [
+            $response(['headers' => ['X-Tags' => ['schema' => ['type' => 'array', 'items' => $broken]]]]),
+            'OpenAPI items of header "X-Tags" of response "200" of operation GET /h must be an object',
+        ];
+        yield 'a property of a body schema' => [
+            $body(['type' => 'object', 'properties' => ['tags' => $broken]]),
+            'OpenAPI properties "tags" of media type "application/json" of requestBody of operation POST /b must be an object',
+        ];
+        yield 'a member of allOf' => [
+            $body(['allOf' => [['type' => 'object'], 'invalid']]),
+            'OpenAPI allOf[1] of media type "application/json" of requestBody of operation POST /b must be an object',
+        ];
+        // `oneOf` without an `allOf` before it: the walk must reach every
+        // keyword of the group, not stop at the first one the schema omits.
+        yield 'a member of oneOf' => [
+            $body(['oneOf' => [['type' => 'object'], $broken]]),
+            'OpenAPI oneOf[1] of media type "application/json" of requestBody of operation POST /b must be an object',
+        ];
+        yield 'allOf that is not a list' => [
+            $body(['allOf' => ['a' => ['type' => 'object']]]),
+            'OpenAPI allOf of media type "application/json" of requestBody of operation POST /b must be a list of schemas',
+        ];
+        yield 'additionalProperties of a nested schema' => [
+            $body(['type' => 'object', 'properties' => ['x' => ['type' => 'object', 'additionalProperties' => $broken]]]),
+            'OpenAPI additionalProperties of properties "x" of media type "application/json" of requestBody of operation POST /b must be an object',
+        ];
+        yield 'keys of a nested schema' => [
+            $body(['type' => 'object', 'properties' => ['x' => ['type' => 'string', 0 => 'malformed']]]),
+            'OpenAPI schema keys of properties "x" of media type "application/json" of requestBody of operation POST /b must be strings',
+        ];
+    }
+
+    /**
+     * The readable-but-unconstraining forms a subschema may take, so the walk
+     * above cannot be tightened into rejecting legal documents.
+     */
+    public function compilesSubschemasThatAreReadable(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+            'requestBody' => ['content' => ['application/json' => ['schema' => [
+                'type' => 'object',
+                'properties' => ['x' => true, 'y' => ['type' => 'string'], '2020' => ['type' => 'integer']],
+                'additionalProperties' => false,
+                'not' => ['type' => 'null'],
+                'allOf' => [['type' => 'object']],
+                '$defs' => ['Named' => ['type' => 'string']],
+            ]]]],
+            'responses' => ['204' => []],
+        ]]]]);
+
+        Assert::same(count($contract->operations()), 1);
+    }
+
     public function rejectsMalformedResponseContentAndSchemaKeys(): void
     {
         try {
