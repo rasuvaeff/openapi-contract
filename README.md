@@ -54,6 +54,13 @@ caller can catch the package as one type: `InvalidContract` (with
 what they were — `\InvalidArgumentException` and `\RuntimeException` — so
 existing catches keep working.
 
+A header parameter named `Accept`, `Content-Type` or `Authorization` is
+ignored, as both specifications require: HTTP gives those three a meaning of
+their own, and OpenAPI describes them elsewhere — content negotiation by the
+`content` map, authentication by the security schemes. Under OAS 3.0 a
+`requestBody` on `GET`, `HEAD` or `DELETE` is ignored too, which is what that
+dialect tells consumers to do; OAS 3.1 permits it and it is validated.
+
 Every path-template placeholder must have an effective `in: path` parameter
 with the same name and explicit `required: true`; extra path parameters are
 rejected while compiling the contract.

@@ -32,6 +32,9 @@ Rules:
 - a `pattern` from the document runs in the backend's `preg_match`; a contract
   is a trusted input, and PHP's `pcre.backtrack_limit` bounds each match
   fail-closed rather than hanging;
+- a header parameter named `Accept`, `Content-Type` or `Authorization` is
+  ignored (both specifications say so), and under OAS 3.0 a `requestBody` on
+  GET/HEAD/DELETE is ignored too — 3.1 permits it and validates it;
 - each path-template placeholder requires an effective same-named `in: path`
   parameter with explicit `required: true`; extra path parameters fail at
   contract compilation;

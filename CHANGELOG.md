@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A header parameter named `Accept`, `Content-Type` or
+  `Authorization` is ignored, as both specifications say in the same words.
+  Enforcing it turned a conforming request into three violations, and a
+  document declaring `Authorization` as a header parameter — a common habit —
+  into one that demanded the header on every request.
+
+- **Fixed.** Under OAS 3.0, `requestBody` on `GET`, `HEAD` and `DELETE` is
+  ignored, which is what that dialect says consumers SHALL do. OAS 3.1 permits
+  it instead and only advises against it, so a 3.1 document is validated as
+  before.
+
 - **Fixed.** `$ref` is resolved only where it is a keyword. The resolver walked
   every array and read any map carrying a `$ref` member as a reference, so a
   document that merely *showed* such a payload — in an `example`, in an Example
