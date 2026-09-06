@@ -23,6 +23,15 @@ Rules:
   the entry file's directory tree; absolute paths, URI schemes,
   percent-encoded paths, traversal, and symlink escapes are rejected before
   reading, while `fromArray()`/`fromJson()` accept same-document refs only;
+- Path Item and Operation `parameters` merge by location and name, the
+  Operation's declaration replacing the Path Item's; a pair declared twice
+  inside one list is not an error and the last declaration wins;
+- a request URI without an authority is matched by path alone: a relative
+  server and a host-agnostic request are not rejected for failing to name a
+  host the request never claimed;
+- a `pattern` from the document runs in the backend's `preg_match`; a contract
+  is a trusted input, and PHP's `pcre.backtrack_limit` bounds each match
+  fail-closed rather than hanging;
 - each path-template placeholder requires an effective same-named `in: path`
   parameter with explicit `required: true`; extra path parameters fail at
   contract compilation;
@@ -120,6 +129,10 @@ API reference:
   headers (required presence, `simple`-style value decoding and schema in
   the response direction), media types (`application/json` and `*+json`),
   body schema.
+- `Operation::responseFor(int $status): ?array` — the Response Object a
+  status resolves to (`['key' => ..., 'definition' => ...]`), by the same
+  exact/`NXX`/`default` selection response validation uses; `null` when the
+  status is undeclared or is not an HTTP status at all;
 - `Contract::validateResponse(string $operationKey, Response): ValidationResult`
   — validates a response fixture without a request; unknown keys yield one
   `response.operation.unknown` violation. Response selection remains exact,
@@ -159,11 +172,27 @@ API reference:
   `response.body.schema`), `operation`, `location`, `instancePath`,
   `specPointer` (JSON Pointer into the document), `expected`, `actual`
   (bounded), `message`.
+- Violation codes (complete set; the code is the stable contract, the
+  formatter's message text is a diagnostic that may be reworded):
+  `request.operation.unknown`, `request.server.mismatch`,
+  `request.parameter.missing`, `request.parameter.serialization`,
+  `request.parameter.schema`, `request.body.missing`,
+  `request.body.media_type`, `request.body.json`, `request.body.decode`,
+  `request.body.schema`, `request.body.unsupported`, `request.body.too_large`,
+  `request.body.non_seekable`, `request.body.unreadable`,
+  `response.operation.unknown`, `response.status.invalid`,
+  `response.status.mismatch`, `response.header.missing`,
+  `response.header.serialization`, `response.header.schema`,
+  `response.header.unsupported`, `response.body.missing`,
+  `response.body.media_type`, `response.body.json`, `response.body.schema`,
+  `response.body.unsupported`, `response.body.too_large`,
+  `response.body.non_seekable`, `response.body.unreadable`.
 - `ContractViolation::fromResult(ValidationResult)` uses the complete bounded
   formatter output as the exception message.
-- Exceptions: `InvalidContract` (base, extends
-  `\InvalidArgumentException`), `UnsupportedVersion`,
-  `UnsupportedSerialization`, `UnknownOperation`.
+- Exceptions: all implement `ContractException`; `InvalidContract` (base,
+  extends `\InvalidArgumentException`), `UnsupportedVersion`,
+  `UnsupportedSerialization`, `UnknownOperation`, `ContractViolation`
+  (extends `\RuntimeException`).
 
 Example:
 

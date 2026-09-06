@@ -135,12 +135,22 @@ final readonly class ValidationResultFormatter
         return $this->isSensitiveName($violation->instancePath);
     }
 
+    /**
+     * The budget is a byte budget — it exists to bound the message — and the
+     * value handed here is always `json_encode` output, which escapes every
+     * non-ASCII character as `\uXXXX`. Cutting it therefore cannot split a
+     * UTF-8 sequence, and the rendered message is valid UTF-8 whatever the
+     * document and the payload contained. What a cut *can* land inside is one
+     * of those escapes, which leaves `\u04` where a character was meant, so
+     * a partial escape at the end is dropped rather than shown.
+     */
     private function truncate(string $value, int $bytes): string
     {
         if (strlen($value) <= $bytes) {
             return $value;
         }
+        $cut = substr($value, 0, $bytes - 3);
 
-        return substr($value, 0, $bytes - 3) . '...';
+        return (preg_replace('/(?<!\\\\)\\\\(?:u[0-9a-fA-F]{0,3})?$/', '', $cut) ?? $cut) . '...';
     }
 }
