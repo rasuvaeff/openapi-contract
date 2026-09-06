@@ -331,6 +331,22 @@ final readonly class ResponseValidator
         SchemaDialect $dialect,
         string $pointer,
     ): array {
+        if ($this->declaresNothingValid($header)) {
+            // The boolean schema `false` admits no value at all, and the
+            // header arrived. A body declaring it has always been fail-closed;
+            // a header declaring it used to read as "no schema here" and
+            // assert only presence.
+            return [new Violation(
+                code: 'response.header.schema',
+                operation: $matched->operation->key,
+                location: 'header',
+                instancePath: $name,
+                specPointer: $pointer . '/schema',
+                expected: false,
+                actual: $wire,
+                message: sprintf('Response header "%s" does not match its schema', $name),
+            )];
+        }
         $schema = $this->declaredSchema($header);
         $style = $header['style'] ?? 'simple';
         if ($schema === null || $style !== 'simple') {
