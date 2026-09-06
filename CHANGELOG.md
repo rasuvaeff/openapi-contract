@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A trailing slash is part of the path. `/pets` and `/pets/` are
+  different resources to RFC 3986 and to every router an application sits
+  behind; matching trimmed both ends of both sides, so a document declaring
+  both compiled and then answered both requests with the same operation,
+  leaving the other unreachable.
+
+- **Fixed.** The diagnostic for an unmatched request carries the path, not the
+  whole URI. The query string is where an API key travels, and the rendered
+  message is what `ContractViolation` carries into an application's log — the
+  redaction that guards `actual` used to find the credential inside
+  `instancePath` and redact the line below while printing this one.
+
 - **Fixed.** A Schema Object is checked all the way down where the document is
   compiled, not on the first message that happens to reach a subschema. An
   `items` or `properties` member the package cannot read used to survive

@@ -287,6 +287,13 @@ final readonly class Contract
 
     private function unmatchedResult(RequestInterface $request, bool $serverMismatch): ValidationResult
     {
+        // The path, never the whole URI: a query string is where an API key
+        // travels, and this diagnostic is rendered verbatim into the message
+        // that `ContractViolation` carries and an application logs. The
+        // redaction that guards `actual` cannot help a field printed beside
+        // it — it used to find `api_key` *inside* this very value and redact
+        // the line below while printing this one.
+        $path = $request->getUri()->getPath();
         if ($serverMismatch) {
             $authority = $request->getUri()->getScheme() . '://' . $request->getUri()->getAuthority();
 
@@ -294,13 +301,13 @@ final readonly class Contract
                 code: 'request.server.mismatch',
                 operation: 'unknown',
                 location: 'request',
-                instancePath: (string) $request->getUri(),
+                instancePath: $path,
                 specPointer: '/servers',
                 expected: 'declared server',
                 actual: $authority,
                 message: sprintf(
                     'Path %s is declared, but no server of its operations matches %s',
-                    $request->getUri()->getPath(),
+                    $path,
                     $authority,
                 ),
             )]);
@@ -310,19 +317,21 @@ final readonly class Contract
             code: 'request.operation.unknown',
             operation: 'unknown',
             location: 'request',
-            instancePath: (string) $request->getUri(),
+            instancePath: $path,
             specPointer: '/paths',
             expected: 'declared operation',
-            actual: strtoupper($request->getMethod()) . ' ' . $request->getUri()->getPath(),
-            message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()),
+            actual: strtoupper($request->getMethod()) . ' ' . $path,
+            message: sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $path),
         )]);
     }
 
-    /** @return array<string, string>|null */
+    /**
+     * @return array<string, string>|null
+     */
     private function matchPath(string $route, string $requestPath): ?array
     {
-        $routeParts = explode('/', trim($route, '/'));
-        $requestParts = explode('/', trim($requestPath, '/'));
+        $routeParts = $this->segments($route);
+        $requestParts = $this->segments($requestPath);
         if (count($routeParts) !== count($requestParts)) {
             return null;
         }
@@ -351,6 +360,22 @@ final readonly class Contract
         }
 
         return $params;
+    }
+
+    /**
+     * The segments of a path, with a trailing slash kept as the empty segment
+     * it is: RFC 3986 makes `/pets` and `/pets/` different resources, and so
+     * does every router the application sits behind. Trimming both ends — as
+     * this did — let a document declaring both compile and then answer both
+     * requests with whichever route sorted first, leaving the other operation
+     * unreachable. Nothing is stripped: both sides are split the same way, so
+     * the leading empty segment cancels out and the trailing one does not.
+     *
+     * @return list<string>
+     */
+    private function segments(string $path): array
+    {
+        return explode('/', $path);
     }
 
     /**

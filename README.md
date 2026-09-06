@@ -120,7 +120,8 @@ them, while the generator package feeds them into its deterministic example
 phase. `MatchedOperation` carries the operation and the raw path parameters
 extracted from the URI. Matching honours server base paths,
 prefers concrete paths over templated ones, decodes each segment exactly
-once, and rejects decoded separators that would escape a template slot. A
+once, and rejects decoded separators that would escape a template slot. A trailing slash is part of the path: `/pets` and `/pets/` are different
+resources, as RFC 3986 has them. A
 placeholder may share its segment with literals (`/report.{format}`,
 `/v{version}/items`, `/{a}-{b}`); the literal runs are matched as written.
 
