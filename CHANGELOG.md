@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** The same parameter declared twice inside one `parameters` list is
+  rejected. A parameter is unique by name and location, and reading the last
+  declaration silently dropped whichever was stricter — a document could
+  narrow a parameter and have the narrowing disappear. Across the two lists
+  the Operation's declaration still replaces the Path Item's, which is the
+  specification's own rule; header names are compared case-insensitively, so
+  `X-Trace` and `x-trace` are one parameter.
+
 - **Fixed.** A header parameter named `Accept`, `Content-Type` or
   `Authorization` is ignored, as both specifications say in the same words.
   Enforcing it turned a conforming request into three violations, and a

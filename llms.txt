@@ -24,8 +24,9 @@ Rules:
   percent-encoded paths, traversal, and symlink escapes are rejected before
   reading, while `fromArray()`/`fromJson()` accept same-document refs only;
 - Path Item and Operation `parameters` merge by location and name, the
-  Operation's declaration replacing the Path Item's; a pair declared twice
-  inside one list is not an error and the last declaration wins;
+  Operation's declaration replacing the Path Item's; the same pair declared
+  twice inside ONE list is `InvalidContract` (header names compare
+  case-insensitively);
 - a request URI without an authority is matched by path alone: a relative
   server and a host-agnostic request are not rejected for failing to name a
   host the request never claimed;
