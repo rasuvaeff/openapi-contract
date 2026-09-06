@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A response header declaring the boolean schema `false` fails
+  closed when the header arrives, as a body declaring it always has. It used to
+  read as "no schema here" and assert presence only.
+
+- **Fixed.** The request path comes from the URI rather than from
+  `parse_url()` on the rendered URI, which reads a scheme where a relative
+  path's first segment carries a colon.
+
+- **Added.** The README says what the package does not do: declared `security`
+  is compiled but never enforced — a request missing its credential validates
+  clean — and `allowReserved` is an annotation validation does not read, like
+  `example`/`examples`.
+
 - **Fixed.** A trailing slash is part of the path. `/pets` and `/pets/` are
   different resources to RFC 3986 and to every router an application sits
   behind; matching trimmed both ends of both sides, so a document declaring

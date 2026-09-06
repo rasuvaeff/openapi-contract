@@ -63,6 +63,14 @@ Rules:
   schema validation or diagnostics;
 - `readOnly`/`writeOnly` properties apply directionally to request/response
   effective schemas;
+- declared `security` is NOT enforced: requirements compile and are checked
+  for referencing a declared scheme, but a request missing its credential
+  validates clean — authorization is the application's middleware, not this
+  package;
+- `allowReserved` is compiled and exposed on the parameter, never read by
+  validation (an annotation, like `example`/`examples`);
+- a response header declaring the boolean schema `false` fails closed when the
+  header is present, as a body declaring it does;
 - root `security` is inherited by operations; explicit `security: []` marks
   an operation anonymous; credentials live in the generator package;
 - `components.securitySchemes` compile into a typed map: a scheme without a

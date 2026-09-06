@@ -269,6 +269,27 @@ final class ResponseValidationTest
         Assert::same($schema->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/content/application~1json/schema');
     }
 
+    /**
+     * The boolean schema `false` admits no value at all. A body declaring it
+     * has always been fail-closed; a header declaring it used to read as "no
+     * schema here" and assert presence only.
+     */
+    public function refusesAHeaderWhoseSchemaAdmitsNothing(): void
+    {
+        $contract = $this->headerContract(['X-Never' => ['schema' => false]]);
+
+        Assert::true($this->validate($contract, [])->isValid());
+        $present = $this->validate($contract, ['X-Never' => 'anything']);
+        Assert::same($present->violations[0]->code, 'response.header.schema');
+        Assert::same($present->violations[0]->message, 'Response header "X-Never" does not match its schema');
+        Assert::same($present->violations[0]->specPointer, '/paths/~1h/get/responses/200/headers/X-Never/schema');
+        Assert::false($present->violations[0]->expected);
+        Assert::same($present->violations[0]->actual, 'anything');
+
+        // `true` is the unconstrained boolean schema: presence only.
+        Assert::true($this->validate($this->headerContract(['X-Any' => ['schema' => true]]), ['X-Any' => 'anything'])->isValid());
+    }
+
     public function rejectsMalformedHeaderDeclarations(): void
     {
         try {

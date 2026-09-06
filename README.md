@@ -110,7 +110,11 @@ $declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [.
 ```
 
 `Operation` identity is the `operationId` when present, otherwise the stable
-`METHOD /path` fallback. A Path Item's parameters and an Operation's are
+`METHOD /path` fallback. Compiled parameters carry `allowReserved` as an
+annotation, like `example`/`examples`: validation does not read it, because a
+value that leaves a reserved character unencoded cannot be told from the
+delimiter it looks like — the package reads such a query exactly as the SAPI
+does. A Path Item's parameters and an Operation's are
 merged by location and name, and an Operation's declaration replaces the Path
 Item's for the same pair, as the specification requires; two declarations of
 the same pair *within* one list are not an error here — the last one wins —
@@ -311,6 +315,13 @@ may be reworded in any release, so pin codes rather than text.
 | `response.body.unreadable` | the response body stream reports more data and then reads none |
 
 ## Security
+
+**Declared `security` is not enforced.** Requirements are compiled, and a
+requirement naming an undeclared scheme fails the document — but a request
+missing its API key validates clean. This package checks the shape of an
+exchange against the contract, not the authorization of the caller; putting
+credentials on a request belongs to `rasuvaeff/property-testing-openapi`, and
+enforcing them belongs to the application's middleware.
 
 Unsupported contract semantics are never ignored: versions, dialects,
 references, serialization styles, and schema assertions outside the support

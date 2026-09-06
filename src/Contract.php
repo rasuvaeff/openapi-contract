@@ -147,8 +147,12 @@ final readonly class Contract
     private function matchWithDiagnostics(RequestInterface $request): array
     {
         $method = strtoupper($request->getMethod());
-        $path = parse_url((string) $request->getUri(), PHP_URL_PATH);
-        if (!is_string($path) || $path === '') {
+        // The URI's own path, not one parsed back out of the rendered URI:
+        // `parse_url()` reads a scheme where a relative path's first segment
+        // carries a colon, and answers with a different path than the request
+        // declares.
+        $path = $request->getUri()->getPath();
+        if ($path === '') {
             $path = '/';
         }
         $scheme = strtolower($request->getUri()->getScheme());
