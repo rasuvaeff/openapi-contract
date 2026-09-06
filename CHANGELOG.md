@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A declaration this package cannot read is now rejected where it
+  is written, instead of being read as "there is nothing to check here". A
+  `requestBody` that is not an object used to compile to no body at all while
+  the response side rejected the same shape; `parameters` that were not a list
+  vanished; a Media Type Object, `encoding`, `headers` or Schema Object of an
+  unreadable shape was skipped at request time, and the very same document
+  raised a bare `InvalidArgumentException` out of `validateRequest()` while
+  `validateResponse()` called the body valid. All of them are `InvalidContract`
+  from `fromArray()`/`fromJson()`/`fromFile()` now, and the two directions read
+  one document the same way. A schema this package cannot hand to the backend
+  at all — a value JSON cannot encode, which is how YAML's `.nan` and `.inf`
+  arrive — is rejected there too, rather than surfacing as a raw `JsonException`
+  on the first request that happened to use it.
+
+- **Fixed.** A boolean field written as a string (`required: "true"`,
+  `explode: "yes"`) is rejected instead of silently reading as its default,
+  which made a required parameter optional.
+
+- **Fixed.** A document whose `paths` produce no operation at all — path items
+  with no method, or only `x-` keys — is rejected. Such a contract answered
+  `UnknownOperation` to every request, which reads as "this request is wrong"
+  when what is wrong is the document.
+
+- **Fixed.** A YAML file that does not parse leaves `fromFile()` as
+  `InvalidContract` naming the document, with the parser's exception as
+  `previous`. symfony/yaml's `ParseException` used to escape as itself — a
+  third-party type on a public exit, from an optional dependency.
+
+- **Changed.** A response `content` map with nothing in it now means "no media
+  type is declared", so a body that arrives under one is reported as
+  undeclared. It used to skip body validation entirely.
+
 - **Changed.** The generated corpus is re-recorded against
   `property-testing-openapi` at the header decision: 287 cases over 20
   operations, up from 274 over 19. The new operation is `headers.get` — a

@@ -9,6 +9,7 @@ use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
@@ -209,22 +210,43 @@ final class ResponseValidationTest
         Assert::same($schema->violations[0]->specPointer, '/paths/~1a~0b/get/responses/200/content/application~1json/schema');
     }
 
-    public function skipsMalformedAndOptionalHeaderDeclarations(): void
+    public function rejectsMalformedHeaderDeclarations(): void
     {
-        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
-            '204' => ['headers' => [0 => ['required' => true], 'X-Bad' => 'nonarray', 'X-Opt' => []]],
-        ]]]]]);
+        try {
+            $this->headerContract([0 => ['required' => true], 'X-Ok' => []]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI header names of response "200" of operation GET /h must be strings');
+        }
 
-        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(204))->isValid());
+        try {
+            $this->headerContract(['X-Bad' => 'nonarray']);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI header "X-Bad" of response "200" of operation GET /h must be an object');
+        }
+
+        try {
+            $this->headerContract(['X-Bad' => ['schema' => ['type' => 'integer', 0 => 'malformed']]]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema keys of header "X-Bad" of response "200" of operation GET /h must be strings');
+        }
+
+        // A Header Object that declares nothing to check is still a header
+        // this package can read; only the unreadable ones are rejected.
+        Assert::true($this->validate($this->headerContract(['X-Opt' => []]), [])->isValid());
     }
 
-    public function emptyContentMapsSkipBodyValidation(): void
+    public function emptyContentMapsDeclareNoMediaType(): void
     {
-        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
-            '200' => ['content' => []],
-        ]]]]]);
+        $contract = $this->contentContract([]);
 
-        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, [], 'plain'))->isValid());
+        Assert::true($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200))->isValid());
+        // A `content` map with nothing in it declares no media type at all, so
+        // a body that arrives under one is undeclared. Reading the empty map
+        // as "no content section here" skipped the check instead.
+        Assert::same($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, [], 'plain'))->violations[0]->code, 'response.body.media_type');
     }
 
     public function normalizesTheResponseMediaType(): void
@@ -244,13 +266,21 @@ final class ResponseValidationTest
         Assert::same($contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], $deep(64)))->violations[0]->code, 'response.body.json');
     }
 
-    public function toleratesMalformedMediaDefinitionsAndSchemas(): void
+    public function rejectsMalformedMediaDefinitionsAndSchemas(): void
     {
-        $entries = $this->contentContract([0 => ['schema' => ['type' => 'string']], 'application/json' => []]);
-        Assert::true($entries->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '{}'))->isValid());
+        try {
+            $this->contentContract([0 => ['schema' => ['type' => 'string']], 'application/json' => []]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI content keys of response "200" of operation GET /h must be media type strings');
+        }
 
-        $scalarSchema = $this->contentContract(['application/json' => ['schema' => 'invalid']]);
-        Assert::true($scalarSchema->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'application/json'], '{}'))->isValid());
+        try {
+            $this->contentContract(['application/json' => ['schema' => 'invalid']]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI schema of media type "application/json" of response "200" of operation GET /h must be an object');
+        }
     }
 
     public function matchesResponseWildcardAndSuffixDeclarations(): void
@@ -309,10 +339,10 @@ final class ResponseValidationTest
         Assert::same($exchange($this->contentContract(['text/plain' => ['schema' => ['type' => ['string', 'integer']]]]), $plain('1'))->violations[0]->code, 'response.body.unsupported');
     }
 
-    public function checksEveryHeaderDeclarationPastMalformedEntries(): void
+    public function checksEveryDeclaredHeader(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => ['responses' => [
-            '204' => ['headers' => [0 => ['required' => true], 'X-Req' => ['required' => true]]],
+            '204' => ['headers' => ['X-Opt' => [], 'X-Req' => ['required' => true]]],
         ]]]]]);
 
         $result = $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(204));
@@ -425,10 +455,9 @@ final class ResponseValidationTest
         $contract = $this->headerContract([
             'X-Any' => ['required' => true, 'description' => 'no schema'],
             'Content-Type' => ['required' => true, 'schema' => ['type' => 'integer']],
-            'X-Bad' => ['schema' => ['type' => 'integer', 0 => 'malformed']],
         ]);
 
-        Assert::true($this->validate($contract, ['X-Any' => 'anything, at all', 'X-Bad' => 'not an integer'])->isValid());
+        Assert::true($this->validate($contract, ['X-Any' => 'anything, at all'])->isValid());
         Assert::same($this->validate($contract, [])->violations[0]->code, 'response.header.missing');
         Assert::same(count($this->validate($contract, [])->violations), 1);
     }

@@ -50,6 +50,18 @@ Every path-template placeholder must have an effective `in: path` parameter
 with the same name and explicit `required: true`; extra path parameters are
 rejected while compiling the contract.
 
+Declarations are read strictly rather than leniently. A `requestBody`,
+`parameters`, `content`, `encoding`, `headers` or Schema Object whose shape
+this package cannot read is `InvalidContract` at load time, not a silently
+unchecked part of the contract; a boolean field written as a string
+(`required: "true"`) is rejected instead of falling back to its default; a
+schema carrying a value JSON cannot encode (YAML's `.nan` and `.inf`) is
+rejected before it can reach the validation backend; a document whose `paths`
+produce no operation at all is rejected rather than compiled into a contract
+that answers `UnknownOperation` to every request; and a YAML file that does
+not parse is reported as `InvalidContract`, never as the parser's own
+exception type.
+
 `fromFile()` also resolves relative `$ref`s to sibling JSON/YAML files.
 Every referenced file must stay inside the entry file's directory tree:
 absolute paths, URI schemes, percent-encoded paths, traversal, and symlink

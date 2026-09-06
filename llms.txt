@@ -22,6 +22,14 @@ Rules:
 - each path-template placeholder requires an effective same-named `in: path`
   parameter with explicit `required: true`; extra path parameters fail at
   contract compilation;
+- declarations are read strictly: a `requestBody`, `parameters`, `content`,
+  `encoding`, `headers` or Schema Object in a shape this package cannot read
+  is `InvalidContract` at load time (never a silently unchecked part of the
+  contract), a boolean field written as a string is rejected instead of
+  falling back to its default, a schema carrying `.nan`/`.inf` is rejected
+  before reaching the backend, a document whose `paths` yield no operation is
+  rejected, and an unparsable YAML file is `InvalidContract`, not the parser's
+  own exception;
 - OpenAPI 3.0 and 3.1 use separate schema compilation paths (3.0 `nullable`
   and boolean exclusive bounds are normalized; 3.1 rides the 2020-12 base
   dialect);

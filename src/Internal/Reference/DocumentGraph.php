@@ -121,8 +121,18 @@ final class DocumentGraph
             if (!class_exists($yamlClass)) {
                 throw new InvalidContract('YAML loading requires symfony/yaml');
             }
-            /** @var mixed $document */
-            $document = call_user_func([$yamlClass, 'parse'], $contents);
+
+            try {
+                /** @var mixed $document */
+                $document = call_user_func([$yamlClass, 'parse'], $contents);
+            } catch (\RuntimeException $exception) {
+                // symfony/yaml raises `ParseException`, which extends
+                // `RuntimeException`. Naming the class here would make an
+                // optional dependency a required one, and letting it out would
+                // put a third-party type on a public exit the JSON branch
+                // below already keeps inside this package.
+                throw new InvalidContract(sprintf('OpenAPI YAML document "%s" is not valid YAML', $display), (int) $exception->getCode(), previous: $exception);
+            }
             if (!is_array($document) || array_is_list($document)) {
                 throw new InvalidContract(sprintf('OpenAPI YAML document "%s" must decode to an object', $display));
             }

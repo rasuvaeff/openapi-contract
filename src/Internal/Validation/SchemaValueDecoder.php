@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
+use Rasuvaeff\OpenApiContract\InvalidContract;
 
 /**
  * @internal
@@ -75,6 +76,12 @@ final readonly class SchemaValueDecoder
      * has no keywords to decode with, and the backend enforces it — so it
      * answers `null` here instead of raising out of a validation call.
      *
+     * A shape that is neither raises `InvalidContract`: the document said
+     * something this package cannot read, which is a contract error and not a
+     * fault of the message being validated. The compiler rejects every such
+     * declaration it can see, so this exit is reachable only for a schema
+     * nested inside another one and for a hand-built `Operation`.
+     *
      * @return array<string, mixed>|null
      */
     public function schema(mixed $value): ?array
@@ -83,11 +90,11 @@ final readonly class SchemaValueDecoder
             return null;
         }
         if (!is_array($value) || array_is_list($value)) {
-            throw new \InvalidArgumentException('Schema must be an object');
+            throw new InvalidContract('Schema must be an object');
         }
         foreach (array_keys($value) as $key) {
             if (!is_string($key)) {
-                throw new \InvalidArgumentException('Schema keys must be strings');
+                throw new InvalidContract('Schema keys must be strings');
             }
         }
 
