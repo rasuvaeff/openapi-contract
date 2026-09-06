@@ -14,6 +14,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(JsonPointerResolver::class)]
+#[Covers(UnsupportedReference::class)]
 final class JsonPointerResolverTest
 {
     public function resolvesEscapedSameDocumentReferences(): void

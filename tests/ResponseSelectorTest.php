@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use InvalidArgumentException;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
+use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;
@@ -13,6 +14,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(ResponseSelector::class)]
+#[Covers(SelectedResponse::class)]
 final class ResponseSelectorTest
 {
     #[DataProvider('precedenceProvider')]

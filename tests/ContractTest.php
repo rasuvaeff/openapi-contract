@@ -33,6 +33,8 @@ use Testo\Test;
 #[Covers(UnknownOperation::class)]
 #[Covers(UnsupportedSerialization::class)]
 #[Covers(UnsupportedVersion::class)]
+#[Covers(ContractException::class)]
+#[Covers(UnsupportedDialect::class)]
 final class ContractTest
 {
     public function matchesConcretePathBeforeTemplate(): void

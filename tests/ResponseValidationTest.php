@@ -9,7 +9,12 @@ use Nyholm\Psr7\ServerRequest;
 use Nyholm\Psr7\Stream;
 use Psr\Http\Message\StreamInterface;
 use Rasuvaeff\OpenApiContract\Contract;
+use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyTooLarge;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyUnreadable;
+use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
+use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\Understudy\Understudy;
 use Testo\Assert;
@@ -23,6 +28,11 @@ use function Rasuvaeff\Understudy\when;
 #[Test]
 #[Covers(Contract::class)]
 #[Covers(ResponseValidator::class)]
+#[Covers(SelectedResponse::class)]
+#[Covers(MessageBodyTooLarge::class)]
+#[Covers(MessageBodyUnreadable::class)]
+#[Covers(OpaqueBodyVerdict::class)]
+#[Covers(SchemaValueDecoder::class)]
 final class ResponseValidationTest
 {
     public function validatesSelectedResponseAndPreservesBodyPosition(): void

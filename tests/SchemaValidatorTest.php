@@ -21,6 +21,8 @@ use Testo\Test;
 #[Test]
 #[Covers(SchemaValidator::class)]
 #[Covers(SchemaCompiler::class)]
+#[Covers(UnsupportedSchema::class)]
+#[Covers(SchemaDialect::class)]
 final class SchemaValidatorTest
 {
     #[DataProvider('dialectProvider')]

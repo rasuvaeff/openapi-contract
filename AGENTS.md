@@ -84,6 +84,17 @@ make release-check
 
 ## Mutation gate: known equivalent classes
 
+**A class that appears in no `#[Covers]` gets no mutants at all.** Infection is
+fed by testo's codecov map, which is built from those attributes, so an
+unlisted class is not "covered by whatever executes it" — it is invisible, and
+so is every regression in it. The body decoders, the value decoder, the
+message-reading trait and the response selection value object were in that
+position until the 1.0 preparation wave; adding them raised the mutant count
+by roughly 470 and dropped the measured MSI by two and a half points before
+the tests caught up. Add the `#[Covers]` when you add a class, and check the
+mutant total after — a number that did not move is the symptom.
+
+
 `composer mutation` (minMsi 92) leaves a stable set of escaped mutants that
 are equivalent by analysis — do not chase them, and re-classify anything new:
 injective key/template concatenations (a reordered or trimmed key that stays

@@ -10,7 +10,14 @@ use Psr\Http\Message\StreamInterface;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\ContractViolation;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
+use Rasuvaeff\OpenApiContract\Internal\Validation\BodyDecodingFailed;
+use Rasuvaeff\OpenApiContract\Internal\Validation\FormUrlencodedBodyDecoder;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyTooLarge;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyUnreadable;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MultipartBodyDecoder;
+use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
+use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
 use Rasuvaeff\OpenApiContract\Operation;
@@ -34,6 +41,13 @@ use function Rasuvaeff\Understudy\when;
 #[Covers(ValidationResult::class)]
 #[Covers(Violation::class)]
 #[Covers(ContractViolation::class)]
+#[Covers(BodyDecodingFailed::class)]
+#[Covers(FormUrlencodedBodyDecoder::class)]
+#[Covers(MessageBodyTooLarge::class)]
+#[Covers(MessageBodyUnreadable::class)]
+#[Covers(MultipartBodyDecoder::class)]
+#[Covers(OpaqueBodyVerdict::class)]
+#[Covers(SchemaValueDecoder::class)]
 final class RequestValidationTest
 {
     public function validatesParametersAndJsonBody(): void
@@ -1212,6 +1226,337 @@ final class RequestValidationTest
         Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('rows', 'application/json', '[[1],[2]]')))->violations[0]->code, 'request.body.schema');
         Assert::same($contract->validateRequest($request($part('ids', 'application/json', '[1,2]') . $part('rows', 'application/json', '[1]')))->violations[0]->message, 'Multipart property "ids" has content type "application/json", expected "text/plain"');
         Assert::same($contract->validateRequest($request($part('ids', 'text/plain', '1') . $part('rows', 'text/plain', '1')))->violations[0]->message, 'Multipart property "rows" has content type "text/plain", expected "application/json"');
+    }
+
+    /**
+     * The form decoder reads a body by the declaration, not by guesswork:
+     * which pairs belong to which property, which pairs are left over, and
+     * how a name and a value come off the wire. Each case below fails
+     * differently when one of those decisions is changed.
+     */
+    #[DataProvider('formBodyProvider')]
+    public function decodesFormBodiesByTheirDeclaration(array $definition, string $body, ?string $code): void
+    {
+        $result = $this->bodyContract(['application/x-www-form-urlencoded' => $definition])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], $body));
+
+        Assert::same($result->violations[0]->code ?? null, $code);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, string|null}> */
+    public static function formBodyProvider(): iterable
+    {
+        $object = ['type' => 'object', 'properties' => ['role' => ['type' => 'string'], 'name' => ['type' => 'string']]];
+
+        yield 'an exploded object property takes its own property names' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['user' => $object],
+                'required' => ['user'],
+                'additionalProperties' => false,
+            ]],
+            'role=admin&name=Ada',
+            null,
+        ];
+        yield 'an unexploded object property takes its own name' => [
+            [
+                'schema' => ['type' => 'object', 'properties' => ['user' => $object], 'required' => ['user']],
+                'encoding' => ['user' => ['explode' => false]],
+            ],
+            'user=role,admin,name,Ada',
+            null,
+        ];
+        yield 'a property with no pairs is skipped, not the ones after it' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['a' => ['type' => 'string'], 'b' => ['type' => 'integer']],
+                'required' => ['b'],
+            ]],
+            'b=7',
+            null,
+        ];
+        yield 'a property after a content-type property is still decoded' => [
+            [
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => ['doc' => ['type' => 'object'], 'n' => ['type' => 'integer']],
+                    'required' => ['doc', 'n'],
+                ],
+                'encoding' => ['doc' => ['contentType' => 'application/json']],
+            ],
+            'doc=%7B%22k%22%3A1%7D&n=7',
+            null,
+        ];
+        yield 'a left-over pair is decoded by additionalProperties' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['a' => ['type' => 'string']],
+                'required' => ['a', 'extra'],
+                'additionalProperties' => ['type' => 'integer'],
+            ]],
+            'a=x&extra=7',
+            null,
+        ];
+        yield 'a pair consumed by a property is not left over as well' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['user' => $object],
+                'required' => ['user'],
+                'additionalProperties' => ['type' => 'integer'],
+            ]],
+            'role=admin&name=Ada',
+            null,
+        ];
+        yield 'plus and percent decode in both the name and the value' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['a b' => ['type' => 'string', 'const' => 'c d']],
+                'required' => ['a b'],
+            ]],
+            'a+b=c+d',
+            null,
+        ];
+        yield 'only the first equals sign splits a pair' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['x' => ['const' => '1=2']],
+                'required' => ['x'],
+            ]],
+            'x=1=2',
+            null,
+        ];
+        yield 'a pair without a value decodes to an empty string' => [
+            ['schema' => [
+                'type' => 'object',
+                'properties' => ['flag' => ['type' => 'string', 'const' => '']],
+                'required' => ['flag'],
+            ]],
+            'flag',
+            null,
+        ];
+        yield 'an unsupported encoding style fails closed' => [
+            [
+                'schema' => ['type' => 'object', 'properties' => ['doc' => ['type' => 'string']]],
+                'encoding' => ['doc' => ['style' => 'deepObject']],
+            ],
+            'doc=x',
+            'request.body.decode',
+        ];
+        yield 'a non-boolean encoding explode fails closed' => [
+            [
+                'schema' => ['type' => 'object', 'properties' => ['doc' => ['type' => 'string']]],
+                'encoding' => ['doc' => ['explode' => 'yes']],
+            ],
+            'doc=x',
+            'request.body.decode',
+        ];
+        yield 'an empty encoding contentType fails closed' => [
+            [
+                'schema' => ['type' => 'object', 'properties' => ['doc' => ['type' => 'string']]],
+                'encoding' => ['doc' => ['contentType' => '']],
+            ],
+            'doc=x',
+            'request.body.decode',
+        ];
+    }
+
+    /**
+     * Every way a multipart body can be malformed, and the boundaries of the
+     * limits that decide it. Each message is pinned because the decoder is
+     * fail-closed by design: a guard that stops guarding is invisible unless
+     * something asserts what it said.
+     */
+    #[DataProvider('multipartFramingProvider')]
+    public function reportsHowAMultipartBodyIsMalformed(string $contentType, string $body, ?string $message): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => ['schema' => [
+            'type' => 'object',
+            'properties' => ['note' => ['type' => 'string']],
+        ]]]);
+
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => $contentType], $body));
+
+        Assert::same($result->violations[0]->message ?? null, $message);
+    }
+
+    /** @return iterable<string, array{string, string, string|null}> */
+    public static function multipartFramingProvider(): iterable
+    {
+        $note = static fn(string $boundary): string => sprintf(
+            "--%s\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--%s--\r\n",
+            $boundary,
+            $boundary,
+        );
+        $limit = str_repeat('a', 70);
+
+        yield 'no boundary declared' => ['multipart/form-data', $note('X'), 'Multipart request body has no boundary'];
+        yield 'boundary at the length limit' => ['multipart/form-data; boundary=' . $limit, $note($limit), null];
+        yield 'boundary over the length limit' => ['multipart/form-data; boundary=' . $limit . 'a', $note($limit . 'a'), 'Multipart request boundary is invalid'];
+        yield 'boundary with a character RFC 2046 does not allow' => ['multipart/form-data; boundary=a[b', $note('a[b'), 'Multipart request boundary is invalid'];
+        yield 'quoted boundary carrying a space' => ['multipart/form-data; boundary="a b"', $note('a b'), null];
+        yield 'body that does not open with the boundary' => ['multipart/form-data; boundary=X', $note('Y'), 'Multipart request body has invalid boundary framing'];
+        yield 'part that does not follow its delimiter with CRLF' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--XContent-Disposition: form-data; name=\"other\"\r\n\r\nyo\r\n--X--\r\n",
+            'Multipart request part has invalid framing',
+        ];
+        yield 'part without a header terminator' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"note\"\r\n--X--\r\n",
+            'Multipart request part has no header terminator',
+        ];
+        yield 'part header block over the byte budget' => [
+            'multipart/form-data; boundary=X',
+            sprintf(
+                "--X\r\nContent-Disposition: form-data; name=\"note\"\r\nX-Pad: %s\r\n\r\nhi\r\n--X--\r\n",
+                str_repeat('p', 16 * 1024),
+            ),
+            'Multipart request part headers exceed 16384 bytes',
+        ];
+        yield 'part with a header line that is not a header' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"note\"\r\nnot a header\r\n\r\nhi\r\n--X--\r\n",
+            'Multipart request part contains an invalid header',
+        ];
+        yield 'part that repeats a header' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"note\"\r\nX-A: 1\r\nx-a: 2\r\n\r\nhi\r\n--X--\r\n",
+            'Multipart request part repeats header "x-a"',
+        ];
+        yield 'part without a form-data disposition' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: attachment; name=\"note\"\r\n\r\nhi\r\n--X--\r\n",
+            'Multipart request part requires Content-Disposition form-data with a name',
+        ];
+        yield 'part with no name at all' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; filename=\"f\"\r\n\r\nhi\r\n--X--\r\n",
+            'Multipart request part requires Content-Disposition form-data with a name',
+        ];
+        yield 'scalar property sent twice' => [
+            'multipart/form-data; boundary=X',
+            "--X\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--X\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nyo\r\n--X--\r\n",
+            'Multipart property "note" occurs more than once',
+        ];
+        yield 'more parts than the budget allows' => [
+            'multipart/form-data; boundary=X',
+            '--X' . str_repeat("\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--X", 129) . "--\r\n",
+            'Multipart request body exceeds 128 parts',
+        ];
+    }
+
+    /**
+     * A multipart `encoding` declaration this package cannot read fails
+     * closed, and a header declaration is read as a `simple` request header
+     * parameter is. Both are the document talking about the part, so the
+     * violation names the property and the header rather than the payload.
+     */
+    #[DataProvider('multipartEncodingProvider')]
+    public function readsAMultipartEncodingDeclarationOrFailsClosed(array $encoding, string $body, ?string $message): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => [
+            'schema' => ['type' => 'object', 'properties' => ['note' => ['type' => 'string']]],
+            'encoding' => $encoding,
+        ]]);
+
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary=X'], $body));
+
+        Assert::same($result->violations[0]->message ?? null, $message);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, string|null}> */
+    public static function multipartEncodingProvider(): iterable
+    {
+        $part = static fn(string $headers): string => sprintf(
+            "--X\r\nContent-Disposition: form-data; name=\"note\"%s\r\n\r\nhi\r\n--X--\r\n",
+            $headers,
+        );
+        $plain = $part('');
+
+        yield 'an unsupported encoding style fails closed' => [
+            ['note' => ['style' => 'simple']],
+            $plain,
+            'Encoding style for multipart property "note" must be form',
+        ];
+        yield 'an empty contentType fails closed' => [
+            ['note' => ['contentType' => '']],
+            $plain,
+            'Encoding contentType for multipart property "note" must be a non-empty string',
+        ];
+        yield 'a non-string contentType fails closed' => [
+            ['note' => ['contentType' => 7]],
+            $plain,
+            'Encoding contentType for multipart property "note" must be a non-empty string',
+        ];
+        yield 'a non-boolean explode fails closed' => [
+            ['note' => ['explode' => 'yes']],
+            $plain,
+            'Encoding explode for multipart property "note" must be a boolean',
+        ];
+        yield 'a header declared with an unsupported style fails closed' => [
+            ['note' => ['headers' => ['X-Trace' => ['style' => 'form', 'schema' => ['type' => 'string']]]]],
+            $part("\r\nX-Trace: abc"),
+            'Multipart property "note" header "X-Trace" uses an unsupported style',
+        ];
+        yield 'a header that does not satisfy its schema fails closed' => [
+            ['note' => ['headers' => ['X-Trace' => ['schema' => ['type' => 'integer']]]]],
+            $part("\r\nX-Trace: abc"),
+            'Multipart property "note" header "X-Trace" does not match its schema',
+        ];
+        yield 'a header exploded as declared is read that way' => [
+            ['note' => ['headers' => ['X-Trace' => ['explode' => true, 'schema' => [
+                'type' => 'object',
+                'properties' => ['a' => ['type' => 'integer']],
+                'required' => ['a'],
+            ]]]]],
+            $part("\r\nX-Trace: a=1"),
+            null,
+        ];
+        yield 'a declared header is otherwise just read' => [
+            ['note' => ['headers' => ['X-Trace' => ['schema' => ['type' => 'integer']]]]],
+            $part("\r\nX-Trace: 7"),
+            null,
+        ];
+    }
+
+    /**
+     * An array property carries one part per item, and a JSON part carries a
+     * value that is not a string at all. Each shape the item can take is
+     * passed through as itself; anything else fails closed rather than
+     * reaching the schema as something it is not.
+     */
+    #[DataProvider('multipartArrayItemProvider')]
+    public function passesEveryJsonShapeThroughAnArrayPart(string $items, string $json, bool $valid): void
+    {
+        $contract = $this->bodyContract(['multipart/form-data' => [
+            'schema' => ['type' => 'object', 'required' => ['tags'], 'properties' => [
+                'tags' => ['type' => 'array', 'minItems' => 1, 'items' => ['type' => $items]],
+            ]],
+            'encoding' => ['tags' => ['contentType' => 'application/json']],
+        ]]);
+        $body = sprintf(
+            "--X\r\nContent-Disposition: form-data; name=\"tags\"\r\nContent-Type: application/json\r\n\r\n%s\r\n--X--\r\n",
+            $json,
+        );
+
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'multipart/form-data; boundary=X'], $body));
+
+        Assert::same($result->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function multipartArrayItemProvider(): iterable
+    {
+        yield 'integer items' => ['integer', '[1, 2]', true];
+        yield 'number items' => ['number', '[1.5]', true];
+        yield 'boolean items' => ['boolean', '[true, false]', true];
+        yield 'null items' => ['null', '[null]', true];
+        yield 'object items' => ['object', '[{"a": 1}]', true];
+        yield 'array items' => ['array', '[[1], []]', true];
+        // A JSON string item is still coerced by its schema, exactly as a
+        // text part is; a value that is not a number stays what it was.
+        yield 'integer items coercing a numeric string' => ['integer', '["1"]', true];
+        yield 'integer items rejecting a non-numeric string' => ['integer', '["x"]', false];
     }
 
     public function rejectsMalformedMultipartBodies(): void
