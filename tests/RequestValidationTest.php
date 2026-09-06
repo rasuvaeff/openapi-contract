@@ -14,6 +14,7 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\BodyDecodingFailed;
 use Rasuvaeff\OpenApiContract\Internal\Validation\FormUrlencodedBodyDecoder;
 use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyTooLarge;
 use Rasuvaeff\OpenApiContract\Internal\Validation\MessageBodyUnreadable;
+use Rasuvaeff\OpenApiContract\Internal\Validation\MessageReading;
 use Rasuvaeff\OpenApiContract\Internal\Validation\MultipartBodyDecoder;
 use Rasuvaeff\OpenApiContract\Internal\Validation\OpaqueBodyVerdict;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
@@ -37,6 +38,7 @@ use function Rasuvaeff\Understudy\when;
 #[Test]
 #[Covers(Contract::class)]
 #[Covers(RequestValidator::class)]
+#[Covers(MessageReading::class)]
 #[Covers(Operation::class)]
 #[Covers(MatchedOperation::class)]
 #[Covers(ValidationResult::class)]

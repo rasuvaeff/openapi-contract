@@ -80,8 +80,10 @@ Rules:
   an unencoded one) — it is a hand-off to consumers that render query values,
   which cannot derive it from the schema;
 - budgets are `Limits`, not constants: `new Limits(documentBytes:,
-  messageBodyBytes:, documentFiles:)` passed to any factory; a budget below 1
-  throws `\InvalidArgumentException`. `*.body.too_large` means the validator
+  messageBodyBytes:, documentFiles:, documentNodes:)` passed to any factory; a
+  budget below 1 throws `\InvalidArgumentException`. `documentNodes` bounds
+  what a document expands into, which for YAML anchors is unrelated to what it
+  weighs. `*.body.too_large` means the validator
   declined to read that body, NOT that the message is invalid — raise the
   budget rather than treating it as a failed verdict;
 - `Operation` is a read model: its constructor is `@internal` (nothing public
@@ -112,9 +114,10 @@ API reference:
   symfony/yaml; multi-file relative `$ref`s under the entry directory) build
   the immutable compiled contract.
 - `Limits` (readonly): `documentBytes` (default 10 MiB),
-  `messageBodyBytes` (default 1 MiB), `documentFiles` (default 64), with
-  `Limits::DEFAULT_DOCUMENT_BYTES` / `DEFAULT_MESSAGE_BODY_BYTES` /
-  `DEFAULT_DOCUMENT_FILES` as the constants behind them.
+  `messageBodyBytes` (default 1 MiB), `documentFiles` (default 64),
+  `documentNodes` (default 5 000 000), with `Limits::DEFAULT_DOCUMENT_BYTES` /
+  `DEFAULT_MESSAGE_BODY_BYTES` / `DEFAULT_DOCUMENT_FILES` /
+  `DEFAULT_DOCUMENT_NODES` as the constants behind them.
 - `Contract::operations(): list<Operation>`;
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
 - `Contract::securitySchemes(): array<string, CompiledSecurityScheme>` —

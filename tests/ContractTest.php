@@ -12,6 +12,7 @@ use Rasuvaeff\OpenApiContract\ContractException;
 use Rasuvaeff\OpenApiContract\ContractViolation;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\CompiledDocument;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
@@ -31,6 +32,7 @@ use Testo\Test;
 #[Covers(Contract::class)]
 #[Covers(CompiledDocument::class)]
 #[Covers(DocumentCompiler::class)]
+#[Covers(DocumentNodes::class)]
 #[Covers(InvalidContract::class)]
 #[Covers(UnknownOperation::class)]
 #[Covers(UnsupportedSerialization::class)]
@@ -469,6 +471,38 @@ final class ContractTest
         } catch (InvalidContract $exception) {
             Assert::same($exception->getMessage(), 'Ambiguous OpenAPI paths "/pets/{id}" and "/pets/{name}" for method GET');
         }
+    }
+
+    /**
+     * The byte budget measures the document; this one measures what it
+     * expands into, which for YAML aliases is unrelated.
+     */
+    public function refusesADocumentOverTheConfiguredNodeBudget(): void
+    {
+        $document = ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['type' => 'string', 'enum' => range(1, 40)]]],
+            'responses' => ['200' => []],
+        ]]]];
+
+        try {
+            Contract::fromArray($document, new Limits(documentNodes: 20));
+            Assert::true(actual: false, message: 'Expected the node budget to refuse the document');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document expands to more than 20 nodes');
+        }
+
+        Assert::same(Contract::fromArray($document, new Limits(documentNodes: 200))->operations()[0]->path, '/h');
+    }
+
+    public function countsEveryNodeOfADocumentOnce(): void
+    {
+        Assert::same(DocumentNodes::within(['a' => 1, 'b' => ['c' => 2]], 100), 3);
+        Assert::same(DocumentNodes::within([], 100), 0);
+        Assert::same(DocumentNodes::within(['a' => 1, 'b' => 2], 2), 2);
+        Assert::null(DocumentNodes::within(['a' => 1, 'b' => 2], 1));
+        // The count stops at the budget, so an oversized document costs the
+        // budget rather than its own size.
+        Assert::null(DocumentNodes::within(['a' => range(1, 10_000)], 3));
     }
 
     public function refusesADocumentOverTheConfiguredByteBudget(): void

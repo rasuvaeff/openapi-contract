@@ -122,10 +122,19 @@ byte-budget throw, the scheme-detection regex anchor whose removal only
 widens an already fail-closed rejection (a colon in a later path segment),
 and the canonical-delimiter index in `ParameterCodec::parseDelimitedQuery()`
 (every wire form of a delimiter is folded to the chosen one before the
-split, so any element of the list produces the same partition), and the
+split, so any element of the list produces the same partition), the
 `array_values()` calls over a Path Item's and an Operation's `parameters`
 in `DocumentCompiler::parameters()` (a JSON array decodes to a list, so
-the re-index has nothing to change and only the pointer index would move).
+the re-index has nothing to change and only the pointer index would move),
+and — since the message-reading trait joined the coverage map — the whole
+chunking arithmetic of `MessageReading::bodyContents()`: a larger `$remaining`
+or a wider `read()` window still lands on the same `> $maxBytes` check, and
+`break` against `continue` on an at-eof empty chunk differ only in re-testing
+the `while` condition that is already false. The media-type selection helpers
+in the same trait escape for the reasons above: the rank sentinel is below
+every specificity, the key/definition type guard is reachable only through a
+hand-built `Operation`, and the strict `>` is untestable because no two
+declarations of equal specificity can match one media type.
 
 ## When you finish
 

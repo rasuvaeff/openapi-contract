@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
@@ -67,9 +68,13 @@ final readonly class Contract
     /** @param array<string, mixed> $document */
     public static function fromArray(array $document, ?Limits $limits = null): self
     {
+        $limits ??= new Limits();
+        if (DocumentNodes::within($document, $limits->documentNodes) === null) {
+            throw new InvalidContract(sprintf('OpenAPI document expands to more than %d nodes', $limits->documentNodes));
+        }
         $compiled = (new DocumentCompiler())->compile($document);
 
-        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits ?? new Limits());
+        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
     }
 
     public static function fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null): self
@@ -100,7 +105,7 @@ final readonly class Contract
     public static function fromFile(string $path, ?Limits $limits = null): self
     {
         $limits ??= new Limits();
-        $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes);
+        $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes, $limits->documentNodes);
         $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph);
 
         return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
