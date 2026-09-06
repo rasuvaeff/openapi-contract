@@ -90,6 +90,33 @@ final class ValidationResultFormatterTest
         Assert::string($formatted)->contains('actual: "' . str_repeat('a', 508) . '...');
     }
 
+    /**
+     * The budget is a byte budget, and the cut lands where it lands. Every
+     * value reaching it is `json_encode` output, so multibyte text arrives as
+     * `\uXXXX` escapes and the message stays valid UTF-8 — but a cut inside
+     * one of those escapes would leave `\u04` standing where a character was
+     * meant.
+     */
+    public function truncatesWithoutLeavingAPartialEscape(): void
+    {
+        $message = (new ValidationResultFormatter())->format(new ValidationResult([
+            new Violation(
+                code: 'request.parameter.schema',
+                operation: 'pets.get',
+                location: 'query',
+                instancePath: 'q',
+                specPointer: '/paths/~1pets/get/parameters/0/schema',
+                expected: ['type' => 'string'],
+                actual: str_repeat('я', 400),
+                message: 'Query parameter "q" does not match its schema',
+            ),
+        ]));
+
+        Assert::true(mb_check_encoding($message, 'UTF-8'));
+        Assert::same(preg_match('/\\\\u[0-9a-fA-F]{0,3}\.\.\./', $message), 0);
+        Assert::string($message)->contains('...');
+    }
+
     public function preservesValuesAtTheExactByteLimitAndJsonFlags(): void
     {
         $formatted = (new ValidationResultFormatter())->format(new ValidationResult([

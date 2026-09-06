@@ -99,10 +99,20 @@ foreach ($contract->operations() as $operation) {
 $matched = $contract->match($request);        // MatchedOperation|null
 $matched = $contract->requireMatch($request); // бросает UnknownOperation
 $operation = $contract->operation('pets.get'); // бросает UnknownOperation
+
+// Response Object, в который резолвится статус — точный код, затем диапазон
+// NXX, затем `default`, — ровно так же, как его выбирает валидация ответа;
+// null, если статус не объявлен или вовсе не является HTTP-статусом.
+$declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [...]] | null
 ```
 
 Identity операции — `operationId`, если он есть, иначе стабильный
-`METHOD /path`. Скомпилированные параметры сохраняют объявленные
+`METHOD /path`. Параметры Path Item и Operation
+сливаются по паре «location + name», и объявление операции заменяет
+объявление Path Item для той же пары, как требует спека; два объявления одной
+пары *внутри* одного списка ошибкой здесь не считаются — выигрывает
+последнее, — поэтому документ, объявивший пару дважды, проверяется по своему
+последнему слову. Скомпилированные параметры сохраняют объявленные
 `example`/`examples` (с разрешёнными `$ref`) как аннотации: валидация их
 игнорирует, а пакет генераторов использует в детерминированной
 example-фазе. `MatchedOperation` несёт операцию и сырые path-параметры из
@@ -118,7 +128,9 @@ defaults у server variables. Absolute server ограничивает кажд�
 URI, который запрос реально несёт, — нормализованные scheme, host и
 effective port (`443` для `https`, `80` для `http`), поэтому одинаковый path
 на двух hosts выбирает только правильную операцию; relative server и
-path-only request URI остаются host-agnostic. Необъявленные переменные,
+path-only request URI остаются host-agnostic — запрос без authority
+матчится только по пути и осознанно не отвергается за то, что не назвал host,
+на который и не претендовал. Необъявленные переменные,
 отсутствующий или вне-enum default, неподдержанные схемы и userinfo/query/
 fragment в server URL отвергаются fail-closed при компиляции.
 `Operation::$serverBases` остаётся v0.1-проекцией base paths того же списка.
@@ -251,6 +263,45 @@ instance path равен `$`; параметр печатается, но каж
 совпадает, редактируется целиком. `ContractViolation` использует тот же
 вывод.
 
+### Коды нарушений
+
+Полный набор. Код — стабильный идентификатор, по которому можно ветвиться;
+текст сообщения, который рядом рендерит `ValidationResultFormatter`, —
+диагностика, и он может быть переформулирован в любом релизе, поэтому пинить
+надо коды, а не текст.
+
+| Код | Когда |
+|---|---|
+| `request.operation.unknown` | запросу не соответствует ни одна операция |
+| `request.server.mismatch` | путь совпал, но ни один объявленный server — нет |
+| `request.parameter.missing` | отсутствует `required`-параметр |
+| `request.parameter.serialization` | значение параметра не разбирается в своём style |
+| `request.parameter.schema` | значение параметра не удовлетворяет схеме |
+| `request.body.missing` | `required`-тело пустое |
+| `request.body.media_type` | media type тела не объявлен (или у тела нет годного content) |
+| `request.body.json` | JSON-тело не парсится |
+| `request.body.decode` | form- или multipart-тело не декодируется как объявлено |
+| `request.body.schema` | тело не удовлетворяет схеме |
+| `request.body.unsupported` | не-JSON и не-form media type несёт схему, которую нельзя проверить на недекодированном payload |
+| `request.body.too_large` | тело больше `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `request.body.non_seekable` | поток тела нельзя перемотать, поэтому он не вычитывается |
+| `request.body.unreadable` | поток тела сообщает, что не закончился, и читает пусто |
+| `response.operation.unknown` | `validateResponse()` получил ключ операции, которого нет в контракте |
+| `response.status.invalid` | статус не является HTTP-статусом (вне 100-599) |
+| `response.status.mismatch` | статус корректен, но операция не объявляет для него ответа |
+| `response.header.missing` | отсутствует `required`-заголовок ответа |
+| `response.header.serialization` | значение заголовка ответа не разбирается |
+| `response.header.schema` | значение заголовка ответа не удовлетворяет схеме |
+| `response.header.unsupported` | Header Object использует `content` или style, отличный от `simple` |
+| `response.body.missing` | ответ, объявивший схему, не прислал тела |
+| `response.body.media_type` | media type ответа не объявлен |
+| `response.body.json` | JSON-тело ответа не парсится |
+| `response.body.schema` | тело ответа не удовлетворяет схеме |
+| `response.body.unsupported` | то же, что `request.body.unsupported`, на стороне ответа |
+| `response.body.too_large` | тело ответа больше `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `response.body.non_seekable` | поток тела ответа нельзя перемотать |
+| `response.body.unreadable` | поток тела ответа сообщает, что не закончился, и читает пусто |
+
 ## Безопасность
 
 Неподдерживаемая семантика контракта никогда не игнорируется: версии,
@@ -263,6 +314,13 @@ instance path равен `$`; параметр печатается, но каж
 сообщений читаются с byte- и JSON-depth-бюджетами; expected/actual в
 диагностике рендерятся в ограниченной форме без раскрытия
 credential-параметров.
+
+Ключевое слово `pattern` — это регулярное выражение из документа, и backend
+валидации исполняет его через `preg_match`. Контракт — доверенный вход (это
+ваш документ, а не ваш трафик), но если вы компилируете чужие документы,
+учтите: катастрофически бэктрекающий паттерн выбирает их автор. PHP-шный
+`pcre.backtrack_limit` ограничивает каждый матч, и упёршийся в лимит матч
+отваливается fail-closed, а не висит.
 
 ## Примеры
 

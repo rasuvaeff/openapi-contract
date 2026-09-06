@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Added.** The complete set of `Violation` codes is written down — in both
+  READMEs and `llms.txt` — with a test that pins it against what the source
+  actually emits, so a new or renamed code is a deliberate edit rather than a
+  side effect. The documents also say what is stable: the code is, the
+  formatter's message text is a diagnostic and may be reworded.
+
+- **Added.** `Operation::responseFor()`, public since 0.2.0, is documented.
+  The parameter merge (Operation over Path Item, last declaration wins within
+  one list), the host-agnostic matching of a request that carries no
+  authority, and the `pattern`/`preg_match` threat model are stated as
+  contract rather than left to be read off the tests.
+
+- **Fixed.** Truncated diagnostics no longer end in a partial `\uXXXX` escape.
+  Every value the formatter bounds is `json_encode` output, so the cut cannot
+  split a UTF-8 sequence — but it could land inside an escape and leave
+  `\u04` where a character was meant.
+
+- **Internal.** `rasuvaeff/understudy` moved to the `^0.9` line.
+
 - **Added.** `ContractException`, the type every exception this package raises
   implements. "Handle anything the contract can throw" had to be written as
   the current list of classes and rechecked on every upgrade, or widened to
@@ -76,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type is declared", so a body that arrives under one is reported as
   undeclared. It used to skip body validation entirely.
 
-- **Changed.** The generated corpus is re-recorded against
+- **Internal.** The generated corpus is re-recorded against
   `property-testing-openapi` at the header decision: 287 cases over 20
   operations, up from 274 over 19. The new operation is `headers.get` — a
   scalar, a list and an exploded object header — which the corpus could not
@@ -87,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the wild trim it and the value the application receives would not be the
   value the case recorded. No case changed its verdict.
 
-- **Changed.** The generated corpus gains the three cases that close its one
+- **Internal.** The generated corpus gains the three cases that close its one
   known blind spot: a multipart part sent under a media type its
   `encoding.contentType` does not allow (290 cases, up from 287). Neglecting
   that keyword is fail-open — a validator that reads it and ignores it accepts

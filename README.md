@@ -100,10 +100,19 @@ foreach ($contract->operations() as $operation) {
 $matched = $contract->match($request);        // MatchedOperation|null
 $matched = $contract->requireMatch($request); // throws UnknownOperation
 $operation = $contract->operation('pets.get'); // throws UnknownOperation
+
+// The Response Object a status resolves to — exact code, then the NXX range,
+// then `default` — as response validation selects it; null when the status is
+// not declared, or is not an HTTP status at all.
+$declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [...]] | null
 ```
 
 `Operation` identity is the `operationId` when present, otherwise the stable
-`METHOD /path` fallback. Compiled parameters keep declared `example`/
+`METHOD /path` fallback. A Path Item's parameters and an Operation's are
+merged by location and name, and an Operation's declaration replaces the Path
+Item's for the same pair, as the specification requires; two declarations of
+the same pair *within* one list are not an error here — the last one wins —
+so a document that declares one twice is validated against its final word. Compiled parameters keep declared `example`/
 `examples` values (with `$ref`s resolved) as annotations: validation ignores
 them, while the generator package feeds them into its deterministic example
 phase. `MatchedOperation` carries the operation and the raw path parameters
@@ -119,7 +128,9 @@ variables substituted with their declared defaults. An absolute server
 constrains every URI component the request actually carries — normalized
 scheme, host, and effective port (`443` for `https`, `80` for `http`) — so
 the same path on two hosts selects only the right operation; a relative
-server and a path-only request URI stay host-agnostic. Undeclared variables,
+server and a path-only request URI stay host-agnostic — a request that carries
+no authority is matched by path alone, and is deliberately not rejected for
+failing to name a host it never claimed. Undeclared variables,
 missing or non-enum defaults, unsupported schemes, and userinfo/query/
 fragment parts of a server URL fail closed at compile time.
 `Operation::$serverBases` remains the v0.1 base-path projection of the same
@@ -250,6 +261,44 @@ matches the credential pattern (`authorization`, `api_key`, `token`, `secret`,
 `password`, `cookie`) replaced, and a parameter whose own name matches is
 redacted outright. `ContractViolation` uses the same rendering.
 
+### Violation codes
+
+The complete set. A code is a stable identifier callers may switch on; the
+message text `ValidationResultFormatter` renders beside it is a diagnostic and
+may be reworded in any release, so pin codes rather than text.
+
+| Code | Raised when |
+|---|---|
+| `request.operation.unknown` | no operation matches the request |
+| `request.server.mismatch` | the path matches, but no declared server does |
+| `request.parameter.missing` | a `required` parameter is absent |
+| `request.parameter.serialization` | a parameter value cannot be deserialized in its style |
+| `request.parameter.schema` | a parameter value does not satisfy its schema |
+| `request.body.missing` | a `required` body is empty |
+| `request.body.media_type` | the body's media type is not declared (or the body declares no content) |
+| `request.body.json` | a JSON body does not parse |
+| `request.body.decode` | a form or multipart body cannot be decoded as declared |
+| `request.body.schema` | the body does not satisfy its schema |
+| `request.body.unsupported` | a non-JSON, non-form media type carries a schema no undecoded payload can be judged against |
+| `request.body.too_large` | the body exceeds `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `request.body.non_seekable` | the body stream cannot be rewound, so it is not consumed |
+| `request.body.unreadable` | the body stream reports more data and then reads none |
+| `response.operation.unknown` | `validateResponse()` was given an operation key the contract does not have |
+| `response.status.invalid` | the status is not an HTTP status code (outside 100-599) |
+| `response.status.mismatch` | the status is valid but the operation declares no response for it |
+| `response.header.missing` | a `required` response header is absent |
+| `response.header.serialization` | a response header value cannot be deserialized |
+| `response.header.schema` | a response header value does not satisfy its schema |
+| `response.header.unsupported` | a Header Object uses `content` or a style other than `simple` |
+| `response.body.missing` | a response that declares a schema answered with nothing |
+| `response.body.media_type` | the response media type is not declared |
+| `response.body.json` | a JSON response body does not parse |
+| `response.body.schema` | the response body does not satisfy its schema |
+| `response.body.unsupported` | as `request.body.unsupported`, on the response side |
+| `response.body.too_large` | the response body exceeds `Contract::MAX_MESSAGE_BODY_BYTES` |
+| `response.body.non_seekable` | the response body stream cannot be rewound |
+| `response.body.unreadable` | the response body stream reports more data and then reads none |
+
 ## Security
 
 Unsupported contract semantics are never ignored: versions, dialects,
@@ -261,6 +310,13 @@ because silently unchecking part of a contract is the one failure a validator
 must never produce. User-supplied documents and message bodies are read with
 byte and JSON-depth budgets, and diagnostics render expected/actual values
 in bounded form without exposing credential parameters.
+
+A `pattern` keyword is a regular expression from the document, and the
+validation backend runs it with `preg_match`. A contract is a trusted input —
+it is your document, not your traffic — but if you compile documents supplied
+by someone else, note that a catastrophically backtracking pattern is theirs
+to choose. PHP's `pcre.backtrack_limit` bounds each match and a match that
+hits the limit fails closed rather than hanging.
 
 ## Examples
 
