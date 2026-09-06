@@ -1,0 +1,21 @@
+openapi: 3.1.0
+servers:
+  - url: https://api.test
+paths:
+  /pets/{id}:
+    get:
+      operationId: pets.get
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: one pet
+          content:
+            application/json:
+              schema:
+                $ref: 'schemas/pet.yaml#/Pet'

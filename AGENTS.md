@@ -130,7 +130,11 @@ and — since the message-reading trait joined the coverage map — the whole
 chunking arithmetic of `MessageReading::bodyContents()`: a larger `$remaining`
 or a wider `read()` window still lands on the same `> $maxBytes` check, and
 `break` against `continue` on an at-eof empty chunk differ only in re-testing
-the `while` condition that is already false. The media-type selection helpers
+the `while` condition that is already false. Route bucketing escapes in the
+widening direction only: the always-scanned bucket is a superset, so a mutant
+that puts more routes into it loses the optimization and not a verdict — a
+mutant that narrowed bucketing would change selection, and those are killed.
+The media-type selection helpers
 in the same trait escape for the reasons above: the rank sentinel is below
 every specificity, the key/definition type guard is reachable only through a
 hand-built `Operation`, and the strict `>` is untestable because no two
