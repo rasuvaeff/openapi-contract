@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 
 /**
  * @internal

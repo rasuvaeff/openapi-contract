@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDirection;
 
 /**
  * How far a declared media type the package cannot decode — anything that is
@@ -38,7 +39,7 @@ enum OpaqueBodyVerdict
         string $body,
         SchemaValidator $schemas,
         SchemaDialect $dialect,
-        string $direction,
+        SchemaDirection $direction,
     ): self {
         if ($schema === null || $schema === []) {
             return self::Opaque;

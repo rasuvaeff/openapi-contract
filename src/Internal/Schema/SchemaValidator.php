@@ -10,6 +10,8 @@ use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Validator as OpisValidator;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDirection;
 
 /**
  * Validates a value against an OAS Schema Object, hiding the backend.
@@ -64,7 +66,7 @@ final class SchemaValidator
     /**
      * @param array<string, mixed> $schema
      */
-    public function isValid(mixed $value, array $schema, SchemaDialect $dialect, string $direction = 'request'): bool
+    public function isValid(mixed $value, array $schema, SchemaDialect $dialect, SchemaDirection $direction = SchemaDirection::Request): bool
     {
         $compiled = $this->compiledSchema($schema, $dialect, $direction);
 
@@ -86,9 +88,9 @@ final class SchemaValidator
      *
      * @param array<string, mixed> $schema
      */
-    private function compiledSchema(array $schema, SchemaDialect $dialect, string $direction): Schema
+    private function compiledSchema(array $schema, SchemaDialect $dialect, SchemaDirection $direction): Schema
     {
-        $key = hash('xxh128', $dialect->name . "\0" . $direction . "\0" . json_encode($schema, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+        $key = hash('xxh128', $dialect->name . "\0" . $direction->name . "\0" . json_encode($schema, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
         if (isset($this->compiled[$key])) {
             return $this->compiled[$key];
         }
@@ -124,17 +126,14 @@ final class SchemaValidator
      * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
-    private function effectiveSchema(array $schema, string $direction): array
+    private function effectiveSchema(array $schema, SchemaDirection $direction): array
     {
-        if ($direction !== 'request' && $direction !== 'response') {
-            throw new \InvalidArgumentException(sprintf('Unknown schema direction "%s"', $direction));
-        }
         foreach (self::DIRECTIONAL_KEYWORDS as $keyword) {
             if (!array_key_exists($keyword, $schema)) {
                 continue;
             }
             if ($keyword === 'properties' && is_array($schema[$keyword])) {
-                $flag = $direction === 'request' ? 'readOnly' : 'writeOnly';
+                $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $dropped */
                 $dropped = [];

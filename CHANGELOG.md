@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.11.0 — 2026-09-12
+
+- **Added.** `Contract::accepts()` and `SchemaCheck` expose the schema check
+  the contract already performs: does this value satisfy this Schema Object,
+  as this document's dialect spells it and the direction applies it? It is the
+  same compiled schema and the same backend `validateRequest()` and
+  `validateResponse()` use, and a contract reuses its own compilation cache,
+  so checking many values against one schema compiles it once. A consumer
+  needed this to agree with the contract instead of reimplementing the OAS 3.0
+  normalisation, the directional `readOnly`/`writeOnly` rewrite and the
+  parser hardening — a second copy of which agrees until it silently does not.
+- **Added.** `SchemaDirection` (`Request`, `Response`) and a public
+  `SchemaDialect` (`OpenApi30`, `OpenApi31`), the latter moved out of
+  `Internal\Schema\`. The direction replaces an internal `'request'`/`'response'`
+  string, so naming an unknown one is now a type error rather than a runtime
+  exception.
+- **Added.** `Operation::$dialect`, filled by compilation from the document's
+  `openapi` version, so the dialect travels with an operation a consumer
+  holds and `SchemaCheck` can be used without the contract that compiled it.
+  The parameter is optional and last; a hand-built operation defaults to
+  `OpenApi31`.
+
 ## 0.10.0 — 2026-09-06
 
 - **Changed.** Matching indexes routes by method, segment count and first

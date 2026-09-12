@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Reference;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 
 /**
  * Resolves same-document fragment references, and — when a DocumentGraph is

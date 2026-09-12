@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\RequestInterface;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\DuplicateParameterValue;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
@@ -14,6 +13,8 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDirection;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
 
@@ -379,7 +380,7 @@ final readonly class RequestValidator
      */
     private function validateOpaqueBody(MatchedOperation $matched, string $mediaType, string $body, array $definition, SchemaDialect $dialect): array
     {
-        return match (OpaqueBodyVerdict::of($this->declaredSchema($definition), $body, $this->schemas, $dialect, 'request')) {
+        return match (OpaqueBodyVerdict::of($this->declaredSchema($definition), $body, $this->schemas, $dialect, SchemaDirection::Request)) {
             OpaqueBodyVerdict::Opaque, OpaqueBodyVerdict::Valid => [],
             OpaqueBodyVerdict::Unsupported => [$this->bodyViolation($matched, 'request.body.unsupported', sprintf('Request media type "%s" cannot be validated against a non-string schema', $mediaType), $mediaType)],
             OpaqueBodyVerdict::Invalid => [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $body)],

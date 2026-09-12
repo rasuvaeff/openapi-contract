@@ -321,6 +321,53 @@ matches the credential pattern (`authorization`, `api_key`, `token`, `secret`,
 `password`, `cookie`) replaced, and a parameter whose own name matches is
 redacted outright. `ContractViolation` uses the same rendering.
 
+### Checking one schema
+
+`Contract::accepts()` answers, for one Schema Object of this document, the
+question validation asks of it: does this value satisfy it? It is the same
+compiled schema and the same backend `validateRequest()` and
+`validateResponse()` use, and the contract's compilation cache is reused, so
+checking many values against one schema compiles it once.
+
+```php
+use Rasuvaeff\OpenApiContract\SchemaDirection;
+
+$schema = $contract->operation('pets.create')->parameters[0]['schema'];
+
+$contract->accepts(42, $schema);                             // request direction
+$contract->accepts($value, $schema, SchemaDirection::Response);
+```
+
+The direction is not decoration. A `readOnly` property is not part of a
+request and a `writeOnly` one is not part of a response; each is dropped, with
+its `required` entry, before the value is judged, so the same value and the
+same schema answer differently in the two directions.
+
+The value is judged as the backend reads JSON: an object is a `stdClass`, the
+way `json_decode()` produces one without `associative: true`. An associative
+PHP array is a JSON *array*, which no `type: object` schema admits. A
+parameter travels as a string on the wire and is decoded before it is judged,
+so pass the decoded value rather than the wire spelling.
+
+A consumer holding an `Operation` and no contract uses `SchemaCheck`, naming
+the dialect the operation carries:
+
+```php
+use Rasuvaeff\OpenApiContract\SchemaCheck;
+
+$operation = $contract->operation('pets.create');
+$check = new SchemaCheck();
+
+$check->accepts($value, $schema, $operation->dialect);
+```
+
+`Operation::$dialect` is filled by compilation from the document's `openapi`
+version — `SchemaDialect::OpenApi30` or `SchemaDialect::OpenApi31` — because
+the dialect decides how a schema is read: 3.0 spells nullability as
+`nullable: true` and the exclusive bounds as booleans, 3.1 as a type union and
+as numbers. A schema a dialect cannot read raises `InvalidContract` rather
+than being silently read as something else.
+
 ### Violation codes
 
 The complete set. A code is a stable identifier callers may switch on; the
