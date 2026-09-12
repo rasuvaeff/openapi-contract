@@ -213,6 +213,21 @@ API reference:
   replaced, and is redacted outright when the instance path itself matches.
 - Schema compilation is cached per `Contract` instance, keyed by schema,
   direction and dialect.
+- `Contract::accepts(mixed $value, array $schema, SchemaDirection $direction = SchemaDirection::Request): bool`
+  runs that same check on one Schema Object, binding the document's dialect
+  and reusing the cache. `SchemaCheck::accepts($value, $schema, SchemaDialect
+  $dialect, SchemaDirection $direction = Request)` is the same check for a
+  consumer holding an `Operation` and no contract.
+- `SchemaDirection` (enum): `Request`, `Response`. Decides which properties
+  apply — `readOnly` is dropped from a request, `writeOnly` from a response,
+  with their `required` entries, recursively.
+- `SchemaDialect` (enum): `OpenApi30`, `OpenApi31`. `Operation::$dialect`
+  carries the document's, filled by compilation; a hand-built `Operation`
+  defaults to `OpenApi31`. A schema the dialect cannot read raises
+  `InvalidContract`.
+- Values are judged as `json_decode()` produces them: a JSON object is a
+  `stdClass`, not an associative array. Decode a parameter's wire string
+  before checking it.
 - `Violation` (readonly): `code` (stable, e.g. `request.parameter.missing`,
   `response.body.schema`), `operation`, `location`, `instancePath`,
   `specPointer` (JSON Pointer into the document), `expected`, `actual`

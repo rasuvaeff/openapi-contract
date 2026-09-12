@@ -7,9 +7,9 @@ namespace Rasuvaeff\OpenApiContract\Internal\Compilation;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Operation;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
 use Rasuvaeff\OpenApiContract\UnsupportedVersion;
 
@@ -154,6 +154,7 @@ final readonly class DocumentCompiler
                         ? $this->securityRequirements($raw['security'], $schemeNames)
                         : $rootSecurity,
                     servers: $servers,
+                    dialect: $dialect,
                 );
             }
         }

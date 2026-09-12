@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Compilation;
 
 use Rasuvaeff\OpenApiContract\Contract;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Operation;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 
 /**
  * @psalm-import-type CompiledSecurityScheme from Contract

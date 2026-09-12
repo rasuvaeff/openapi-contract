@@ -6,7 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Testo\Assert;
 use Testo\Codecov\Covers;
 use Testo\Data\DataProvider;

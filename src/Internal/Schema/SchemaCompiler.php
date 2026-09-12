@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 
 /**
  * Normalizes the first supported OAS Schema Object subset into JSON Schema

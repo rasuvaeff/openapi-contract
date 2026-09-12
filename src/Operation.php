@@ -51,6 +51,11 @@ final readonly class Operation
      *        variables substituted with their defaults). Contract compilation
      *        always fills it; `$serverBases` stays as the v0.1 base-path
      *        projection of the same list.
+     * @param SchemaDialect $dialect the dialect this operation's Schema
+     *        Objects are written in, so a consumer holding the operation can
+     *        check a value against one of them the way the contract does
+     *        ({@see SchemaCheck}). Compilation fills it from the document's
+     *        `openapi` version; a hand-built operation defaults to 3.1.
      *
      * @internal an operation is built by compiling a document. Nothing public
      *           validates a hand-built one: {@see Contract} is constructed
@@ -69,6 +74,7 @@ final readonly class Operation
         public array $serverBases = ['/'],
         public array $security = [],
         public array $servers = [],
+        public SchemaDialect $dialect = SchemaDialect::OpenApi31,
     ) {}
 
     /**

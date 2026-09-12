@@ -7,8 +7,9 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaCompiler;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDirection;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\Gen;
@@ -233,7 +234,7 @@ final class SchemaValidatorTest
         Assert::true($validator->isValid((object) ['2020' => 1], $schema, SchemaDialect::OpenApi31));
         Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
         Assert::false($validator->isValid((object) ['2020' => 'x'], $schema, SchemaDialect::OpenApi31));
-        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, direction: 'response'));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, direction: SchemaDirection::Response));
     }
 
     /**
@@ -313,8 +314,8 @@ final class SchemaValidatorTest
         foreach ([1, 2] as $ignored) {
             Assert::true($validator->isValid($request, $directional, SchemaDialect::OpenApi31));
             Assert::false($validator->isValid($response, $directional, SchemaDialect::OpenApi31));
-            Assert::true($validator->isValid($response, $directional, SchemaDialect::OpenApi31, direction: 'response'));
-            Assert::false($validator->isValid($request, $directional, SchemaDialect::OpenApi31, direction: 'response'));
+            Assert::true($validator->isValid($response, $directional, SchemaDialect::OpenApi31, direction: SchemaDirection::Response));
+            Assert::false($validator->isValid($request, $directional, SchemaDialect::OpenApi31, direction: SchemaDirection::Response));
         }
 
         // `nullable` is an OAS 3.0 keyword and is rejected under 3.1: caching
@@ -391,19 +392,6 @@ final class SchemaValidatorTest
         $schema = ['type' => 'object', 'required' => ['a'], 'properties' => ['a' => ['type' => 'integer', 'default' => 1]]];
 
         Assert::false((new SchemaValidator())->isValid((object) [], $schema, SchemaDialect::OpenApi31));
-    }
-
-    public function rejectsUnknownDirection(): void
-    {
-        try {
-            (new SchemaValidator())->isValid(1, [], SchemaDialect::OpenApi31, direction: 'other');
-        } catch (\InvalidArgumentException $exception) {
-            Assert::string($exception->getMessage())->contains('Unknown schema direction');
-
-            return;
-        }
-
-        Assert::true(actual: false, message: 'Expected invalid direction exception');
     }
 
 }

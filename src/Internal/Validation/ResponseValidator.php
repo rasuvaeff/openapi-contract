@@ -7,7 +7,6 @@ namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
 use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
@@ -15,6 +14,8 @@ use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterStyle;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\SchemaDirection;
 use Rasuvaeff\OpenApiContract\ValidationResult;
 use Rasuvaeff\OpenApiContract\Violation;
 
@@ -208,7 +209,7 @@ final readonly class ResponseValidator
         $schema = $this->values->schema($schemaValue);
         $schemaValid = $schema === null
             ? !$this->declaresNothingValid($mediaDefinition)
-            : $this->schemas->isValid($value, $schema, $dialect, direction: 'response');
+            : $this->schemas->isValid($value, $schema, $dialect, direction: SchemaDirection::Response);
         if (!$schemaValid) {
             $violations[] = new Violation(
                 code: 'response.body.schema',
@@ -287,7 +288,7 @@ final readonly class ResponseValidator
     ): array {
         $schema = $this->declaredSchema($mediaDefinition);
 
-        return match (OpaqueBodyVerdict::of($schema, $body, $this->schemas, $dialect, 'response')) {
+        return match (OpaqueBodyVerdict::of($schema, $body, $this->schemas, $dialect, SchemaDirection::Response)) {
             OpaqueBodyVerdict::Opaque, OpaqueBodyVerdict::Valid => [],
             OpaqueBodyVerdict::Unsupported => [new Violation(
                 code: 'response.body.unsupported',
@@ -399,7 +400,7 @@ final readonly class ResponseValidator
                 message: sprintf('Response header "%s" cannot be deserialized', $name),
             )];
         }
-        if ($this->schemas->isValid($value, $schema, $dialect, direction: 'response')) {
+        if ($this->schemas->isValid($value, $schema, $dialect, direction: SchemaDirection::Response)) {
             return [];
         }
 

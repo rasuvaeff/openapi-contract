@@ -6,8 +6,8 @@ namespace Rasuvaeff\OpenApiContract\Internal\Compilation;
 
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\SchemaDialect;
 
 /**
  * Compiles `components.securitySchemes` into the typed map exposed by

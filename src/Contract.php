@@ -9,7 +9,6 @@ use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaDialect;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
@@ -48,6 +47,8 @@ final readonly class Contract
      */
     private const string ANY_FIRST_SEGMENT = '{*}';
 
+    private SchemaValidator $schemas;
+
     private RequestValidator $requests;
 
     private ResponseValidator $responses;
@@ -81,9 +82,9 @@ final readonly class Contract
         // schema is paid once and not once per validated message. Both
         // directions share it: a request and a response schema differ by the
         // direction the cache key already carries.
-        $schemas = new SchemaValidator();
-        $this->requests = new RequestValidator($limits, $schemas);
-        $this->responses = new ResponseValidator($limits, $schemas);
+        $this->schemas = new SchemaValidator();
+        $this->requests = new RequestValidator($limits, $this->schemas);
+        $this->responses = new ResponseValidator($limits, $this->schemas);
         $routes = [];
         foreach ($operations as $operation) {
             foreach ($operation->servers as $baseIndex => $server) {
@@ -298,6 +299,36 @@ final readonly class Contract
         $responseResult = $this->responses->validate($matched, $response, $this->dialect);
 
         return new ValidationResult([...$requestResult->violations, ...$responseResult->violations]);
+    }
+
+    /**
+     * Whether a value satisfies a Schema Object of this document, as this
+     * document's dialect spells it and the direction applies it.
+     *
+     * This is the check {@see validateRequest()} and {@see validateResponse()}
+     * run on a decoded value, asked directly. It judges the value it is
+     * given: a parameter travels as a string on the wire and is decoded
+     * before it is judged, so pass the decoded value, not the wire spelling.
+     *
+     * The contract's own compilation cache is reused, so checking many values
+     * against one schema compiles it once.
+     *
+     * The value is judged as the backend reads JSON: an object is a
+     * `stdClass`, the way `json_decode()` produces one without
+     * `associative: true`, and an associative PHP array is a JSON *array*
+     * that no `type: object` schema admits. A scalar needs no such care.
+     *
+     * @param array<string, mixed> $schema a Schema Object, as {@see Operation}
+     *        carries it
+     * @throws InvalidContract when the schema declares something this package
+     *         cannot evaluate
+     */
+    public function accepts(
+        mixed $value,
+        array $schema,
+        SchemaDirection $direction = SchemaDirection::Request,
+    ): bool {
+        return $this->schemas->isValid($value, $schema, $this->dialect, $direction);
     }
 
     public function validateResponse(string $operationKey, ResponseInterface $response): ValidationResult
