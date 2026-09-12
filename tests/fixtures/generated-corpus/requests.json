@@ -1282,6 +1282,162 @@
             }
         },
         {
+            "name": "bounded.create/body-length/1",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "bounded.create/body-length/2",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "bounded.create/body-length/3",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "bounded.create/body-type/1",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "bounded.create/body-type/2",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "bounded.create/body-type/3",
+            "document": "legacy",
+            "operationId": "bounded.create",
+            "request": {
+                "method": "POST",
+                "target": "/bounded",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
             "name": "bounded.create/json-syntax/1",
             "document": "legacy",
             "operationId": "bounded.create",
