@@ -134,7 +134,12 @@ the `while` condition that is already false. Route bucketing escapes in the
 widening direction only: the always-scanned bucket is a superset, so a mutant
 that puts more routes into it loses the optimization and not a verdict — a
 mutant that narrowed bucketing would change selection, and those are killed.
-The media-type selection helpers
+The keyword test on the
+single-subschema branch of `SchemaValidator::effectiveSchema()` (`items` or
+`additionalProperties`) escapes under negation because `properties` is
+consumed by the branch above it and every other keyword the loop visits is a
+list, so the widened condition never reaches a node it would rewrite
+differently. The media-type selection helpers
 in the same trait escape for the reasons above: the rank sentinel is below
 every specificity, the key/definition type guard is reachable only through a
 hand-built `Operation`, and the strict `>` is untestable because no two

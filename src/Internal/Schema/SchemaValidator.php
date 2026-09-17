@@ -32,9 +32,14 @@ final class SchemaValidator
 
     /**
      * Keywords whose subschemas constrain the same direction as the schema
-     * that carries them, and so are rewritten with it.
+     * that carries them, and so are rewritten with it. `additionalProperties`
+     * is the map-of-objects form and used to be missing: a document keyed
+     * its items by name instead of listing them, and the `readOnly` property
+     * every item dropped elsewhere stayed required there. `not` is left
+     * alone on purpose — what a `readOnly` property means under a negation
+     * is not something either specification says.
      */
-    private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'allOf', 'anyOf', 'oneOf'];
+    private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
 
     private readonly OpisValidator $validator;
 
@@ -165,7 +170,7 @@ final class SchemaValidator
                 if (is_array($required)) {
                     $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($dropped[$name])));
                 }
-            } elseif ($keyword === 'items' && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
+            } elseif (($keyword === 'items' || $keyword === 'additionalProperties') && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
                 /** @var array<string, mixed> $items */
                 $items = $schema[$keyword];
                 $schema[$keyword] = $this->effectiveSchema($items, $direction);

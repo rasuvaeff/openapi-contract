@@ -286,6 +286,21 @@ final readonly class ResponseValidator
         SchemaDialect $dialect,
         string $basePointer,
     ): array {
+        if ($this->declaresNothingValid($mediaDefinition)) {
+            // The boolean schema `false` admits no body, and one arrived. The
+            // JSON branch has always said so; this branch read `false` as "no
+            // schema here" and passed the body.
+            return [new Violation(
+                code: 'response.body.schema',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: '$',
+                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                expected: false,
+                actual: $body,
+                message: 'Response body does not match its schema',
+            )];
+        }
         $schema = $this->declaredSchema($mediaDefinition);
 
         return match (OpaqueBodyVerdict::of($schema, $body, $this->schemas, $dialect, SchemaDirection::Response)) {

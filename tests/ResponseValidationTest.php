@@ -18,6 +18,7 @@ use Rasuvaeff\OpenApiContract\Internal\Validation\ResponseValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\SchemaValueDecoder;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
+use Rasuvaeff\OpenApiContract\Violation;
 use Rasuvaeff\Understudy\Understudy;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -625,6 +626,24 @@ final class ResponseValidationTest
         $result = $this->validateBody($this->contentContract(['application/json' => ['schema' => false]]), '{}');
 
         Assert::same($result->violations[0]->code, 'response.body.schema');
+    }
+
+    /**
+     * The same declaration on a body this package cannot decode. The opaque
+     * branch read `false` as "no schema here" and passed the body, while the
+     * request side has always reported it — the one asymmetry a validator
+     * must not have, because a declared constraint went unchecked.
+     */
+    public function aFalseSchemaOnANonJsonResponseBodyAdmitsNothing(): void
+    {
+        $contract = $this->contentContract(['text/plain' => ['schema' => false]]);
+        $result = $contract->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'text/plain'], 'hello'));
+
+        Assert::same(array_map(static fn(Violation $violation): string => $violation->code, $result->violations), ['response.body.schema']);
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/content/text~1plain/schema');
+        Assert::false($result->violations[0]->expected);
+        Assert::same($result->violations[0]->actual, 'hello');
+        Assert::true($this->contentContract(['text/plain' => []])->validateExchange(new ServerRequest('GET', '/h'), new Response(200, ['Content-Type' => 'text/plain'], 'hello'))->isValid());
     }
 
     public function aTrueResponseBodySchemaConstrainsNothing(): void

@@ -199,6 +199,30 @@ final class ContractTest
             ->requireMatch(new ServerRequest('GET', '/missing'));
     }
 
+    /**
+     * The exception message lands in the same logs as a violation message,
+     * and a query string or userinfo is where a credential travels. The
+     * unmatched *violation* has printed the path alone for that reason; the
+     * exception printed the whole URI.
+     */
+    public function requireMatchPrintsThePathAndNotTheUri(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/x' => ['get' => ['responses' => ['200' => []]]]],
+        ]);
+
+        try {
+            $contract->requireMatch(new Request('post', 'https://user:PASSW0RD@api.example.com/missing?api_key=SECRET'));
+        } catch (UnknownOperation $exception) {
+            Assert::same($exception->getMessage(), 'No operation matches POST /missing');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected UnknownOperation');
+    }
+
     public function rejectsEmptyResponsesObject(): void
     {
         Expect::exception(InvalidContract::class);
