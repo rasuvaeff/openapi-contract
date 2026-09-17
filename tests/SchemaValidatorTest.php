@@ -142,6 +142,9 @@ final class SchemaValidatorTest
         Assert::true($validator->isValid($value, $object, SchemaDialect::OpenApi31));
         Assert::true($validator->isValid([$value], ['type' => 'array', 'items' => $object], SchemaDialect::OpenApi31));
         Assert::true($validator->isValid($value, ['allOf' => [$object]], SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['k' => $value], ['type' => 'object', 'additionalProperties' => $object], SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['k' => (object) ['id' => 1]], ['type' => 'object', 'additionalProperties' => $object], SchemaDialect::OpenApi31, SchemaDirection::Response));
+        Assert::false($validator->isValid((object) ['k' => $value], ['type' => 'object', 'additionalProperties' => $object], SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
     public function toleratesSchemasWhereEveryPropertyIsFilteredOut(): void

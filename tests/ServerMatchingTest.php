@@ -228,6 +228,26 @@ final class ServerMatchingTest
         Assert::same($unknown->violations[0]->code, 'request.operation.unknown');
     }
 
+    /**
+     * The diagnostic names what the comparison read — scheme, host, port —
+     * and not the authority, which by PSR-7 carries the userinfo the
+     * comparison never looks at and a log must never receive.
+     */
+    public function serverMismatchDiagnosticOmitsUserinfoAndKeepsThePort(): void
+    {
+        $contract = $this->singleServerContract('https://api.example.com/v1');
+
+        $mismatch = $contract->validateRequest(new Request('GET', 'https://user:PASSW0RD@evil.example.com:8443/v1/x?api_key=SECRET'));
+
+        Assert::same($mismatch->violations[0]->code, 'request.server.mismatch');
+        Assert::same($mismatch->violations[0]->actual, 'https://evil.example.com:8443');
+        Assert::same($mismatch->violations[0]->instancePath, '/v1/x');
+        Assert::same(
+            $mismatch->violations[0]->message,
+            'Path /v1/x is declared, but no server of its operations matches https://evil.example.com:8443',
+        );
+    }
+
     #[DataProvider('invalidServerProvider')]
     public function failsClosedOnUnsupportedServerDeclarations(array $server, string $messagePart): void
     {

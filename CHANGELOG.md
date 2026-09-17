@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Fixed.** A `readOnly` property is now dropped from a request schema — and a
+  `writeOnly` one from a response schema — under `additionalProperties` as it
+  already was under `properties`, `items` and the composition keywords. A
+  document that keyed its items by name instead of listing them kept the
+  property required, so a legal request was reported as
+  `request.body.schema`. `not` is deliberately left alone: neither
+  specification says what a `readOnly` property means under a negation.
+  (#130)
+- **Fixed.** `Contract::requireMatch()` names the request path in its
+  `UnknownOperation` message, not the whole URI: a query string and userinfo
+  are where a credential travels, and the unmatched *violation* had printed
+  the path alone for exactly that reason. The `request.server.mismatch`
+  diagnostic renders scheme, host and port instead of the PSR-7 authority,
+  which carries userinfo the comparison never reads. (#131)
+- **Fixed.** A Media Type Object declaring the boolean schema `false` on a
+  non-JSON response body now produces `response.body.schema`, as the request
+  side and the JSON branch already did; the opaque branch had read `false` as
+  "no schema declared" and passed the body. (#132)
+
 ## 0.11.0 — 2026-09-12
 
 - **Added.** `Contract::accepts()` and `SchemaCheck` expose the schema check

@@ -275,7 +275,10 @@ final readonly class Contract
 
     public function requireMatch(RequestInterface $request): MatchedOperation
     {
-        return $this->match($request) ?? throw new UnknownOperation(sprintf('No operation matches %s %s', $request->getMethod(), (string) $request->getUri()));
+        // The path, not the URI: see unmatchedResult() — this message ends up
+        // in the same logs, and a query string or userinfo is where a
+        // credential travels.
+        return $this->match($request) ?? throw new UnknownOperation(sprintf('No operation matches %s %s', strtoupper($request->getMethod()), $request->getUri()->getPath()));
     }
 
     public function validateRequest(RequestInterface $request): ValidationResult
@@ -365,7 +368,12 @@ final readonly class Contract
         // the line below while printing this one.
         $path = $request->getUri()->getPath();
         if ($serverMismatch) {
-            $authority = $request->getUri()->getScheme() . '://' . $request->getUri()->getAuthority();
+            // Scheme, host and port are what the server declaration is
+            // compared against; `getAuthority()` would add the userinfo the
+            // comparison never reads and the diagnostic must not print.
+            $uri = $request->getUri();
+            $port = $uri->getPort();
+            $authority = $uri->getScheme() . '://' . $uri->getHost() . ($port === null ? '' : ':' . $port);
 
             return new ValidationResult([new Violation(
                 code: 'request.server.mismatch',
@@ -396,9 +404,6 @@ final readonly class Contract
     }
 
     /**
-     * @return array<string, string>|null
-     */
-    /**
      * The bucket a route belongs to: its first segment when that segment is a
      * literal, and the always-scanned one when it is templated or absent. A
      * literal first segment is compared to the decoded request segment
@@ -413,6 +418,9 @@ final readonly class Contract
         return $first === null || str_contains($first, '{') ? self::ANY_FIRST_SEGMENT : $first;
     }
 
+    /**
+     * @return array<string, string>|null
+     */
     private function matchPath(string $route, string $requestPath): ?array
     {
         $routeParts = $this->segments($route);

@@ -321,6 +321,38 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($request)->isValid());
     }
 
+    /**
+     * The same item declared three ways. A document that keys its items by
+     * name (`additionalProperties`) rather than listing them (`items`) used
+     * to keep the `readOnly` property required, so the map form rejected the
+     * request the other two accepted.
+     */
+    public function dropsReadOnlyPropertiesUnderEveryApplicatorKeyword(): void
+    {
+        $item = ['type' => 'object', 'required' => ['id', 'name'], 'properties' => [
+            'id' => ['type' => 'integer', 'readOnly' => true],
+            'name' => ['type' => 'string'],
+        ]];
+        $operation = static fn(array $schema): array => ['post' => [
+            'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => $schema]]],
+            'responses' => ['204' => []],
+        ]];
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'components' => ['schemas' => ['Item' => $item]], 'paths' => [
+            '/direct' => $operation(['$ref' => '#/components/schemas/Item']),
+            '/list' => $operation(['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Item']]),
+            '/map' => $operation(['type' => 'object', 'additionalProperties' => ['$ref' => '#/components/schemas/Item']]),
+            '/closed' => $operation(['type' => 'object', 'additionalProperties' => false]),
+        ]]);
+        $post = static fn(string $path, string $body): ServerRequest => new ServerRequest('POST', $path, ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($post('/direct', '{"name":"a"}'))->isValid());
+        Assert::true($contract->validateRequest($post('/list', '[{"name":"a"}]'))->isValid());
+        Assert::true($contract->validateRequest($post('/map', '{"k":{"name":"a"}}'))->isValid());
+        Assert::false($contract->validateRequest($post('/map', '{"k":{}}'))->isValid());
+        // A boolean `additionalProperties` is not a subschema and passes through untouched.
+        Assert::false($contract->validateRequest($post('/closed', '{"k":1}'))->isValid());
+    }
+
     public function reportsExactParameterViolationPointers(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/a~b' => ['get' => [
