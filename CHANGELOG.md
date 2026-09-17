@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-JSON response body now produces `response.body.schema`, as the request
   side and the JSON branch already did; the opaque branch had read `false` as
   "no schema declared" and passed the body. (#132)
+- **Fixed.** `Contract::accepts()` and `SchemaCheck::accepts()` raise
+  `InvalidContract` for a schema they cannot read — one that cannot be
+  JSON-encoded (`NAN`/`INF`, malformed UTF-8, more than 512 levels), or a list
+  in place of an object — where the first leaked a raw `JsonException` and
+  the second was read as the empty schema and accepted every value. A schema
+  out of a document meets neither: the compiler settles both at load time.
+- **Documentation.** Four boundaries are now written down: a JSON body deeper
+  than 64 levels is reported as `*.body.json`, which the decoder cannot tell
+  from malformed JSON; the schema compilation cache never evicts, so a
+  `SchemaCheck` is one per document; a hand-passed schema may `$ref` only
+  inside itself; and `securitySchemes()` checks `flows` and the URL fields
+  for shape, not for content. `llms.txt` no longer names the
+  `Contract::MAX_*` constants that 0.9.0 replaced with `Limits`.
 
 ## 0.11.0 — 2026-09-12
 

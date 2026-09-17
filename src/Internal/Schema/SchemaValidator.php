@@ -95,7 +95,17 @@ final class SchemaValidator
      */
     private function compiledSchema(array $schema, SchemaDialect $dialect, SchemaDirection $direction): Schema
     {
-        $key = hash('xxh128', $dialect->name . "\0" . $direction->name . "\0" . json_encode($schema, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
+        $this->assertObjectShape($schema);
+
+        try {
+            $encoded = json_encode($schema, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
+        } catch (\JsonException $exception) {
+            // NAN/INF, malformed UTF-8 or a nesting past 512 levels: a document
+            // schema is checked for all three at compile time, a hand-passed
+            // one is not, and the refusal should still be a contract error.
+            throw UnsupportedSchema::fromBackend($exception);
+        }
+        $key = hash('xxh128', $dialect->name . "\0" . $direction->name . "\0" . $encoded);
         if (isset($this->compiled[$key])) {
             return $this->compiled[$key];
         }
@@ -105,6 +115,22 @@ final class SchemaValidator
             return $this->compiled[$key] = $this->validator->loader()->loadObjectSchema($object);
         } catch (\Throwable $exception) {
             throw UnsupportedSchema::fromBackend($exception);
+        }
+    }
+
+    /**
+     * A document schema never arrives as a list — the compiler refuses the
+     * shape at load time — but a schema handed to `accepts()` can, and read
+     * as the empty schema it accepted every value.
+     *
+     * @param array<array-key, mixed> $schema
+     */
+    private function assertObjectShape(array $schema): void
+    {
+        foreach (array_keys($schema) as $key) {
+            if (!is_string($key)) {
+                throw UnsupportedSchema::atKeyword('schema', 'expected a schema object');
+            }
         }
     }
 

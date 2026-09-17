@@ -20,9 +20,17 @@ use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
  *
  * Compilation is cached per instance and keyed on the schema, the dialect and
  * the direction, so checking many values against the same schema compiles it
- * once. Keep the instance for as long as the document lives. A {@see Contract}
- * already holds one and offers {@see Contract::accepts()}; this class is for
- * the consumer that holds an {@see Operation} and no contract.
+ * once. The cache never evicts: hold one instance per document, whose schemas
+ * are finite, and not one fed an unbounded stream of distinct schemas. A
+ * {@see Contract} already holds one and offers {@see Contract::accepts()};
+ * this class is for the consumer that holds an {@see Operation} and no
+ * contract.
+ *
+ * A schema is read as the contract reads one out of a document, with two
+ * differences a hand-written schema can meet: a `$ref` is resolved only
+ * inside the schema itself (`#/$defs/…`), every other target is refused; and
+ * a schema that cannot be encoded as JSON — `NAN`, malformed UTF-8, more than
+ * 512 levels — is refused, where a document schema is refused at load time.
  *
  * @api
  */

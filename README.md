@@ -221,7 +221,11 @@ type defines: `apiKey` — `name`, `in` (`query`/`header`/`cookie`); `http` —
 with its URLs and `scopes`; `openIdConnect` — `openIdConnectUrl`;
 `mutualTLS` (OpenAPI 3.1 only) — nothing else. Descriptions and extensions
 are dropped. A scheme without a supported `type`, or missing a field its type
-requires, fails closed as `InvalidContract` at compile time.
+requires, fails closed as `InvalidContract` at compile time. Two things are
+checked for shape only: an `oauth2` scheme whose `flows` object declares no
+flow compiles to an empty `flows`, and the URL fields (`tokenUrl`,
+`authorizationUrl`, `refreshUrl`, `openIdConnectUrl`) must be non-empty
+strings but are not parsed as URLs.
 
 ### Validating exchanges
 
@@ -312,6 +316,10 @@ validation but is non-seekable is not consumed: it produces
 Bodies larger than the configured `messageBodyBytes` (1 MiB by default)
 produce the corresponding `request.body.too_large` or `response.body.too_large`
 violation, which says the body was not read rather than that it was wrong.
+A JSON body is decoded with a nesting budget of 64 levels; one nested deeper
+is reported as `request.body.json` / `response.body.json` — the decoder cannot
+tell a budget overrun from malformed JSON, so the code says "not valid JSON"
+where "not read" would be more precise. The budget is not configurable.
 `ValidationResultFormatter` renders every violation in stable order with
 bounded fields, depth, item counts, and expected/actual values. A value is
 rendered only where its name can be checked: a body is redacted wholesale —
@@ -367,6 +375,17 @@ the dialect decides how a schema is read: 3.0 spells nullability as
 `nullable: true` and the exclusive bounds as booleans, 3.1 as a type union and
 as numbers. A schema a dialect cannot read raises `InvalidContract` rather
 than being silently read as something else.
+
+Two things a hand-written schema can meet that a document schema cannot,
+because the compiler settles them at load time. A `$ref` is resolved only
+inside the schema itself (`#/$defs/…`); a reference to `#/components/…`, to
+another file or to a URL raises `InvalidContract`. A schema that cannot be
+encoded as JSON — `NAN`/`INF`, malformed UTF-8, more than 512 levels of
+nesting — raises `InvalidContract` too, as does a list where an object was
+expected. The compilation cache behind both methods is keyed by the schema
+and never evicts: a `Contract` holds finitely many schemas, but a
+`SchemaCheck` fed an unbounded stream of distinct schemas grows with it —
+keep one per document, not one per generator.
 
 ### Violation codes
 
