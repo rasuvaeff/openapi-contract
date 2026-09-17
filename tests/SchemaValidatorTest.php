@@ -147,6 +147,33 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid((object) ['k' => $value], ['type' => 'object', 'additionalProperties' => $object], SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
+    /**
+     * The guards `SchemaCheck` relies on live here, and mutants in this class
+     * are matched to this test class alone — see the package AGENTS.md on
+     * `#[Covers]` — so the public-facing test in `SchemaCheckTest` cannot
+     * stand in for these.
+     */
+    public function refusesShapesADocumentSchemaCannotTake(): void
+    {
+        $validator = new SchemaValidator();
+        $refused = static function (array $schema) use ($validator): bool {
+            try {
+                $validator->isValid(1, $schema, SchemaDialect::OpenApi31);
+            } catch (UnsupportedSchema) {
+                return true;
+            }
+
+            return false;
+        };
+
+        Assert::true($refused(['a', 'b']));
+        Assert::true($refused([0 => 'a', 'type' => 'integer']));
+        Assert::true($refused(['type' => 'number', 'maximum' => NAN]));
+        Assert::true($refused(['type' => 'string', 'pattern' => "\xff"]));
+        Assert::false($refused([]));
+        Assert::false($refused(['type' => 'integer']));
+    }
+
     public function toleratesSchemasWhereEveryPropertyIsFilteredOut(): void
     {
         $validator = new SchemaValidator();

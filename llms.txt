@@ -66,9 +66,10 @@ Rules:
   original position in `finally`; non-seekable bodies are never consumed and
   yield `request.body.non_seekable` / `response.body.non_seekable` when their
   declared content needs validation;
-- `Contract::MAX_MESSAGE_BODY_BYTES` is 1 MiB; larger bodies yield
+- `Limits::$messageBodyBytes` defaults to 1 MiB; larger bodies yield
   `request.body.too_large` / `response.body.too_large` without entering
-  schema validation or diagnostics;
+  schema validation or diagnostics; a JSON body nested deeper than 64 levels
+  yields `request.body.json` / `response.body.json` (not configurable);
 - `readOnly`/`writeOnly` properties apply directionally to request/response
   effective schemas;
 - declared `security` is NOT enforced: requirements compile and are checked
@@ -95,7 +96,9 @@ Rules:
   an operation anonymous; credentials live in the generator package;
 - `components.securitySchemes` compile into a typed map: a scheme without a
   supported `type` (`apiKey`, `http`, `mutualTLS` on 3.1 only, `oauth2`,
-  `openIdConnect`) or missing a field its type requires fails closed;
+  `openIdConnect`) or missing a field its type requires fails closed; an
+  `oauth2` scheme with an empty `flows` object compiles to empty `flows`, and
+  URL fields are checked as non-empty strings, not parsed as URLs;
 - a present response header with a `schema` is decoded `simple`-style and
   validated (`response.header.schema` / `response.header.serialization`);
   `content`-form or non-`simple` declarations fail closed as
@@ -211,8 +214,12 @@ API reference:
   `actual` is redacted wholesale; a parameter `actual` is rendered with members
   whose name matches `authorization|api[-_]?key|token|secret|password|cookie`
   replaced, and is redacted outright when the instance path itself matches.
-- Schema compilation is cached per `Contract` instance, keyed by schema,
-  direction and dialect.
+- Schema compilation is cached per `Contract` / `SchemaCheck` instance,
+  keyed by schema, direction and dialect; the cache never evicts, so hold one
+  instance per document. A hand-passed schema may `$ref` only inside itself
+  (`#/$defs/…`); any other target, a schema that cannot be JSON-encoded
+  (`NAN`, malformed UTF-8, >512 levels) or a list in place of an object
+  raises `InvalidContract`.
 - `Contract::accepts(mixed $value, array $schema, SchemaDirection $direction = SchemaDirection::Request): bool`
   runs that same check on one Schema Object, binding the document's dialect
   and reusing the cache. `SchemaCheck::accepts($value, $schema, SchemaDialect

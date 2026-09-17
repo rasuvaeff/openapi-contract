@@ -17,6 +17,7 @@ use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 use Testo\Assert;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Expect;
 use Testo\Test;
 
@@ -106,6 +107,67 @@ final class SchemaCheckTest
     public function theDialectDecidesHowNullabilityIsSpelled(): void
     {
         Assert::true((new SchemaCheck())->accepts(null, ['type' => 'string', 'nullable' => true], SchemaDialect::OpenApi30));
+    }
+
+    /**
+     * A document schema is checked for these at load time; a hand-passed one
+     * reaches the cache key first, where `json_encode` used to leak a raw
+     * `JsonException` — an exit outside `ContractException`.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('unencodableSchemaProvider')]
+    public function refusesASchemaItCannotEncode(array $schema): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        (new SchemaCheck())->accepts(1, $schema, SchemaDialect::OpenApi31);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function unencodableSchemaProvider(): iterable
+    {
+        yield 'NAN bound' => [['type' => 'number', 'maximum' => NAN]];
+        yield 'malformed UTF-8 pattern' => [['type' => 'string', 'pattern' => "\xff"]];
+        $deep = ['type' => 'integer'];
+        for ($level = 0; $level < 600; ++$level) {
+            $deep = ['type' => 'array', 'items' => $deep];
+        }
+        yield 'deeper than json_encode allows' => [$deep];
+    }
+
+    /**
+     * A list is not a Schema Object. Read as one it was the empty schema and
+     * accepted every value, which is the fail-open a validator must not have.
+     */
+    public function refusesAListInPlaceOfASchema(): void
+    {
+        Expect::exception(InvalidContract::class);
+
+        (new SchemaCheck())->accepts(1, ['a', 'b'], SchemaDialect::OpenApi31);
+    }
+
+    /**
+     * `$ref` reaches the backend unresolved here — the compiler resolves
+     * references out of a document before a schema is compiled, so a
+     * hand-passed schema is the only place one can still appear. Inside the
+     * schema it works; anywhere else it is refused as a contract error.
+     */
+    public function resolvesReferencesOnlyInsideTheSchemaItself(): void
+    {
+        $check = new SchemaCheck();
+
+        Assert::true($check->accepts(5, ['$defs' => ['n' => ['type' => 'integer']], '$ref' => '#/$defs/n'], SchemaDialect::OpenApi31));
+        Assert::false($check->accepts('x', ['$defs' => ['n' => ['type' => 'integer']], '$ref' => '#/$defs/n'], SchemaDialect::OpenApi31));
+        foreach (['#/components/schemas/Pet', 'other.json#/Pet', 'https://example.invalid/pet.json'] as $reference) {
+            try {
+                $check->accepts(5, ['$ref' => $reference], SchemaDialect::OpenApi31);
+            } catch (InvalidContract) {
+                continue;
+            }
+
+            Assert::true(actual: false, message: sprintf('Expected "%s" to be refused', $reference));
+        }
     }
 
     /** Under 3.1 `nullable` is not a keyword, and a schema using it is refused rather than silently read as `type: string` alone. */
