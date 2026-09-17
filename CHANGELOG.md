@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.11.1 — 2026-09-18
 
 - **Fixed.** A `readOnly` property is now dropped from a request schema — and a
   `writeOnly` one from a response schema — under `additionalProperties` as it
