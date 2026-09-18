@@ -37,6 +37,13 @@ final class LimitsTest
         Assert::same($limits->documentNodes, 14);
     }
 
+    public function acceptsTheSmallestBudgetThatAdmitsSomething(): void
+    {
+        $limits = new Limits(documentBytes: 1, messageBodyBytes: 1, documentFiles: 1, documentNodes: 1);
+
+        Assert::same([$limits->documentBytes, $limits->messageBodyBytes, $limits->documentFiles, $limits->documentNodes], [1, 1, 1, 1]);
+    }
+
     #[DataProvider('emptyBudgetProvider')]
     public function refusesABudgetThatAdmitsNothing(int $documentBytes, int $messageBodyBytes, int $documentFiles, int $documentNodes, string $message): void
     {

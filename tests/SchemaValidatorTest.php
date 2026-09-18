@@ -207,11 +207,65 @@ final class SchemaValidatorTest
         // 2^63 arrives as a float: json_decode() and the parameter decoder both overflow into one.
         yield 'int64 above, as the float it decodes to' => [$int64, 9_223_372_036_854_775_808.0, false];
         yield 'int64 far above' => [$int64, 1.0e20, false];
+        yield 'int64 lower bound, as the float it decodes to' => [$int64, -9_223_372_036_854_775_808.0, true];
         yield 'int64 far below' => [$int64, -1.0e20, false];
         yield 'int64 whole-valued float inside' => [$int64, 1.0e15, true];
         yield 'a string is not judged by an integer format' => [$int32, 'x', false];
         yield 'an unknown integer format stays an annotation' => [['type' => 'integer', 'format' => 'int8'], 1_000, true];
         yield 'a number format stays an annotation' => [['type' => 'number', 'format' => 'float'], 1.0e300, true];
+    }
+
+    /**
+     * The backend parses a node the first time a value reaches it and wraps a
+     * parse error into a schema that throws when validated. `compile()`
+     * parses every node — the root and each subschema under every keyword
+     * the compiler emits — so the refusal is the compilation's, not the
+     * first unlucky value's.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('unparsableNodeProvider')]
+    public function compileParsesEveryNodeTheBackendWouldParseLazily(array $schema, string $message): void
+    {
+        $validator = new SchemaValidator();
+
+        try {
+            $validator->compile($schema, SchemaDialect::OpenApi31, SchemaDirection::Request);
+            Assert::true(actual: false, message: 'Expected compilation to refuse the schema');
+        } catch (UnsupportedSchema $exception) {
+            Assert::string($exception->getMessage())->contains($message);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function unparsableNodeProvider(): iterable
+    {
+        $bad = ['type' => 'string', 'pattern' => '['];
+        yield 'the root' => [$bad, 'pattern value must be a valid regex'];
+        yield 'under items' => [['type' => 'array', 'items' => $bad], 'pattern value must be a valid regex'];
+        yield 'under additionalProperties' => [['type' => 'object', 'additionalProperties' => $bad], 'pattern value must be a valid regex'];
+        yield 'under not' => [['not' => $bad], 'pattern value must be a valid regex'];
+        yield 'under oneOf, with no allOf before it' => [['oneOf' => [['type' => 'integer'], $bad]], 'pattern value must be a valid regex'];
+        yield 'under anyOf' => [['anyOf' => [$bad]], 'pattern value must be a valid regex'];
+        yield 'under properties, with no $defs before it' => [['type' => 'object', 'properties' => ['ok' => ['type' => 'string'], 'a' => $bad]], 'pattern value must be a valid regex'];
+        yield 'under $defs, reached through $ref' => [['properties' => ['a' => ['$ref' => '#/$defs/A']], '$defs' => ['A' => $bad]], 'pattern value must be a valid regex'];
+        yield 'two levels down' => [['type' => 'object', 'properties' => ['a' => ['type' => 'array', 'items' => ['allOf' => [$bad]]]]], 'pattern value must be a valid regex'];
+        yield 'a minimum that is not a number, nested' => [['type' => 'object', 'properties' => ['n' => ['type' => 'integer', 'minimum' => '5']]], 'minimum must contain a valid number'];
+    }
+
+    /**
+     * Compilation walks the subschemas the compiler emits; a member that is
+     * not an object (a boolean schema, a scalar in a list) is not a node and
+     * is left to the backend, which reads it as it always did.
+     */
+    public function compileLeavesNonObjectMembersToTheBackend(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['allOf' => [true, ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]], 'items' => true];
+
+        $validator->compile($schema, SchemaDialect::OpenApi31, SchemaDirection::Request);
+        Assert::true($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
     public function toleratesSchemasWhereEveryPropertyIsForeign(): void

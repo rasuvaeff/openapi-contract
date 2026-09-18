@@ -1120,6 +1120,7 @@ final class RequestValidationTest
         yield 'integer rejects a fraction' => [['type' => 'integer'], '5.0', false];
         yield 'integer bound sees the magnitude past PHP range' => [['type' => 'integer', 'maximum' => 10], '99999999999999999999', false];
         yield 'integer past PHP range is still an integer' => [['type' => 'integer'], '99999999999999999999', true];
+        yield 'integer past PHP range is not the saturated maximum' => [['type' => 'integer', 'const' => PHP_INT_MAX], '99999999999999999999', false];
         yield 'integer at PHP range does not become a float' => [['type' => 'integer', 'const' => PHP_INT_MAX], (string) PHP_INT_MAX, true];
         yield 'negative integer at PHP range does not become a float' => [['type' => 'integer', 'const' => PHP_INT_MIN], (string) PHP_INT_MIN, true];
         yield 'negative zero is the integer zero' => [['type' => 'integer', 'const' => 0], '-0', true];
@@ -1789,16 +1790,35 @@ final class RequestValidationTest
             ]],
             responses: ['204' => []],
         );
+        $withIntegerKey = new Operation(
+            key: 'GET /n',
+            operationId: null,
+            method: 'GET',
+            path: '/n',
+            parameters: [[
+                'name' => 'ids',
+                'in' => 'query',
+                'required' => true,
+                'style' => 'form',
+                'explode' => false,
+                'allowReserved' => false,
+                'schema' => ['type' => 'array', 'items' => [0 => 'x', 'type' => 'string']],
+                'specPointer' => '/paths/~1n/get/parameters/0',
+            ]],
+            responses: ['204' => []],
+        );
 
-        try {
-            (new RequestValidator(new Limits()))->validate(
-                new MatchedOperation($operation, []),
-                new ServerRequest('GET', '/n?ids=1'),
-                SchemaDialect::OpenApi31,
-            );
-            Assert::true(actual: false);
-        } catch (InvalidContract $exception) {
-            Assert::same($exception->getMessage(), 'Schema must be an object');
+        foreach ([[$operation, 'Schema must be an object'], [$withIntegerKey, 'Schema keys must be strings']] as [$handBuilt, $message]) {
+            try {
+                (new RequestValidator(new Limits()))->validate(
+                    new MatchedOperation($handBuilt, []),
+                    new ServerRequest('GET', '/n?ids=1'),
+                    SchemaDialect::OpenApi31,
+                );
+                Assert::true(actual: false);
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), $message);
+            }
         }
     }
 
