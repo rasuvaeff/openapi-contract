@@ -113,17 +113,15 @@ final readonly class OperationSchemas
 
     /**
      * A Schema Object as the validators read one: a keyword map, or the
-     * empty schema. A boolean has nothing to compile, and any other shape
-     * has already been refused by the compiler.
+     * empty schema. A boolean has nothing to compile, and any other shape —
+     * a list included, whose keys are not strings — has already been refused
+     * by the compiler.
      *
      * @return array<string, mixed>|null
      */
     private function schema(mixed $value): ?array
     {
         if (!is_array($value)) {
-            return null;
-        }
-        if ($value !== [] && array_is_list($value)) {
             return null;
         }
         foreach (array_keys($value) as $key) {

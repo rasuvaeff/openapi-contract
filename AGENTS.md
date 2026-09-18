@@ -158,7 +158,12 @@ single-subschema branch of `SchemaValidator::effectiveSchema()` (`items` or
 `additionalProperties`) escapes under negation because `properties` is
 consumed by the branch above it and every other keyword the loop visits is a
 list, so the widened condition never reaches a node it would rewrite
-differently. The media-type selection helpers
+differently. The two `return [];`
+guards in `OperationSchemas` that answer a non-array `content` or `headers`
+escape under removal because the `foreach` they protect then iterates a
+non-array — a PHP warning and the same empty result — and the walk's
+`(string) $name` casts, like the decoder's, only spell a numeric key PHP
+normalises back. The media-type selection helpers
 in the same trait escape for the reasons above: the rank sentinel is below
 every specificity, the key/definition type guard is reachable only through a
 hand-built `Operation`, and the strict `>` is untestable because no two

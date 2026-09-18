@@ -65,12 +65,14 @@ final class OperationSchemasTest
                 'd' => ['schema' => []],
                 'e' => 'not-a-media-type',
                 'f' => ['encoding' => 'not-an-object'],
-                'g' => ['encoding' => ['p' => 'not-an-object', 'r' => ['headers' => 'not-an-object'], 'h' => ['headers' => ['X' => 'not-an-object']]]],
+                'g' => ['encoding' => ['p' => 'not-an-object', 'r' => ['headers' => 'not-an-object'], 'h' => ['headers' => ['X' => 'not-an-object', 'Y' => ['schema' => ['const' => 'after-a-bad-header']]]], 'i' => ['headers' => ['Z' => ['schema' => ['const' => 'after-a-bad-encoding']]]]]],
+                'z' => ['schema' => ['const' => 'after-a-bad-media-type']],
             ]],
-            responses: [200 => 'not-an-object', 201 => ['content' => 'not-an-object', 'headers' => 'not-an-object'], 204 => []],
+            responses: [200 => 'not-an-object', 201 => ['content' => 'not-an-object', 'headers' => 'not-an-object'], 204 => [], 202 => ['content' => ['application/json' => ['schema' => ['const' => 'after-a-bad-response']]]]],
         );
 
-        Assert::same($this->sites($operation), ['{}@Request']);
+        // What is skipped is skipped alone: the walk goes on past it.
+        Assert::same($this->sites($operation), ['{}@Request', 'after-a-bad-header@Request', 'after-a-bad-encoding@Request', 'after-a-bad-media-type@Request', 'after-a-bad-response@Response']);
         Assert::same($this->sites(new Operation(key: 'GET /n', operationId: null, method: 'GET', path: '/n', requestBody: ['content' => 'x'])), []);
     }
 
