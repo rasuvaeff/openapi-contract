@@ -174,38 +174,156 @@ final class SchemaValidatorTest
         Assert::false($refused(['type' => 'integer']));
     }
 
-    public function toleratesSchemasWhereEveryPropertyIsFilteredOut(): void
+    /**
+     * OpenAPI defines `int32` and `int64` as ranges of the integer type. The
+     * backend registers formats for strings only, so both were annotations:
+     * `4294967296` satisfied `format: int32`. Every other format on a
+     * non-string value stays an annotation, as the README table says.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('integerFormatProvider')]
+    public function assertsTheIntegerFormatsAsRanges(array $schema, mixed $value, bool $valid): void
+    {
+        $validator = new SchemaValidator();
+
+        Assert::same($validator->isValid($value, $schema, SchemaDialect::OpenApi31), $valid);
+        Assert::same($validator->isValid($value, ['type' => 'integer', 'nullable' => true, 'format' => $schema['format']], SchemaDialect::OpenApi30), $valid);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, mixed, bool}> */
+    public static function integerFormatProvider(): iterable
+    {
+        $int32 = ['type' => 'integer', 'format' => 'int32'];
+        $int64 = ['type' => 'integer', 'format' => 'int64'];
+        yield 'int32 upper bound' => [$int32, 2_147_483_647, true];
+        yield 'int32 lower bound' => [$int32, -2_147_483_648, true];
+        yield 'int32 above' => [$int32, 2_147_483_648, false];
+        yield 'int32 below' => [$int32, -2_147_483_649, false];
+        yield 'int32 whole-valued float' => [$int32, 7.0, true];
+        yield 'int32 whole-valued float above' => [$int32, 4_294_967_296.0, false];
+        yield 'int64 upper bound' => [$int64, PHP_INT_MAX, true];
+        yield 'int64 lower bound' => [$int64, PHP_INT_MIN, true];
+        // 2^63 arrives as a float: json_decode() and the parameter decoder both overflow into one.
+        yield 'int64 above, as the float it decodes to' => [$int64, 9_223_372_036_854_775_808.0, false];
+        yield 'int64 far above' => [$int64, 1.0e20, false];
+        yield 'int64 lower bound, as the float it decodes to' => [$int64, -9_223_372_036_854_775_808.0, true];
+        yield 'int64 far below' => [$int64, -1.0e20, false];
+        yield 'int64 whole-valued float inside' => [$int64, 1.0e15, true];
+        yield 'a string is not judged by an integer format' => [$int32, 'x', false];
+        yield 'an unknown integer format stays an annotation' => [['type' => 'integer', 'format' => 'int8'], 1_000, true];
+        yield 'a number format stays an annotation' => [['type' => 'number', 'format' => 'float'], 1.0e300, true];
+    }
+
+    /**
+     * The backend parses a node the first time a value reaches it and wraps a
+     * parse error into a schema that throws when validated. `compile()`
+     * parses every node — the root and each subschema under every keyword
+     * the compiler emits — so the refusal is the compilation's, not the
+     * first unlucky value's.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('unparsableNodeProvider')]
+    public function compileParsesEveryNodeTheBackendWouldParseLazily(array $schema, string $message): void
+    {
+        $validator = new SchemaValidator();
+
+        try {
+            $validator->compile($schema, SchemaDialect::OpenApi31, SchemaDirection::Request);
+            Assert::true(actual: false, message: 'Expected compilation to refuse the schema');
+        } catch (UnsupportedSchema $exception) {
+            Assert::string($exception->getMessage())->contains($message);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function unparsableNodeProvider(): iterable
+    {
+        $bad = ['type' => 'string', 'pattern' => '['];
+        yield 'the root' => [$bad, 'pattern value must be a valid regex'];
+        yield 'under items' => [['type' => 'array', 'items' => $bad], 'pattern value must be a valid regex'];
+        yield 'under additionalProperties' => [['type' => 'object', 'additionalProperties' => $bad], 'pattern value must be a valid regex'];
+        yield 'under not' => [['not' => $bad], 'pattern value must be a valid regex'];
+        yield 'under oneOf, with no allOf before it' => [['oneOf' => [['type' => 'integer'], $bad]], 'pattern value must be a valid regex'];
+        yield 'under anyOf' => [['anyOf' => [$bad]], 'pattern value must be a valid regex'];
+        yield 'under properties, with no $defs before it' => [['type' => 'object', 'properties' => ['ok' => ['type' => 'string'], 'a' => $bad]], 'pattern value must be a valid regex'];
+        yield 'under $defs, reached through $ref' => [['properties' => ['a' => ['$ref' => '#/$defs/A']], '$defs' => ['A' => $bad]], 'pattern value must be a valid regex'];
+        yield 'two levels down' => [['type' => 'object', 'properties' => ['a' => ['type' => 'array', 'items' => ['allOf' => [$bad]]]]], 'pattern value must be a valid regex'];
+        yield 'a minimum that is not a number, nested' => [['type' => 'object', 'properties' => ['n' => ['type' => 'integer', 'minimum' => '5']]], 'minimum must contain a valid number'];
+    }
+
+    /**
+     * Compilation walks the subschemas the compiler emits; a member that is
+     * not an object (a boolean schema, a scalar in a list) is not a node and
+     * is left to the backend, which reads it as it always did.
+     */
+    public function compileLeavesNonObjectMembersToTheBackend(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['allOf' => [true, ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]]], 'items' => true];
+
+        $validator->compile($schema, SchemaDialect::OpenApi31, SchemaDirection::Request);
+        Assert::true($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+    }
+
+    public function toleratesSchemasWhereEveryPropertyIsForeign(): void
     {
         $validator = new SchemaValidator();
         $readOnly = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]], 'required' => ['id']];
 
         Assert::true($validator->isValid((object) [], $readOnly, SchemaDialect::OpenApi31));
-        Assert::true($validator->isValid((object) ['id' => 'free-form'], $readOnly, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['id' => 7], $readOnly, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['id' => 'free-form'], $readOnly, SchemaDialect::OpenApi31));
         Assert::true($validator->isValid((object) [], ['type' => 'object', 'properties' => []], SchemaDialect::OpenApi31));
         Assert::false($validator->isValid('scalar', $readOnly, SchemaDialect::OpenApi31));
     }
 
     /**
-     * Dropping the last property drops `properties` itself, so what the
-     * document says about undeclared properties is what still decides: a
-     * closed object stays closed, and an open one stays open. Pinned because
-     * the open half reads like a hole in a fail-closed package and is not
-     * one — OAS implies no `additionalProperties: false`.
+     * A foreign property loses its `required` entry and nothing else, so the
+     * verdict on a value that carries it is the same whether the object is
+     * open or closed: the property is declared, so a closed object admits it,
+     * and typed, so an open one still checks it. Dropping the subschema, as
+     * this did, made the two disagree — the open object accepted
+     * `{"id": "x"}` and the closed one rejected `{"id": 1}`.
      */
-    public function filteringEveryPropertyLeavesTheDocumentsOwnOpennessIntact(): void
+    public function aForeignPropertyStaysDeclaredAndTypedInBothOpenAndClosedObjects(): void
     {
         $validator = new SchemaValidator();
         $properties = ['id' => ['type' => 'integer', 'readOnly' => true]];
-        $open = ['type' => 'object', 'properties' => $properties];
-        $closed = ['type' => 'object', 'properties' => $properties, 'additionalProperties' => false];
+        $open = ['type' => 'object', 'properties' => $properties, 'required' => ['id']];
+        $closed = ['type' => 'object', 'properties' => $properties, 'required' => ['id'], 'additionalProperties' => false];
 
-        Assert::true($validator->isValid((object) [], $open, SchemaDialect::OpenApi31));
-        Assert::true($validator->isValid((object) ['id' => 1], $open, SchemaDialect::OpenApi31));
+        foreach ([$open, $closed] as $schema) {
+            Assert::true($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+            Assert::true($validator->isValid((object) ['id' => 1], $schema, SchemaDialect::OpenApi31));
+            Assert::false($validator->isValid((object) ['id' => 'x'], $schema, SchemaDialect::OpenApi31));
+            // The response direction keeps the requirement, and the type.
+            Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+            Assert::true($validator->isValid((object) ['id' => 1], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+            Assert::false($validator->isValid((object) ['id' => 'x'], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+        }
         Assert::true($validator->isValid((object) ['unrelated' => 'x'], $open, SchemaDialect::OpenApi31));
-
-        Assert::true($validator->isValid((object) [], $closed, SchemaDialect::OpenApi31));
-        Assert::false($validator->isValid((object) ['id' => 1], $closed, SchemaDialect::OpenApi31));
         Assert::false($validator->isValid((object) ['unrelated' => 'x'], $closed, SchemaDialect::OpenApi31));
+    }
+
+    /**
+     * The rewrite recurses into the foreign property too: a `writeOnly`
+     * member of a `readOnly` object is not required on a response, where the
+     * object itself is.
+     */
+    public function rewritesTheMembersOfAForeignPropertyAsWell(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['type' => 'object', 'required' => ['meta'], 'properties' => [
+            'meta' => ['type' => 'object', 'readOnly' => true, 'required' => ['token'], 'properties' => ['token' => ['type' => 'string', 'writeOnly' => true]]],
+        ]];
+
+        Assert::true($validator->isValid((object) ['meta' => (object) []], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+        Assert::false($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+        Assert::true($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['meta' => (object) []], $schema, SchemaDialect::OpenApi31));
     }
 
     /**

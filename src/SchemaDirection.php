@@ -8,10 +8,11 @@ namespace Rasuvaeff\OpenApiContract;
  * Which half of an exchange a schema constrains.
  *
  * A Schema Object asserts different things about a request and about a
- * response: a `readOnly` property is not part of a request and a `writeOnly`
- * one is not part of a response, and each is dropped — with its `required`
- * entry — before the value is judged. A value checked in the wrong direction
- * is therefore judged against a schema the document never applies to it.
+ * response: a `readOnly` property is not required on a request and a
+ * `writeOnly` one is not required on a response, and each loses its
+ * `required` entry — keeping its subschema — before the value is judged. A
+ * value checked in the wrong direction is therefore judged against a schema
+ * the document never applies to it.
  *
  * @api
  */

@@ -8,6 +8,7 @@ use Opis\JsonSchema\Errors\ValidationError;
 use Opis\JsonSchema\Parsers\SchemaParser;
 use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
+use Opis\JsonSchema\Schemas\ExceptionSchema;
 use Opis\JsonSchema\Validator as OpisValidator;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
@@ -41,6 +42,19 @@ final class SchemaValidator
      */
     private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
 
+    /**
+     * Every keyword under which the compiler emits a subschema, by the shape
+     * of its value, so {@see assertParsed()} can visit each node the backend
+     * would otherwise parse on the first value that reaches it.
+     *
+     * @var array{single: list<string>, list: list<string>, map: list<string>}
+     */
+    private const array SUBSCHEMA_KEYWORDS = [
+        'single' => ['additionalProperties', 'items', 'not'],
+        'list' => ['allOf', 'anyOf', 'oneOf'],
+        'map' => ['$defs', 'properties'],
+    ];
+
     private readonly OpisValidator $validator;
 
     public function __construct(
@@ -57,6 +71,13 @@ final class SchemaValidator
             'allowSlots' => false,
             'allowTemplates' => false,
         ]);
+        $formats = $parser->getFormatResolver() ?? throw new \LogicException('The schema backend offers no format resolver');
+        // OpenAPI defines `int32` and `int64` as ranges of the integer type
+        // (RFC 8259 leaves a number's range to the interchange), and the
+        // backend knows neither: without these two an integer `format` was
+        // an annotation and a value outside the declared width passed.
+        $formats->registerCallable('integer', 'int32', static fn(int|float $value): bool => $value >= -2_147_483_648 && $value <= 2_147_483_647);
+        $formats->registerCallable('integer', 'int64', static fn(int|float $value): bool => is_int($value) || ($value >= -9_223_372_036_854_775_808 && $value < 9_223_372_036_854_775_808));
         $loader = new SchemaLoader(
             parser: $parser,
             decodeJsonString: true,
@@ -66,6 +87,20 @@ final class SchemaValidator
             max_errors: 20,
             stop_at_first_error: false,
         );
+    }
+
+    /**
+     * Compiles the schema for one direction — and caches it — without judging
+     * a value, so a contract can pay for every schema of its document while
+     * it is built and a schema this package cannot evaluate is refused there,
+     * not from the first message that happens to reach it.
+     *
+     * @param array<string, mixed> $schema
+     * @throws UnsupportedSchema
+     */
+    public function compile(array $schema, SchemaDialect $dialect, SchemaDirection $direction): void
+    {
+        $this->compiledSchema($schema, $dialect, $direction);
     }
 
     /**
@@ -112,9 +147,62 @@ final class SchemaValidator
         $object = $this->compiler->compile($this->effectiveSchema($schema, $direction), $dialect);
 
         try {
-            return $this->compiled[$key] = $this->validator->loader()->loadObjectSchema($object);
+            $compiled = $this->validator->loader()->loadObjectSchema($object);
+            $this->assertParsed($compiled, $object);
         } catch (\Throwable $exception) {
             throw UnsupportedSchema::fromBackend($exception);
+        }
+
+        return $this->compiled[$key] = $compiled;
+    }
+
+    /**
+     * The backend parses a schema node the first time a value reaches it, and
+     * a node it cannot parse — a `pattern` that is not a regex, a `minimum`
+     * that is not a number — becomes a schema that throws when validated,
+     * silently, until then. Every node is parsed here instead, the root and
+     * each subschema the compiler emitted, so the refusal comes out of the
+     * compilation that a contract runs at load time.
+     */
+    private function assertParsed(Schema $compiled, \stdClass $node): void
+    {
+        if ($compiled instanceof ExceptionSchema) {
+            // The only way the backend gives up the exception it wrapped.
+            $this->validator->schemaValidation(null, $compiled);
+        }
+        $loader = $this->validator->loader();
+        foreach (self::SUBSCHEMA_KEYWORDS['single'] as $keyword) {
+            /** @var mixed $member */
+            $member = $node->{$keyword} ?? null;
+            if ($member instanceof \stdClass) {
+                $this->assertParsed($loader->loadObjectSchema($member), $member);
+            }
+        }
+        foreach (self::SUBSCHEMA_KEYWORDS['list'] as $keyword) {
+            /** @var mixed $members */
+            $members = $node->{$keyword} ?? null;
+            if (!is_array($members)) {
+                continue;
+            }
+            /** @var mixed $member */
+            foreach ($members as $member) {
+                if ($member instanceof \stdClass) {
+                    $this->assertParsed($loader->loadObjectSchema($member), $member);
+                }
+            }
+        }
+        foreach (self::SUBSCHEMA_KEYWORDS['map'] as $keyword) {
+            /** @var mixed $members */
+            $members = $node->{$keyword} ?? null;
+            if (!$members instanceof \stdClass) {
+                continue;
+            }
+            /** @var mixed $member */
+            foreach (get_object_vars($members) as $member) {
+                if ($member instanceof \stdClass) {
+                    $this->assertParsed($loader->loadObjectSchema($member), $member);
+                }
+            }
         }
     }
 
@@ -135,29 +223,35 @@ final class SchemaValidator
     }
 
     /**
-     * The schema as it constrains one direction: properties the other
-     * direction owns (`readOnly` on a request, `writeOnly` on a response) are
-     * dropped, along with their `required` entries, recursively through
-     * `items` and the composition keywords.
+     * The schema as it constrains one direction. A property the other
+     * direction owns (`readOnly` on a request, `writeOnly` on a response)
+     * loses its `required` entry and nothing else: it stays declared and
+     * typed, so a value that carries it is still judged by its subschema and
+     * a closed object (`additionalProperties: false`) still admits it. That
+     * is what both specifications say — the property "SHOULD NOT be sent" in
+     * the foreign direction, and "the required will take effect on the
+     * response only". Dropping the subschema, as this did, made the verdict
+     * depend on `additionalProperties`: an open object stopped checking the
+     * type and a closed one rejected the property the document declared.
      *
-     * Dropping the last property drops `properties` itself rather than
-     * leaving an empty map, which would forbid every property. What the
-     * document says about undeclared properties keeps saying it: a schema
-     * with `additionalProperties: false` then admits nothing, and one without
-     * it still admits anything, exactly as it does for the other direction.
-     * OAS implies no closed object, so this does not close one.
+     * The rewrite recurses through `properties`, `items`,
+     * `additionalProperties` and the composition keywords — including into
+     * the foreign property itself, whose own members may be flagged.
      *
-     * Direction is the *only* reason a property is dropped. A member this
-     * method does not recurse into — a boolean schema, or any shape it does
-     * not read — is passed through untouched for the compiler and the backend
-     * to judge. Dropping it here instead removed the property, its subschema
-     * and its `required` entry from the check, which is the one outcome a
-     * validator must never produce silently.
+     * Direction is the *only* reason a `required` entry is dropped. A member
+     * this method does not recurse into — a boolean schema, or any shape it
+     * does not read — is passed through untouched for the compiler and the
+     * backend to judge, because dropping it here removes a check the document
+     * made, which is the one outcome a validator must never produce silently.
+     *
+     * The rewrite is idempotent, and it is what {@see \Rasuvaeff\OpenApiContract\SchemaCheck::effective()}
+     * exports: a consumer that generates values for one direction reads the
+     * same effective schema the validator judges them by.
      *
      * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
-    private function effectiveSchema(array $schema, SchemaDirection $direction): array
+    public function effectiveSchema(array $schema, SchemaDirection $direction): array
     {
         foreach (self::DIRECTIONAL_KEYWORDS as $keyword) {
             if (!array_key_exists($keyword, $schema)) {
@@ -166,8 +260,8 @@ final class SchemaValidator
             if ($keyword === 'properties' && is_array($schema[$keyword])) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
-                /** @var array<string, true> $dropped */
-                $dropped = [];
+                /** @var array<string, true> $foreign */
+                $foreign = [];
                 /** @var array<array-key, mixed> $propertyMap */
                 $propertyMap = $schema[$keyword];
                 foreach (array_keys($propertyMap) as $name) {
@@ -180,21 +274,15 @@ final class SchemaValidator
                     }
                     /** @var array<string, mixed> $property */
                     if (($property[$flag] ?? false) === true) {
-                        $dropped[(string) $name] = true;
-
-                        continue;
+                        $foreign[(string) $name] = true;
                     }
                     $properties[$name] = $this->effectiveSchema($property, $direction);
                 }
-                if ($properties === []) {
-                    unset($schema['properties']);
-                } else {
-                    $schema['properties'] = $properties;
-                }
+                $schema['properties'] = $properties;
                 /** @var mixed $required */
                 $required = $schema['required'] ?? null;
                 if (is_array($required)) {
-                    $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($dropped[$name])));
+                    $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($foreign[$name])));
                 }
             } elseif (($keyword === 'items' || $keyword === 'additionalProperties') && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
                 /** @var array<string, mixed> $items */

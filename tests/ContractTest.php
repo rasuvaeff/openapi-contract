@@ -13,6 +13,7 @@ use Rasuvaeff\OpenApiContract\ContractViolation;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\CompiledDocument;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\OperationSchemas;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
@@ -33,6 +34,7 @@ use Testo\Test;
 #[Covers(CompiledDocument::class)]
 #[Covers(DocumentCompiler::class)]
 #[Covers(DocumentNodes::class)]
+#[Covers(OperationSchemas::class)]
 #[Covers(InvalidContract::class)]
 #[Covers(UnknownOperation::class)]
 #[Covers(UnsupportedSerialization::class)]
@@ -162,17 +164,50 @@ final class ContractTest
         Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/broken' => 'not-an-object']]);
     }
 
-    public function rejectsDecodedBackslashPathSegments(): void
+    /**
+     * A percent-encoded separator is part of the segment, not a boundary:
+     * the path is split on the raw `/`, and each segment is decoded on its
+     * own. `/pets/a%2Fb` used to be "no operation matches" for a request
+     * the document declares — and whose parameter the application receives
+     * as `a/b`.
+     */
+    #[DataProvider('encodedSeparatorProvider')]
+    public function anEncodedSeparatorStaysInsideItsSegment(string $path, ?string $operationId, array $pathParameters): void
     {
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
-            'paths' => ['/pets/{id}' => [
-                'parameters' => [['name' => 'id', 'in' => 'path', 'required' => true]],
-                'get' => ['responses' => ['200' => []]],
-            ]],
+            'paths' => [
+                '/pets/{name}' => [
+                    'parameters' => [['name' => 'name', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string', 'pattern' => '^[a-z]+[/\\\\][a-z]+$']]],
+                    'get' => ['operationId' => 'pets.byName', 'responses' => ['200' => []]],
+                ],
+                '/pets/a%2Fb' => ['get' => ['operationId' => 'pets.literal', 'responses' => ['200' => []]]],
+                '/pets/a/b' => ['get' => ['operationId' => 'pets.nested', 'responses' => ['200' => []]]],
+            ],
         ]);
 
-        Assert::null($contract->match(new ServerRequest('GET', '/pets/%5C')));
+        $matched = $contract->match(new ServerRequest('GET', $path));
+        if ($operationId === null) {
+            Assert::null($matched);
+
+            return;
+        }
+        Assert::instanceOf($matched, MatchedOperation::class);
+        Assert::same($matched->operation->key, $operationId);
+        Assert::same($matched->pathParameters, $pathParameters);
+        // The captured value is decoded once, on the way to its schema.
+        Assert::true($contract->validateRequest(new ServerRequest('GET', $path))->isValid());
+    }
+
+    /** @return iterable<string, array{string, ?string, array<string, string>}> */
+    public static function encodedSeparatorProvider(): iterable
+    {
+        yield 'an encoded slash is captured by the placeholder' => ['/pets/a%2Fb', 'pets.byName', ['name' => 'a%2Fb']];
+        yield 'an encoded backslash is captured by the placeholder' => ['/pets/a%5Cb', 'pets.byName', ['name' => 'a%5Cb']];
+        yield 'a lowercase escape is the same separator' => ['/pets/a%2fb', 'pets.byName', ['name' => 'a%2fb']];
+        yield 'a raw slash is a segment boundary and selects the concrete path' => ['/pets/a/b', 'pets.nested', []];
+        yield 'a literal segment is matched as written, so an encoded one is the template' => ['/pets/a%252Fb', 'pets.literal', []];
+        yield 'an encoded slash does not make a segment out of two' => ['/pets%2Fa/b', null, []];
     }
 
     public function rejectsUnsupportedParameterStyle(): void
@@ -1437,6 +1472,116 @@ final class ContractTest
     }
 
     /**
+     * A schema this package cannot evaluate is refused by the factory, from
+     * every position the validators read a schema at, in the direction they
+     * read it in. Each of these used to load and raise `UnsupportedSchema` or
+     * `UnsupportedDialect` out of `validateRequest()` / `validateResponse()`
+     * — and only for the message that happened to carry the parameter, body
+     * or header, which for a middleware is a 500 on live traffic instead of
+     * an error at boot.
+     *
+     * @param array<string, mixed> $document
+     */
+    #[DataProvider('unsupportedSchemaPositionProvider')]
+    public function refusesAnUnsupportedSchemaAtLoadTimeWhereverItIsDeclared(array $document, string $message): void
+    {
+        try {
+            Contract::fromArray($document);
+            Assert::true(actual: false, message: 'Expected the document to be refused at load time');
+        } catch (InvalidContract $exception) {
+            Assert::string($exception->getMessage())->contains($message);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string}> */
+    public static function unsupportedSchemaPositionProvider(): iterable
+    {
+        $operation = static fn(array $operation, string $version = '3.1.0'): array => ['openapi' => $version, 'paths' => ['/q' => ['get' => [...$operation, 'responses' => $operation['responses'] ?? ['200' => []]]]]];
+        $parameter = static fn(array $schema, string $version = '3.1.0'): array => $operation(['parameters' => [['name' => 'q', 'in' => 'query', 'schema' => $schema]]], $version);
+        $response = static fn(array $schema): array => $operation(['responses' => ['200' => ['content' => ['application/json' => ['schema' => $schema]]]]]);
+        $unsupported = 'assertion is outside the v0.1 support matrix';
+
+        yield 'patternProperties on a parameter' => [$parameter(['type' => 'object', 'patternProperties' => ['^x' => ['type' => 'string']]]), $unsupported];
+        yield 'a draft-07 $schema on a request body' => [
+            ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => ['application/json' => ['schema' => ['$schema' => 'http://json-schema.org/draft-07/schema#', 'type' => 'object']]]],
+                'responses' => ['204' => []],
+            ]]]],
+            'Unsupported JSON Schema dialect "http://json-schema.org/draft-07/schema#"',
+        ];
+        yield 'a pattern that is not a regex, nested in a response body' => [$response(['type' => 'object', 'properties' => ['a' => ['type' => 'string', 'pattern' => '(']]]), 'pattern value must be a valid regex'];
+        yield 'a 3.0 exclusiveMinimum written as a number, on a response header' => [
+            ['openapi' => '3.0.3', 'paths' => ['/q' => ['get' => ['responses' => ['200' => ['headers' => ['X-N' => ['schema' => ['type' => 'integer', 'exclusiveMinimum' => 5]]]]]]]]],
+            'OAS 3.0 requires a boolean',
+        ];
+        yield 'propertyNames on a response body' => [$response(['type' => 'object', 'propertyNames' => ['pattern' => '^x']]), $unsupported];
+        yield 'a minimum that is not a number, under items of a parameter' => [$parameter(['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => '5']]), 'minimum must contain a valid number'];
+        yield 'an if/then on a multipart part header' => [
+            ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+                'requestBody' => ['content' => ['multipart/form-data' => [
+                    'schema' => ['type' => 'object', 'properties' => ['file' => ['type' => 'string']]],
+                    'encoding' => ['file' => ['headers' => ['X-Part' => ['schema' => ['if' => ['type' => 'string'], 'then' => ['minLength' => 1]]]]]],
+                ]]],
+                'responses' => ['204' => []],
+            ]]]],
+            $unsupported,
+        ];
+        yield 'nullable under 3.1, in a oneOf branch of a parameter' => [$parameter(['oneOf' => [['type' => 'string'], ['type' => 'integer', 'nullable' => true]]]), 'use a type union containing null in OAS 3.1'];
+        yield 'a pattern the backend cannot parse, in an anyOf under additionalProperties' => [$parameter(['type' => 'object', 'additionalProperties' => ['anyOf' => [['type' => 'integer'], ['type' => 'string', 'pattern' => '[']]]]), 'pattern value must be a valid regex'];
+    }
+
+    /**
+     * The empty schema is the Schema Object with no keywords, on both sides
+     * and in a header. It loaded and then raised "Schema must be an object"
+     * from the first message that reached it.
+     */
+    public function readsTheEmptySchemaAsUnconstrained(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => []]],
+            'requestBody' => ['content' => ['application/json' => ['schema' => []]]],
+            'responses' => ['200' => ['headers' => ['X-N' => ['schema' => []]], 'content' => ['application/json' => ['schema' => []]]]],
+        ]]]]);
+
+        $request = new ServerRequest('POST', '/b?q=1', ['Content-Type' => 'application/json'], '{"a":1}');
+        $response = new Response(200, ['Content-Type' => 'application/json', 'X-N' => 'x'], '[1]');
+        Assert::true($contract->validateExchange($request, $response)->isValid());
+    }
+
+    /**
+     * The warm-up visits exactly the positions the validators read, and no
+     * others: the request side is compiled as a request, the response side
+     * as a response, and a boolean schema has nothing to compile.
+     */
+    public function compilesEverySchemaPositionInItsOwnDirection(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'paths' => ['/b/{id}' => ['post' => [
+            'parameters' => [
+                ['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['const' => 'p']],
+                ['name' => 'X-H', 'in' => 'header'],
+            ],
+            'requestBody' => ['content' => [
+                'application/json' => ['schema' => ['const' => 'body']],
+                'multipart/form-data' => ['schema' => ['const' => 'multipart'], 'encoding' => ['file' => ['headers' => ['X-Part' => ['schema' => ['const' => 'part-header']]]]]],
+                'text/plain' => ['schema' => false],
+            ]],
+            'responses' => [
+                '200' => ['headers' => ['X-R' => ['schema' => ['const' => 'response-header']], 'X-B' => ['schema' => true]], 'content' => ['application/json' => ['schema' => ['const' => 'response']]]],
+                'default' => ['content' => ['application/json' => ['schema' => ['const' => 'default']]]],
+            ],
+        ]]]]);
+
+        $sites = [];
+        foreach ((new OperationSchemas())->of($contract->operations()[0]) as [$schema, $direction]) {
+            $sites[] = ($schema['const'] ?? '{}') . '@' . $direction->name;
+        }
+        Assert::same($sites, [
+            'p@Request', '{}@Request', 'body@Request', 'multipart@Request', 'part-header@Request',
+            'response@Response', 'response-header@Response', 'default@Response',
+        ]);
+    }
+
+    /**
      * These keywords do not merely add a check — they re-root or re-target
      * every `$ref` in the document. Passing them to the backend unhandled
      * would let it decide what the document means.
@@ -1739,7 +1884,7 @@ final class ContractTest
         yield 'suffix does not match' => ['/report.{format}', '/report', null];
         yield 'literal does not match' => ['/v{version}/items', '/x2/items', null];
         yield 'placeholder needs at least one character' => ['/report.{format}', '/report.', null];
-        yield 'an encoded slash still cannot leave the segment' => ['/report.{format}', '/report.a%2Fb', null];
+        yield 'an encoded slash stays inside the segment' => ['/report.{format}', '/report.a%2Fb', ['format' => 'a%2Fb']];
     }
 
     /**

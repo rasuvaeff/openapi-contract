@@ -36,6 +36,12 @@ final readonly class RequestValidator
      */
     private ParameterCodec $headerParameters;
 
+    /**
+     * A cookie string joins its pairs with `;`, not `&`; the value is still
+     * percent-decoded, see {@see codecFor()}.
+     */
+    private ParameterCodec $cookieParameters;
+
     private SchemaValueDecoder $values;
 
     private FormUrlencodedBodyDecoder $forms;
@@ -53,6 +59,7 @@ final readonly class RequestValidator
     {
         $this->parameters = new ParameterCodec();
         $this->headerParameters = new ParameterCodec(percentEncoded: false);
+        $this->cookieParameters = new ParameterCodec(pairSeparator: ';');
         $this->values = new SchemaValueDecoder();
         $this->forms = new FormUrlencodedBodyDecoder();
         $this->multipart = new MultipartBodyDecoder(schemas: $this->schemas);
@@ -196,7 +203,11 @@ final readonly class RequestValidator
      */
     private function codecFor(string $in): ParameterCodec
     {
-        return $in === 'header' ? $this->headerParameters : $this->parameters;
+        return match ($in) {
+            'header' => $this->headerParameters,
+            'cookie' => $this->cookieParameters,
+            default => $this->parameters,
+        };
     }
 
     /**
@@ -226,6 +237,11 @@ final readonly class RequestValidator
     }
 
     /**
+     * The cookie string split into its pairs by the validator itself, on `;`
+     * and the optional whitespace RFC 6265 puts after it — never on `&`,
+     * which is a legal cookie-octet: `sid=abc&def` is one cookie with a
+     * seven-character value, and it is what `$_COOKIE['sid']` holds.
+     *
      * @param CompiledParameter $parameter
      */
     private function cookieWire(array $parameter, MatchedOperation $matched, string $cookie): ?string
@@ -233,7 +249,7 @@ final readonly class RequestValidator
         if ($cookie === '') {
             return null;
         }
-        $wire = preg_replace('/;\s*/', '&', $cookie);
+        $wire = preg_replace('/;\s*/', ';', $cookie);
         if (!is_string($wire)) {
             return null;
         }
@@ -241,15 +257,15 @@ final readonly class RequestValidator
             if (($parameter['schema']['additionalProperties'] ?? true) !== false) {
                 $foreign = $this->siblingNames($matched, $parameter);
 
-                return $this->filterPairs($wire, static fn(string $key): bool => !in_array($key, $foreign, strict: true));
+                return $this->filterPairs($wire, static fn(string $key): bool => !in_array($key, $foreign, strict: true), ';');
             }
 
             $properties = $this->propertyNames($parameter['schema']);
 
-            return $this->filterPairs($wire, static fn(string $key): bool => in_array($key, $properties, strict: true));
+            return $this->filterPairs($wire, static fn(string $key): bool => in_array($key, $properties, strict: true), ';');
         }
 
-        return $this->filterPairs($wire, static fn(string $key): bool => $key === $parameter['name']);
+        return $this->filterPairs($wire, static fn(string $key): bool => $key === $parameter['name'], ';');
     }
 
     /**
@@ -273,18 +289,21 @@ final readonly class RequestValidator
         return $names;
     }
 
-    /** @param callable(string): bool $accept */
-    private function filterPairs(string $wire, callable $accept): ?string
+    /**
+     * @param callable(string): bool $accept
+     * @param non-empty-string $separator
+     */
+    private function filterPairs(string $wire, callable $accept, string $separator = '&'): ?string
     {
         $accepted = [];
-        foreach (explode('&', $wire) as $pair) {
+        foreach (explode($separator, $wire) as $pair) {
             $key = rawurldecode(explode('=', $pair, 2)[0]);
             if ($accept($key)) {
                 $accepted[] = $pair;
             }
         }
 
-        return $accepted === [] ? null : implode('&', $accepted);
+        return $accepted === [] ? null : implode($separator, $accepted);
     }
 
     /**

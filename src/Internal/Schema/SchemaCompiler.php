@@ -84,7 +84,7 @@ final readonly class SchemaCompiler
     /**
      * @param array<string, mixed> $schema
      */
-    public function compile(array $schema, SchemaDialect $dialect): object
+    public function compile(array $schema, SchemaDialect $dialect): \stdClass
     {
         $compiled = $this->normalizeNode($schema, $dialect);
         $compiled['$schema'] = self::JSON_SCHEMA_2020_12;

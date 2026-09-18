@@ -99,6 +99,66 @@ final class SchemaCheckTest
     }
 
     /**
+     * The exported rewrite is the one the validator judges by: a value is
+     * accepted against the schema exactly when it is accepted against its
+     * effective form, in both directions, and the effective form is a fixed
+     * point of the rewrite.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('directionalSchemaProvider')]
+    public function effectiveIsTheSchemaTheValidatorJudgesBy(array $schema, mixed $value): void
+    {
+        $check = new SchemaCheck();
+        foreach (SchemaDirection::cases() as $direction) {
+            $effective = $check->effective($schema, $direction);
+
+            Assert::same($check->accepts($value, $effective, SchemaDialect::OpenApi31, $direction), $check->accepts($value, $schema, SchemaDialect::OpenApi31, $direction));
+            Assert::same($check->effective($effective, $direction), $effective);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, mixed}> */
+    public static function directionalSchemaProvider(): iterable
+    {
+        $item = ['type' => 'object', 'required' => ['id', 'name'], 'properties' => [
+            'id' => ['type' => 'integer', 'readOnly' => true],
+            'name' => ['type' => 'string', 'writeOnly' => true],
+        ]];
+        yield 'flat object, request-shaped value' => [$item, (object) ['name' => 'a']];
+        yield 'flat object, response-shaped value' => [$item, (object) ['id' => 1]];
+        yield 'flat object, mistyped foreign property' => [$item, (object) ['id' => 'x', 'name' => 'a']];
+        yield 'closed object' => [[...$item, 'additionalProperties' => false], (object) ['id' => 1, 'name' => 'a']];
+        yield 'list of items' => [['type' => 'array', 'items' => $item], [(object) ['name' => 'a']]];
+        yield 'map of items' => [['type' => 'object', 'additionalProperties' => $item], (object) ['k' => (object) ['name' => 'a']]];
+        yield 'composition' => [['allOf' => [$item, ['type' => 'object']]], (object) ['name' => 'a']];
+        yield 'negation is left alone' => [['not' => $item], (object) ['name' => 'a']];
+        yield 'boolean member passes through' => [['type' => 'object', 'properties' => ['open' => true], 'required' => ['open']], (object) []];
+    }
+
+    /**
+     * The shape of the rewrite, pinned member by member: the foreign
+     * property keeps its subschema and loses only its `required` entry, the
+     * native one keeps both, and `not` is not entered.
+     */
+    public function effectiveUnrequiresTheForeignPropertyAndKeepsItsSubschema(): void
+    {
+        $schema = [
+            'type' => 'object',
+            'required' => ['id', 'secret'],
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'secret' => ['type' => 'string', 'writeOnly' => true],
+            ],
+            'not' => ['required' => ['id']],
+        ];
+        $check = new SchemaCheck();
+
+        Assert::same($check->effective($schema, SchemaDirection::Request), [...$schema, 'required' => ['secret']]);
+        Assert::same($check->effective($schema, SchemaDirection::Response), [...$schema, 'required' => ['id']]);
+    }
+
+    /**
      * OAS 3.0 spells nullability as a keyword, 3.1 as a type union. The same
      * schema is therefore read two ways: under 3.0 it admits `null`, and
      * under 3.1 `nullable` is not a keyword at all and the schema is refused
@@ -122,6 +182,26 @@ final class SchemaCheckTest
         Expect::exception(InvalidContract::class);
 
         (new SchemaCheck())->accepts(1, $schema, SchemaDialect::OpenApi31);
+    }
+
+    /**
+     * The backend parses a node the first time a value reaches it; a `$defs`
+     * member reached through a `$ref`, or a property the value happens not
+     * to carry, used to be judged fine until it was not. Every node is
+     * parsed at compilation, so the refusal comes from the first call.
+     */
+    public function refusesASubschemaTheBackendCannotParseBeforeAnyValueReachesIt(): void
+    {
+        $check = new SchemaCheck();
+        $schema = ['type' => 'object', 'properties' => ['a' => ['$ref' => '#/$defs/A']], '$defs' => ['A' => ['type' => 'string', 'pattern' => '[']]];
+
+        try {
+            // An object without `a` never reaches the member the backend cannot read.
+            $check->accepts((object) [], $schema, SchemaDialect::OpenApi31);
+            Assert::true(actual: false, message: 'Expected the schema to be refused');
+        } catch (InvalidContract $exception) {
+            Assert::string($exception->getMessage())->contains('pattern value must be a valid regex');
+        }
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */

@@ -13,10 +13,11 @@ use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
  * This is the check the contract itself runs, not a second opinion. A schema
  * is read as its dialect spells it — OAS 3.0 writes nullability as `nullable`
  * and the exclusive bounds as booleans — and as its direction applies it: a
- * `readOnly` property is dropped from a request and a `writeOnly` one from a
- * response, recursively, along with their `required` entries. A consumer that
- * reimplements any of that agrees with the contract until it silently does
- * not.
+ * `readOnly` property is not required on a request and a `writeOnly` one is
+ * not required on a response, recursively, while both stay declared and
+ * typed. A consumer that reimplements any of that agrees with the contract
+ * until it silently does not; {@see effective()} hands it the rewritten
+ * schema instead.
  *
  * Compilation is cached per instance and keyed on the schema, the dialect and
  * the direction, so checking many values against the same schema compiles it
@@ -63,5 +64,29 @@ final readonly class SchemaCheck
         SchemaDirection $direction = SchemaDirection::Request,
     ): bool {
         return $this->schemas->isValid($value, $schema, $dialect, $direction);
+    }
+
+    /**
+     * The Schema Object as one direction applies it: exactly the rewrite
+     * {@see accepts()}, {@see Contract::accepts()} and the validators perform
+     * before a value is judged, so a consumer that builds values for a
+     * request or a response builds them against the schema they will be
+     * checked by.
+     *
+     * A property the other direction owns (`readOnly` on a request,
+     * `writeOnly` on a response) loses its `required` entry and keeps its
+     * subschema; the rewrite recurses through `properties`, `items`,
+     * `additionalProperties`, `allOf`, `anyOf` and `oneOf`, leaves `not`
+     * alone, and is idempotent. Members it does not read are passed through
+     * as written. The dialect plays no part: the rewrite is the same under
+     * OAS 3.0 and 3.1.
+     *
+     * @param array<string, mixed> $schema a Schema Object, as {@see Operation}
+     *        carries it
+     * @return array<string, mixed>
+     */
+    public function effective(array $schema, SchemaDirection $direction): array
+    {
+        return $this->schemas->effectiveSchema($schema, $direction);
     }
 }
