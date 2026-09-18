@@ -17,6 +17,8 @@ use Rasuvaeff\OpenApiContract\UnsupportedVersion;
  * Compiles a raw OpenAPI document array into the operation list a Contract runs on.
  *
  * @psalm-import-type CompiledParameter from Operation
+ * @psalm-import-type CompiledRequestBody from Operation
+ * @psalm-import-type CompiledResponses from Operation
  *
  * @internal
  */
@@ -149,7 +151,6 @@ final readonly class DocumentCompiler
                         ? []
                         : $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
                     responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
-                    serverBases: array_map(static fn(array $server): string => $server['base'], $servers),
                     security: array_key_exists('security', $raw)
                         ? $this->securityRequirements($raw['security'], $schemeNames)
                         : $rootSecurity,
@@ -493,7 +494,7 @@ final readonly class DocumentCompiler
      * fail-closed about the same shapes, and a document cannot mean one thing
      * in one direction and nothing in the other.
      *
-     * @return array<array-key, mixed>
+     * @return CompiledRequestBody
      */
     private function requestBody(mixed $value, JsonPointerResolver $resolver, string $where): array
     {
@@ -504,6 +505,8 @@ final readonly class DocumentCompiler
         $this->assertBoolean($body['required'] ?? null, sprintf('requestBody of %s', $where), 'required');
         $this->assertContent($body['content'] ?? null, sprintf('requestBody of %s', $where));
 
+        // The two assertions above are what the shape promises.
+        /** @var CompiledRequestBody $body */
         return $body;
     }
 
@@ -513,7 +516,12 @@ final readonly class DocumentCompiler
         if ($value === null) {
             return [];
         }
-        if (!is_array($value) || array_is_list($value)) {
+        if (!is_array($value)) {
+            throw new InvalidContract('OpenAPI parameter schema must be an object');
+        }
+        // The empty schema decodes to the empty array, which is a list to
+        // `array_is_list()` and the Schema Object with no keywords to us.
+        if ($value !== [] && array_is_list($value)) {
             throw new InvalidContract('OpenAPI parameter schema must be an object');
         }
         $schema = $resolver->resolve($value, inSchema: true);
@@ -529,7 +537,7 @@ final readonly class DocumentCompiler
         return $schema;
     }
 
-    /** @return array<array-key, mixed> */
+    /** @return CompiledResponses */
     private function resolvedResponses(mixed $value, JsonPointerResolver $resolver, string $where): array
     {
         if (!is_array($value) || $value === []) {
@@ -548,6 +556,8 @@ final readonly class DocumentCompiler
             $result[$key] = $resolved;
         }
 
+        // The two assertions in the loop are what the shape promises.
+        /** @var CompiledResponses $result */
         return $result;
     }
 

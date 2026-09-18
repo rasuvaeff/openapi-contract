@@ -118,6 +118,12 @@ final readonly class ValidationResultFormatter
      * `$` for a whole-body violation, so there is nothing to inspect. Bodies
      * stay redacted wholesale rather than guessing which field was sensitive.
      *
+     * A cookie is redacted the same way. It is a credential carrier by
+     * definition — a session identifier is what a cookie usually is — and the
+     * name pattern cannot know what the document called the parameter:
+     * `sid` matches nothing, and the value it carried used to be printed
+     * into the message an application logs.
+     *
      * Everything else is named — by the instance path when the value is a
      * scalar, and by its own keys when it is a container, both of which the
      * document declares. Redacting those locations outright, as this did, left
@@ -128,7 +134,7 @@ final readonly class ValidationResultFormatter
      */
     private function redactsActual(Violation $violation): bool
     {
-        if ($violation->location === 'body') {
+        if ($violation->location === 'body' || $violation->location === 'cookie') {
             return true;
         }
 

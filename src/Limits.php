@@ -36,16 +36,16 @@ final readonly class Limits
         public int $documentNodes = self::DEFAULT_DOCUMENT_NODES,
     ) {
         if ($documentBytes < 1) {
-            throw new \InvalidArgumentException('Document byte budget must be positive');
+            throw new InvalidLimits('Document byte budget must be positive');
         }
         if ($messageBodyBytes < 1) {
-            throw new \InvalidArgumentException('Message body byte budget must be positive');
+            throw new InvalidLimits('Message body byte budget must be positive');
         }
         if ($documentFiles < 1) {
-            throw new \InvalidArgumentException('Document file budget must be positive');
+            throw new InvalidLimits('Document file budget must be positive');
         }
         if ($documentNodes < 1) {
-            throw new \InvalidArgumentException('Document node budget must be positive');
+            throw new InvalidLimits('Document node budget must be positive');
         }
     }
 }

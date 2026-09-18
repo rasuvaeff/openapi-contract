@@ -252,7 +252,8 @@ final class ValidationResultFormatterTest
     {
         yield 'query scalar' => ['query', 'page', 'abc', '"abc"'];
         yield 'header scalar' => ['header', 'X-Tenant', 'public', '"public"'];
-        yield 'cookie scalar' => ['cookie', 'session_kind', 'guest', '"guest"'];
+        yield 'cookie scalar is a credential carrier' => ['cookie', 'session_kind', 'guest', '"[redacted]"'];
+        yield 'cookie object is redacted wholesale' => ['cookie', 'prefs', ['theme' => 'dark'], '"[redacted]"'];
         yield 'query scalar with a credential name' => ['query', 'api_key', 'shhh', '"[redacted]"'];
         yield 'header scalar with a credential name' => ['header', 'Authorization', 'Bearer x', '"[redacted]"'];
         yield 'path scalar' => ['path', 'id', '42', '"42"'];

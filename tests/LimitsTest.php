@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Tests;
 
+use Rasuvaeff\OpenApiContract\ContractException;
+use Rasuvaeff\OpenApiContract\InvalidLimits;
 use Rasuvaeff\OpenApiContract\Limits;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -12,6 +14,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Limits::class)]
+#[Covers(InvalidLimits::class)]
 final class LimitsTest
 {
     public function defaultsToTheDocumentedBudgets(): void
@@ -40,8 +43,12 @@ final class LimitsTest
         try {
             new Limits(documentBytes: $documentBytes, messageBodyBytes: $messageBodyBytes, documentFiles: $documentFiles, documentNodes: $documentNodes);
             Assert::true(actual: false, message: 'Expected an empty budget to be refused');
-        } catch (\InvalidArgumentException $exception) {
+        } catch (InvalidLimits $exception) {
             Assert::same($exception->getMessage(), $message);
+            // The package promises one type for everything it raises, and
+            // the concrete parent that existing catches were written against.
+            Assert::instanceOf($exception, ContractException::class);
+            Assert::instanceOf($exception, \InvalidArgumentException::class);
         }
     }
 

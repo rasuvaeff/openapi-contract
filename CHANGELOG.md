@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.0 — 2026-09-18
+
+- **Changed (breaking).** `Operation::$serverBases` is gone. It was documented
+  as the v0.1 base-path projection of `Operation::$servers` and duplicated it
+  entry for entry; read `$servers[$i]['base']`. (#146)
+- **Changed.** A `readOnly` property on a request — and a `writeOnly` one on a
+  response — loses only its `required` entry: it stays declared and typed, as
+  both specifications have it ("the required will take effect on the response
+  only"). Dropping the subschema made the verdict depend on
+  `additionalProperties`: an open object accepted `{"id": "x"}` against an
+  integer `id`, and a closed one rejected the `{"id": 1}` the document
+  declared. `SchemaCheck`, `SchemaDirection` and the README say so. (#141)
+- **Added.** `SchemaCheck::effective(array $schema, SchemaDirection $direction)`
+  exports the directional rewrite the validators apply before a value is
+  judged — a fixed point of itself, dialect-independent — so a consumer that
+  builds values for one direction builds them against the schema they will be
+  checked by instead of a copy of the rule. (#147)
+- **Added.** `format: int32` and `format: int64` are asserted as ranges of the
+  integer type; every other non-string format stays an annotation, and README
+  now tables which formats are asserted and which are not. (#148)
+- **Added.** `InvalidLimits`: a budget below 1 is refused with an
+  `\InvalidArgumentException` that implements `ContractException`, which
+  README had promised of every exception and `Limits` alone did not keep.
+  (#145)
+- **Changed.** `Operation::__construct` is `@api` and append-only, constructed
+  with named arguments — consumers build operations by hand in their tests,
+  so it was frozen in practice. `Operation::$requestBody` and
+  `Operation::$responses` carry declared shapes, `CompiledRequestBody` and
+  `CompiledResponses`, that a consumer may import. (#146)
+- **Fixed.** Every Schema Object the validators read — each parameter's, each
+  request and response media type's, each response header's and multipart
+  part header's — is compiled while the contract is built, in its own
+  direction, so a schema this package cannot evaluate (`patternProperties`,
+  `propertyNames`, `if`/`then`, a `$schema` naming another dialect, an OAS
+  3.0 `exclusiveMinimum` written as a number, a `pattern` or `minimum` the
+  backend cannot parse, at any depth) is `InvalidContract` from
+  `fromArray()`/`fromJson()`/`fromFile()`. It used to load and raise from the
+  first `validate*()` call that reached it — for a middleware, a 500 on live
+  traffic instead of an error at boot. `SchemaCheck::accepts()` refuses such
+  a schema on the first call too, where the backend used to parse a nested
+  member only when a value reached it. (#139)
+- **Fixed.** The empty Schema Object `{}` on a media type, a header or a
+  parameter is read as the unconstrained schema it is; it loaded and then
+  raised `InvalidContract("Schema must be an object")` from the first message
+  that reached it. (#149)
+- **Fixed.** A cookie string is split into pairs on `;` by the validator
+  itself; it was rewritten to `&` and read with the query grammar, so
+  `sid=abc&def` — one cookie with a legal `&` in its value — validated as
+  `abc`. (#140)
+- **Fixed.** A wire string is coerced to `integer`/`number` only when it
+  spells one by the JSON number grammar, anchored: `5\n` was an integer,
+  `.5`, `5.` and ` 5` were numbers, and an integer past PHP's range saturated
+  to `PHP_INT_MAX` instead of keeping its magnitude. (#142)
+- **Fixed.** A percent-encoded `/` or `\` inside a path parameter no longer
+  makes the whole request `request.operation.unknown`: the path is matched on
+  raw segments, each decoded on its own, so `/pets/a%2Fb` matches
+  `/pets/{name}` with `name = "a/b"`, the value the application receives.
+  (#143)
+- **Fixed.** `ValidationResultFormatter` redacts the `actual` value of a
+  violation at `location: cookie` the way it redacts a body: a cookie is a
+  credential carrier whatever the document named it. (#144)
+- **Changed.** `Contract::operation()` looks the key up in an index built at
+  construction instead of scanning the operation list.
+- **Documentation.** README and `llms.txt` list the keywords that are
+  accepted and never read (`allowEmptyValue`, `discriminator`, `xml`,
+  `externalDocs`, `deprecated`), and note that `multipleOf` is evaluated in
+  decimal arithmetic with `ext-bcmath` and in floating point without it.
+
 ## 0.11.1 — 2026-09-18
 
 - **Fixed.** A `readOnly` property is now dropped from a request schema — and a

@@ -8,6 +8,7 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
+use Rasuvaeff\OpenApiContract\Internal\Compilation\OperationSchemas;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Validation\RequestValidator;
@@ -69,6 +70,15 @@ final readonly class Contract
     private array $routes;
 
     /**
+     * Operations by key, for {@see operation()}: a consumer that resolves the
+     * key of every case it generates used to pay a scan of the whole list
+     * per lookup.
+     *
+     * @var array<string, Operation>
+     */
+    private array $byKey;
+
+    /**
      * @param list<Operation> $operations
      * @param array<string, CompiledSecurityScheme> $securitySchemes
      */
@@ -86,7 +96,19 @@ final readonly class Contract
         $this->requests = new RequestValidator($limits, $this->schemas);
         $this->responses = new ResponseValidator($limits, $this->schemas);
         $routes = [];
+        $byKey = [];
+        $sites = new OperationSchemas();
         foreach ($operations as $operation) {
+            $byKey[$operation->key] = $operation;
+            // Every schema the validators will read, compiled now, in the
+            // direction they will read it in. What the compiler could not
+            // refuse by shape alone — a keyword outside the support matrix,
+            // a dialect, a pattern the backend cannot parse — is refused
+            // here, out of the factory, and not from the first request that
+            // happens to carry the parameter.
+            foreach ($sites->of($operation) as [$schema, $direction]) {
+                $this->schemas->compile($schema, $dialect, $direction);
+            }
             foreach ($operation->servers as $baseIndex => $server) {
                 $base = $server['base'];
                 // Bases are '/'-canonical at compile time: rtrimmed or the bare '/'.
@@ -96,6 +118,7 @@ final readonly class Contract
             }
         }
         $this->routes = $routes;
+        $this->byKey = $byKey;
     }
 
     /** @param array<string, mixed> $document */
@@ -163,13 +186,7 @@ final readonly class Contract
 
     public function operation(string $key): Operation
     {
-        foreach ($this->operations as $operation) {
-            if ($operation->key === $key) {
-                return $operation;
-            }
-        }
-
-        throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
+        return $this->byKey[$key] ?? throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
     }
 
     public function match(RequestInterface $request): ?MatchedOperation
@@ -419,6 +436,14 @@ final readonly class Contract
     }
 
     /**
+     * Both paths are split on the raw `/` before anything is decoded, so a
+     * percent-encoded separator never leaves its segment: `/pets/a%2Fb` is
+     * two segments against `/pets/{name}` and captures `a/b`, the value the
+     * application receives, and `/a%2Fb/x` is two segments against the three
+     * of `/a/b/x` and does not match it. Refusing a decoded `/` or `\` on
+     * top of that, as this did, answered "no operation matches" to a request
+     * the document declares.
+     *
      * @return array<string, string>|null
      */
     private function matchPath(string $route, string $requestPath): ?array
@@ -432,9 +457,6 @@ final readonly class Contract
         foreach ($routeParts as $index => $part) {
             $rawRequestPart = $requestParts[$index];
             $requestPart = rawurldecode($rawRequestPart);
-            if (str_contains($requestPart, '/') || str_contains($requestPart, '\\')) {
-                return null;
-            }
             if (preg_match('/^\{([^{}]+)\}$/', $part, $match) === 1) {
                 $params[$match[1]] = $rawRequestPart;
                 continue;

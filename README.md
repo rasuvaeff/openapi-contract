@@ -20,6 +20,10 @@ OpenAPI 3.0 and 3.1 contracts.
 - PHP 8.3 – 8.5
 - `psr/http-message` implementations for the exchanges you validate
 - `symfony/yaml` only when loading YAML documents (suggested, not required)
+- `ext-bcmath` is optional: with it, `multipleOf` is evaluated in decimal
+  arithmetic by the backend; without it, in floating point with a tolerance
+  of `1e-14`, which is exact for every divisor a document is likely to
+  declare and can disagree at the edges of that precision
 
 ## Installation
 
@@ -46,13 +50,21 @@ Loading fails closed: unsupported OpenAPI versions throw
 ambiguous path templates, duplicate operation identities, and malformed
 document shapes throw `InvalidContract`, and parameter `content`
 serialization or unsupported styles throw `UnsupportedSerialization`.
+Every Schema Object the validators will read — each parameter's, each
+request and response media type's, each response header's and multipart
+part header's — is compiled while the contract is built, in the direction
+it will be read in, so a schema this package cannot evaluate (an assertion
+keyword outside the support matrix such as `patternProperties`, a `$schema`
+naming another dialect, an OAS 3.0 `exclusiveMinimum` written as a number,
+a `pattern` the backend cannot parse, wherever it is nested) is
+`InvalidContract` out of the factory and never out of a `validate*()` call.
 
 Every exception this package raises implements `ContractException`, so a
 caller can catch the package as one type: `InvalidContract` (with
 `UnsupportedVersion` and `UnsupportedSerialization` under it),
-`UnknownOperation` and `ContractViolation`. The concrete base classes stay
-what they were — `\InvalidArgumentException` and `\RuntimeException` — so
-existing catches keep working.
+`InvalidLimits`, `UnknownOperation` and `ContractViolation`. The concrete
+base classes stay what they were — `\InvalidArgumentException` and
+`\RuntimeException` — so existing catches keep working.
 
 A header parameter named `Accept`, `Content-Type` or `Authorization` is
 ignored, as both specifications require: HTTP gives those three a meaning of
@@ -124,14 +136,15 @@ found wrong. A gate that rejects on `isValid()` would therefore reject traffic
 it never judged, so an application whose bodies are legitimately larger raises
 the budget instead of reading the violation as a failure. The defaults are
 small on purpose: an unbounded read inside a middleware is a denial of
-service. A budget below 1 is refused with `\InvalidArgumentException`.
+service. A budget below 1 is refused with `InvalidLimits`, an
+`\InvalidArgumentException` that implements `ContractException`.
 
 ### Operations and matching
 
 ```php
 foreach ($contract->operations() as $operation) {
     // Operation: key, operationId, method, path, parameters, requestBody,
-    // responses, serverBases, security, servers
+    // responses, security, servers, dialect
 }
 
 $matched = $contract->match($request);        // MatchedOperation|null
@@ -146,11 +159,22 @@ $declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [.
 
 `Operation` identity is the `operationId` when present, otherwise the stable
 `METHOD /path` fallback. `Operation` is a read model: a contract is built by
-compiling a document, and the constructor is `@internal` — nothing public
-validates a hand-built operation, and the shapes that constructor takes are
-the compiler's output rather than a checked input. The `CompiledParameter`
-shape a consumer imports is read-only for it, and a minor release may add keys
-to it. Compiled parameters carry `allowReserved` for those consumers:
+compiling a document, and the shapes the constructor takes are the compiler's
+output rather than a checked input — nothing public validates a hand-built
+operation. The constructor is public API all the same, because consumers
+build operations by hand in their tests: it is append-only (a minor release
+may add a defaulted parameter at the end, never reorder or remove one), so
+construct it with named arguments. The shapes a consumer imports —
+`CompiledParameter`, and `CompiledRequestBody`/`CompiledResponses` for
+`$requestBody`/`$responses` — are read-only for it, and a minor release may
+add keys to them. `CompiledRequestBody` and `CompiledResponses` are the
+Request Body Object and the Responses Object as the compiler leaves them:
+every `$ref` on the way to a schema resolved, `required` a boolean,
+`content` keyed by media type, `encoding` and `headers` keyed by property and
+header name, and every `schema` a boolean or a keyword map (the empty map
+being the unconstrained schema); what the document wrote beside those keys
+is kept as written. `CompiledResponses` is keyed by status code as PHP reads
+it (`"200"` is `int 200`), by the `NXX` range, or by `default`. Compiled parameters carry `allowReserved` for those consumers:
 validation never reads it, because a value that leaves a reserved character
 unencoded cannot be told from the delimiter it looks like — the package reads
 such a query exactly as the SAPI does — while a consumer that renders a query
@@ -168,8 +192,11 @@ reached through `$ref` is resolved; what an example *contains* is data and is
 kept exactly as written, `$ref`-looking members included — as are a Schema
 Object's `default`/`const`/`enum` and every specification extension. `MatchedOperation` carries the operation and the raw path parameters
 extracted from the URI. Matching honours server base paths,
-prefers concrete paths over templated ones, decodes each segment exactly
-once, and rejects decoded separators that would escape a template slot. A trailing slash is part of the path: `/pets` and `/pets/` are different
+prefers concrete paths over templated ones, and splits the path on the raw
+`/` before decoding each segment exactly once — so a percent-encoded
+separator is part of its segment, never a boundary: `/pets/a%2Fb` matches
+`/pets/{name}` with `name` decoded to `a/b`, the value the application
+receives, and `/a%2Fb/x` does not match `/a/b/x`. A trailing slash is part of the path: `/pets` and `/pets/` are different
 resources, as RFC 3986 has them. A
 placeholder may share its segment with literals (`/report.{format}`,
 `/v{version}/items`, `/{a}-{b}`); the literal runs are matched as written.
@@ -185,8 +212,7 @@ no authority is matched by path alone, and is deliberately not rejected for
 failing to name a host it never claimed. Undeclared variables,
 missing or non-enum defaults, unsupported schemes, and userinfo/query/
 fragment parts of a server URL fail closed at compile time.
-`Operation::$serverBases` remains the v0.1 base-path projection of the same
-list. When the request path is declared but no server authority agrees,
+When the request path is declared but no server authority agrees,
 validation reports `request.server.mismatch` instead of
 `request.operation.unknown`.
 
@@ -194,7 +220,15 @@ Parameters are deserialized where an encoding exists and read as sent where
 one does not. A path segment and a query string are built out of RFC 3986
 delimiters, so a value carrying one has to be escaped and RFC 6570 says how:
 both are percent-decoded, and a query is form-encoded content, so `+` is a
-space. A cookie is decoded too, because every SAPI decodes `$_COOKIE`. A
+space. A cookie is decoded too, because every SAPI decodes `$_COOKIE`; its
+pairs are split on `;` (with the optional whitespace RFC 6265 allows after
+it) and never on `&`, which is an ordinary cookie-octet — `sid=abc&def` is
+one cookie with a seven-character value. A wire string is read as an
+`integer` or `number` only when it spells one by the JSON number grammar
+(`-?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?`, nothing before or after):
+`.5`, `5.`, ` 5`, `5\n` and `0x1A` stay strings and fail the schema, and an
+integer past PHP's range keeps its magnitude as a float rather than
+saturating. A
 **header field value is read verbatim** — HTTP treats it as opaque octets,
 nothing in the wild escapes one, and decoding it would rewrite a value the
 application receives intact (`X-Path: /a%20b` is a literal path; `X-Discount:
@@ -258,7 +292,8 @@ the response direction (`response.header.schema`,
 `content`-form Header Object or a non-`simple` style fails closed as
 `response.header.unsupported`, a `Content-Type` header declaration is ignored
 as the specification requires, and a schema-less declaration asserts presence
-only. `readOnly`/`writeOnly` properties are applied directionally. Root-level `security` is inherited by operations, an
+only. `readOnly`/`writeOnly` properties are applied directionally — see
+[Checking one schema](#checking-one-schema) for what that means. Root-level `security` is inherited by operations, an
 explicit empty `security` list marks an operation anonymous, and credential
 acquisition stays in the generator package.
 
@@ -296,7 +331,7 @@ says the same thing as declaring it below one.
 A declared non-JSON media type on either side (`text/plain`, `text/csv`,
 `application/octet-stream`, ...) is validated as far as its schema allows:
 without a schema the body is opaque and passes; with a string-typed schema
-(`type: string`, any `format`, `minLength`/`maxLength`/`pattern`) the raw
+(`type: string`, with `minLength`/`maxLength`/`pattern` and any asserted `format`) the raw
 payload is validated as that string value (`request.body.schema` /
 `response.body.schema`); any other schema (an XML object, for example) cannot
 be evaluated against an undecoded payload and fails closed as
@@ -324,7 +359,8 @@ where "not read" would be more precise. The budget is not configurable.
 bounded fields, depth, item counts, and expected/actual values. A value is
 rendered only where its name can be checked: a body is redacted wholesale —
 its member names are the application's and a whole-body violation has the
-instance path `$` — while a parameter is rendered with any member whose name
+instance path `$` — and so is a cookie, which is a credential carrier by
+definition whatever the document named it, while a parameter is rendered with any member whose name
 matches the credential pattern (`authorization`, `api_key`, `token`, `secret`,
 `password`, `cookie`) replaced, and a parameter whose own name matches is
 redacted outright. `ContractViolation` uses the same rendering.
@@ -346,10 +382,30 @@ $contract->accepts(42, $schema);                             // request directio
 $contract->accepts($value, $schema, SchemaDirection::Response);
 ```
 
-The direction is not decoration. A `readOnly` property is not part of a
-request and a `writeOnly` one is not part of a response; each is dropped, with
-its `required` entry, before the value is judged, so the same value and the
-same schema answer differently in the two directions.
+The direction is not decoration. A `readOnly` property is not required on a
+request and a `writeOnly` one is not required on a response: before the value
+is judged, the property loses its `required` entry for the foreign direction
+and keeps its subschema — it stays declared and typed, so a request that
+carries a `readOnly` `id` is judged by `id`'s schema and a closed object
+(`additionalProperties: false`) still admits it, exactly as both
+specifications have it ("the required will take effect on the response
+only"). The rewrite recurses through `properties`, `items`,
+`additionalProperties` and the composition keywords, leaves `not` alone, and
+is what makes the same value and the same schema answer differently in the two
+directions.
+
+The rewrite itself is exported, so a consumer that builds values for one
+direction builds them against the schema they will be checked by rather
+than against a copy of the rule:
+
+```php
+$check = new SchemaCheck();
+$requestSchema = $check->effective($schema, SchemaDirection::Request);
+```
+
+`effective()` returns exactly what the validators compile — a fixed point of
+itself, dialect-independent, with every member it does not read passed through
+as written.
 
 The value is judged as the backend reads JSON: an object is a `stdClass`, the
 way `json_decode()` produces one without `associative: true`. An associative
@@ -445,6 +501,25 @@ Three divergences from the specification are deliberate and pinned:
 
 `deepObject` is not among them: `f%5Ba%5D=1` and `f[a]=1` are the same
 parameter here and in PHP's own query parsing.
+
+Five keywords are accepted and never read, because none of them changes a
+verdict this package can give: `allowEmptyValue` (its meaning is undefined
+by the specification, and a parameter with an empty value is judged by its
+schema), `discriminator` (a hint for consumers choosing among `oneOf`
+branches; the branches themselves are still evaluated), `xml`, `externalDocs`
+and `deprecated`. They are kept as written on the compiled operation.
+
+#### Formats
+
+`format` is asserted where the backend has a checker and is an annotation
+everywhere else — a value with an unknown or unchecked format is never
+rejected for it:
+
+| Type | Asserted | Annotation only |
+|---|---|---|
+| `string` | `date`, `time`, `date-time`, `duration`, `uri`, `uri-reference`, `uri-template`, `regex`, `ipv4`, `ipv6`, `uuid`, `email`, `hostname`, `idn-hostname`, `idn-email`, `iri`, `iri-reference`, `json-pointer`, `relative-json-pointer` | `byte`, `binary`, `password`, and any other value |
+| `integer` | `int32` (−2³¹ … 2³¹−1), `int64` (−2⁶³ … 2⁶³−1; a value that overflows PHP's integer arrives as a float and is judged by magnitude) | any other value |
+| `number` | — | `float`, `double`, and any other value |
 
 ## Security
 
