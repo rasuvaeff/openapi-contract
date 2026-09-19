@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.12.2",
+    "contractVersionAtRecording": "v0.13.0",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -1319,6 +1319,66 @@
                         ],
                         "responses": {
                             "204": []
+                        }
+                    }
+                },
+                "/tree": {
+                    "post": {
+                        "operationId": "tree.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/Node"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "201": {
+                                "description": "created",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/Node"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "components": {
+                "schemas": {
+                    "Node": {
+                        "type": "object",
+                        "required": [
+                            "id",
+                            "name"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "id": {
+                                "type": "integer",
+                                "readOnly": true
+                            },
+                            "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 4
+                            },
+                            "parent": {
+                                "$ref": "#/components/schemas/Node"
+                            },
+                            "children": {
+                                "type": "array",
+                                "maxItems": 2,
+                                "items": {
+                                    "$ref": "#/components/schemas/Node"
+                                }
+                            }
                         }
                     }
                 }
@@ -10654,6 +10714,606 @@
                 "target": "/strings/%F3%8E%88%8D%E2%B7%B6%F3%BA%A3%BF%F3%A6%9A%A1K%3A5%CC%88%F3%B9%BA%8F2%28v%25L%27U%F3%BE%B8%97%7B%F3%B5%8C%95%22%E9%9E%85%3CE%C8%A0%E0%B2%AFg%27%E1%B0%AD%E4%A3%9C%C6%94u%C4%8FJ%7Brxa%F1%99%98%BF%21X%5E%7FVB%EA%AA%9C%7B%EC%9A%A7~C%C6%9B%26%3D%E2%80%A8%3F4i%C2%A7sS%3F%C7%A2I1/tags/.6%29~,%3D%F0%AB%AC%B4k%CC%88",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00\",\"parent\":{\"name\":\"\\udb55\\ude7a\",\"children\":[]},\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "tree.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\u97dd\",\"children\":[{\"name\":\"b4\"},{\"name\":\"\\u00f0\\u0244\\ud8f7\\udfee\",\"parent\":{\"name\":\"\\u30f3SM\"}}],\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "tree.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udbcd\\udfa3\\u85e8p\",\"parent\":{\"name\":\"\\u0308\\u00a3\\u0308$\"},\"children\":[],\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-length/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaa\",\"parent\":{\"name\":\"\\udb55\\ude7a\",\"children\":[]}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-length/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaa\",\"children\":[{\"name\":\"b4\"},{\"name\":\"\\u00f0\\u0244\\ud8f7\\udfee\",\"parent\":{\"name\":\"\\u30f3SM\"}}]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-length/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"aaaaa\",\"parent\":{\"name\":\"\\u0308\\u00a3\\u0308$\"},\"children\":[]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-type/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00\",\"parent\":{\"name\":\"\\udb55\\ude7a\",\"children\":[]},\"children\":\"not-a-array\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "children"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-type/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":4096,\"children\":[{\"name\":\"b4\"},{\"name\":\"\\u00f0\\u0244\\ud8f7\\udfee\",\"parent\":{\"name\":\"\\u30f3SM\"}}]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "tree.create/body-type/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":4096,\"parent\":{\"name\":\"\\u0308\\u00a3\\u0308$\"},\"children\":[]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "name"
+                }
+            }
+        },
+        {
+            "name": "tree.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/media-type/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00\",\"parent\":{\"name\":\"\\udb55\\ude7a\",\"children\":[]}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/media-type/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\u97dd\",\"children\":[{\"name\":\"b4\"},{\"name\":\"\\u00f0\\u0244\\ud8f7\\udfee\",\"parent\":{\"name\":\"\\u30f3SM\"}}]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/media-type/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udbcd\\udfa3\\u85e8p\",\"parent\":{\"name\":\"\\u0308\\u00a3\\u0308$\"},\"children\":[]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "tree.create/valid/1",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00\",\"parent\":{\"name\":\"\\udb55\\ude7a\",\"children\":[]}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/10",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\t\\u50e0\",\"parent\":{\"name\":\"\\u01459\"},\"children\":[]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/2",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\u97dd\",\"children\":[{\"name\":\"b4\"},{\"name\":\"\\u00f0\\u0244\\ud8f7\\udfee\",\"parent\":{\"name\":\"\\u30f3SM\"}}]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/3",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udbcd\\udfa3\\u85e8p\",\"parent\":{\"name\":\"\\u0308\\u00a3\\u0308$\"},\"children\":[]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/4",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"le\\u00d4\",\"children\":[{\"name\":\"(;N\"},{\"name\":\";8\",\"children\":[{\"name\":\"\\ud916\\udc1e\\u018c\"},{\"name\":\"%\\ud96f\\udf1eic\",\"parent\":{\"name\":\"|\"}}]}]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/5",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"|&6n\",\"children\":[{\"name\":\"\\uda8f\\ude5a\",\"parent\":{\"name\":\"\\ud898\\udf4f\\uda00\\udf0a\\udb40\\udc41\"}}]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/6",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"F8\\u8b2f\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/7",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"g\\u00d5\\u3777\\ud8a5\\udc17\",\"parent\":{\"name\":\" \\u01bd\",\"children\":[]}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/8",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udb15\\ude87\\udb25\\udd9c\\u0132'\",\"parent\":{\"name\":\"\\uad03\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "tree.create/valid/9",
+            "document": "zoo",
+            "operationId": "tree.create",
+            "request": {
+                "method": "POST",
+                "target": "/tree",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\udaf8\\ude0d\\u2df6\\udbaa\\udcff\",\"children\":[]}"
+                }
             },
             "expect": {
                 "valid": true
