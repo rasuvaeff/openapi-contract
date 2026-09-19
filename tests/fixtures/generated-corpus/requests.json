@@ -1214,14 +1214,13 @@
                                 }
                             },
                             {
-                                "name": "step",
+                                "name": "big",
                                 "in": "query",
                                 "required": true,
                                 "schema": {
-                                    "type": "number",
-                                    "multipleOf": 0.1,
-                                    "minimum": 0,
-                                    "maximum": 1000
+                                    "type": "integer",
+                                    "minimum": 123456789012345678,
+                                    "maximum": 123456789012345680
                                 }
                             },
                             {
@@ -7844,7 +7843,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=-1&expr=g/h",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7853,7 +7852,7 @@
                 "misuse": {
                     "kind": "boundary",
                     "location": "query",
-                    "name": "step"
+                    "name": "v"
                 }
             }
         },
@@ -7863,7 +7862,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=-0.876543210987655&step=630.4000000000001&expr=g/h",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7882,7 +7881,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=-0.876543210987655&step=143&expr=a%2Bb",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345679&expr=a%2Bb",
                 "headers": [],
                 "body": null
             },
@@ -7901,7 +7900,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=287.8&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7920,7 +7919,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234554&step=630.4000000000001&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7939,7 +7938,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234543&step=143&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7958,7 +7957,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=not-a-number&expr=g/h",
+                "target": "/precise?v=0.123456789012345&big=not-an-integer&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7967,7 +7966,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "query",
-                    "name": "step"
+                    "name": "big"
                 }
             }
         },
@@ -7977,7 +7976,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=not-a-number&step=630.4000000000001&expr=g/h",
+                "target": "/precise?v=not-a-number&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7996,7 +7995,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=not-a-number&step=143&expr=a%2Bb",
+                "target": "/precise?v=not-a-number&big=123456789012345679&expr=a%2Bb",
                 "headers": [],
                 "body": null
             },
@@ -8015,7 +8014,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=287.8&expr=g/h",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8029,7 +8028,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.1234567890123453&step=631&expr=c%20d",
+                "target": "/precise?v=0.1234567890123453&big=123456789012345678&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -8043,7 +8042,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234554&step=630.4000000000001&expr=g/h",
+                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8057,7 +8056,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234543&step=143&expr=a%2Bb",
+                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=a%2Bb",
                 "headers": [],
                 "body": null
             },
@@ -8071,7 +8070,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=660.9000000000001&expr=c%20d",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -8085,7 +8084,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234544&step=1000&expr=e%26f",
+                "target": "/precise?v=0.12345678901234544&big=123456789012345678&expr=e%26f",
                 "headers": [],
                 "body": null
             },
@@ -8099,7 +8098,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=356.20000000000005&expr=e%26f",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
                 "headers": [],
                 "body": null
             },
@@ -8113,7 +8112,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=830.3000000000001&expr=g/h",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8127,7 +8126,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234525&step=883.9000000000001&expr=e%26f",
+                "target": "/precise?v=0.12345678901234525&big=123456789012345679&expr=e%26f",
                 "headers": [],
                 "body": null
             },
@@ -8141,7 +8140,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&step=424.40000000000003&expr=e%26f",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
                 "headers": [],
                 "body": null
             },
