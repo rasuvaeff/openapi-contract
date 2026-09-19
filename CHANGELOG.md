@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.1 — 2026-09-19
+
+- **Fixed.** The `multipleOf` verdict depended on whether `ext-bcmath` was
+  loaded, and neither verdict was the specification's. The backend judged
+  the keyword on the parsed doubles: in floating point with a `1e-14`
+  tolerance, which from about `64` upward is less than one ulp, so `64.1`
+  was rejected for `multipleOf: 0.1` (the `composer:2` image, for one); or,
+  with the extension, on the double's expansion to fourteen decimals, which
+  is `123.40000000000001` for `123.4` and was rejected the same way (the
+  GitHub runners, for one). Same document, same bytes, two verdicts. The
+  keyword is now judged on the decimals the document and the message spell
+  — both numbers are taken back to their shortest round-trip spelling,
+  scaled to integers over a common power of ten and divided exactly, with no
+  optional extension involved — so `64.1` and `521642427059.686` are the
+  multiples they read as, and `64.10000000000001` is not (#151). A generator
+  that emitted the float product where the old float path demanded it
+  (`rasuvaeff/property-testing-openapi` 0.15.0) needs its 0.15.1.
+
 ## 0.12.0 — 2026-09-18
 
 - **Changed (breaking).** `Operation::$serverBases` is gone. It was documented
