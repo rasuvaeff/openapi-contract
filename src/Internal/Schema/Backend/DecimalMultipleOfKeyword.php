@@ -16,12 +16,12 @@ use Opis\JsonSchema\ValidationContext;
  *
  * @internal
  */
-final class DecimalMultipleOfKeyword implements Keyword
+final readonly class DecimalMultipleOfKeyword implements Keyword
 {
     use ErrorTrait;
 
     public function __construct(
-        private readonly int|float $divisor,
+        private int|float $divisor,
     ) {}
 
     #[\Override]
