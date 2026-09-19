@@ -129,7 +129,7 @@ final class MultiFileContractTest
         }
     }
 
-    public function detectsCrossFileCyclesViaTheDepthBudget(): void
+    public function refusesACrossFileCycleThatHoldsNoSchema(): void
     {
         $root = $this->workspace();
 
@@ -139,9 +139,53 @@ final class MultiFileContractTest
             $this->write($root, 'b.json', '{"B": {"$ref": "a.json#/A"}}');
 
             Contract::fromFile($root . '/entry.json');
-            Assert::true(actual: false, message: 'Expected reference depth exception');
+            Assert::true(actual: false, message: 'Expected a self-reference exception');
         } catch (InvalidContract $exception) {
-            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep (possible circular reference)');
+            Assert::same($exception->getMessage(), 'OpenAPI $ref "a.json#/A" in OpenAPI document "entry.json" resolves to nothing but a reference to itself');
+        } finally {
+            $this->remove($root);
+        }
+    }
+
+    /**
+     * A target is a file and a pointer: `#/Node` in two files are two schemas,
+     * and one referring to the other is a chain, not a cycle.
+     */
+    public function tellsTheSamePointerInTwoFilesApart(): void
+    {
+        $root = $this->workspace();
+
+        try {
+            $this->write($root, 'entry.json', $this->entryWithParameterSchemaRef('a.json#/Node'));
+            $this->write($root, 'a.json', '{"Node": {"type": "object", "properties": {"next": {"$ref": "b.json#/Node"}}}}');
+            $this->write($root, 'b.json', '{"Node": {"type": "string"}}');
+
+            Assert::same(
+                Contract::fromFile($root . '/entry.json')->operation('listItems')->parameters[0]['schema'],
+                ['type' => 'object', 'properties' => ['next' => ['type' => 'string']]],
+            );
+        } finally {
+            $this->remove($root);
+        }
+    }
+
+    /**
+     * A cycle through two files is one cycle: the def is named after the file
+     * the member lives in, so two files with a `Node` each stay apart.
+     */
+    public function compilesACrossFileRecursiveSchema(): void
+    {
+        $root = $this->workspace();
+
+        try {
+            $this->write($root, 'entry.json', $this->entryWithParameterSchemaRef('a.json#/Node'));
+            $this->write($root, 'a.json', '{"Node": {"type": "object", "properties": {"next": {"$ref": "b.json#/Link"}}}}');
+            $this->write($root, 'b.json', '{"Link": {"type": "object", "properties": {"node": {"$ref": "a.json#/Node"}}}}');
+
+            $schema = Contract::fromFile($root . '/entry.json')->operation('listItems')->parameters[0]['schema'];
+
+            Assert::same(array_keys($schema['$defs']), ['a.json:Node']);
+            Assert::same($schema['properties']['next']['properties']['node'], ['$ref' => '#/$defs/a.json:Node', 'type' => 'object']);
         } finally {
             $this->remove($root);
         }

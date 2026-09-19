@@ -57,6 +57,12 @@ Rules:
   Example Object's `value`, a Schema Object's `default`/`const`/`enum`, or a
   specification extension — those hold the author's data and are kept as
   written (an Example Object reached through `$ref` still resolves);
+- a schema that refers to itself (tree, thread, nested error) compiles to
+  `$defs` + a local `{$ref: '#/$defs/<name>', type: …}` for the back-reference,
+  the def named after the target's JSON Pointer (`components.schemas.Node`;
+  `a.json:Node` from another file); the schema the cycle starts from is
+  inlined AND kept as a def; a schema without a cycle has no `$defs`; a cycle
+  outside a schema, or one with no schema in it, is `InvalidContract`;
 - `$ref` siblings follow the declared dialect: 3.0 ignores them everywhere;
   3.1 keeps `summary`/`description` on a Reference Object (overriding the
   referenced ones) and applies a Schema Object's siblings in addition to the
@@ -81,7 +87,7 @@ Rules:
   a response — the `required` entry is dropped, the subschema is kept, so the
   property stays declared and typed (a closed object still admits it, an open
   one still checks its type); recursive through `properties`, `items`,
-  `additionalProperties`, `allOf`/`anyOf`/`oneOf`, never into `not`;
+  `additionalProperties`, `allOf`/`anyOf`/`oneOf` and `$defs`, never into `not`;
   `SchemaCheck::effective($schema, $direction)` returns exactly that rewrite;
 - declared `security` is NOT enforced: requirements compile and are checked
   for referencing a declared scheme, but a request missing its credential
@@ -92,11 +98,13 @@ Rules:
   an unencoded one) — it is a hand-off to consumers that render query values,
   which cannot derive it from the schema;
 - budgets are `Limits`, not constants: `new Limits(documentBytes:,
-  messageBodyBytes:, documentFiles:, documentNodes:)` passed to any factory; a
-  budget below 1 throws `InvalidLimits` (an `\InvalidArgumentException`
-  implementing `ContractException`). `documentNodes` bounds
-  what a document expands into, which for YAML anchors is unrelated to what it
-  weighs. `*.body.too_large` means the validator
+  messageBodyBytes:, documentFiles:, documentNodes:, resolvedNodes:)` passed
+  to any factory; a budget below 1 throws `InvalidLimits` (an
+  `\InvalidArgumentException` implementing `ContractException`).
+  `documentNodes` bounds what a document expands into, which for YAML
+  anchors is unrelated to what it weighs; `resolvedNodes` bounds the work of
+  inlining references (a shared component is visited once per use — GitHub's
+  REST API needs ~360 000 of the default 1 000 000). `*.body.too_large` means the validator
   declined to read that body, NOT that the message is invalid — raise the
   budget rather than treating it as a failed verdict;
 - `Operation` is a read model: nothing public validates a hand-built
@@ -156,9 +164,10 @@ API reference:
   the immutable compiled contract.
 - `Limits` (readonly): `documentBytes` (default 10 MiB),
   `messageBodyBytes` (default 1 MiB), `documentFiles` (default 64),
-  `documentNodes` (default 5 000 000), with `Limits::DEFAULT_DOCUMENT_BYTES` /
-  `DEFAULT_MESSAGE_BODY_BYTES` / `DEFAULT_DOCUMENT_FILES` /
-  `DEFAULT_DOCUMENT_NODES` as the constants behind them.
+  `documentNodes` (default 5 000 000), `resolvedNodes` (default 1 000 000),
+  with `Limits::DEFAULT_DOCUMENT_BYTES` / `DEFAULT_MESSAGE_BODY_BYTES` /
+  `DEFAULT_DOCUMENT_FILES` / `DEFAULT_DOCUMENT_NODES` /
+  `DEFAULT_RESOLVED_NODES` as the constants behind them.
 - `Contract::operations(): list<Operation>`;
   `Contract::operation(string $key): Operation` throws `UnknownOperation`.
 - `Contract::securitySchemes(): array<string, CompiledSecurityScheme>` —

@@ -55,22 +55,172 @@ final class JsonPointerResolverTest
         yield 'non-string reference' => [42];
     }
 
-    public function rejectsCircularReferencesAtTheConfiguredDepth(): void
+    /**
+     * Outside a schema — a Path Item, a Response, a Parameter — nothing can
+     * evaluate a reference lazily, so a cycle there is refused as what it is,
+     * whatever the depth budget: the budget is for the chain that never
+     * comes back.
+     */
+    public function rejectsACycleOutsideASchemaAsCircular(): void
     {
         $resolver = new JsonPointerResolver(
-            document: ['components' => ['schemas' => ['loop' => ['$ref' => '#/components/schemas/loop']]]],
-            maximumReferenceDepth: 2,
+            document: ['components' => ['responses' => ['loop' => ['$ref' => '#/components/responses/loop']]]],
+            maximumReferenceDepth: 200,
         );
 
         try {
-            $resolver->resolve(['$ref' => '#/components/schemas/loop']);
+            $resolver->resolve(['$ref' => '#/components/responses/loop']);
         } catch (\InvalidArgumentException $exception) {
-            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep (possible circular reference)');
+            Assert::same($exception->getMessage(), 'Circular $ref "#/components/responses/loop" outside a schema in OpenAPI document');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected a circular reference exception');
+    }
+
+    public function rejectsAChainThatOutrunsTheDepthBudget(): void
+    {
+        $document = [];
+        foreach (range(0, 3) as $i) {
+            $document['s' . $i] = ['$ref' => '#/s' . ($i + 1)];
+        }
+        $document['s4'] = ['type' => 'string'];
+        $resolver = new JsonPointerResolver(document: $document, maximumReferenceDepth: 3);
+
+        try {
+            $resolver->resolve(['$ref' => '#/s0']);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep');
 
             return;
         }
 
         Assert::true(actual: false, message: 'Expected reference depth exception');
+    }
+
+    /**
+     * A tree is a schema whose member is the schema itself. Inlining cannot
+     * write that down; the backend can evaluate it as a `$defs` member the
+     * back-reference points to, so that is the compiled form — the root
+     * inlined as every schema is, and kept as a def as well.
+     */
+    public function compilesARecursiveSchemaToDefsAndALocalRef(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => ['Node' => [
+            'type' => 'object',
+            'properties' => ['children' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Node']]],
+        ]]]]);
+
+        $resolved = $resolver->resolve(['$ref' => '#/components/schemas/Node'], inSchema: true);
+
+        $body = [
+            'type' => 'object',
+            'properties' => ['children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/components.schemas.Node', 'type' => 'object']]],
+        ];
+        Assert::same($resolved, [...$body, '$defs' => ['components.schemas.Node' => $body]]);
+    }
+
+    /**
+     * The cycle is found by the resolution path, not by a seen-set: a
+     * component reached twice along different branches is not a cycle, and
+     * keeps being inlined — no `$defs` appears.
+     */
+    public function inlinesADiamondWithoutDefs(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => [
+            'Address' => ['type' => 'string'],
+            'User' => ['type' => 'object', 'properties' => ['home' => ['$ref' => '#/components/schemas/Address'], 'work' => ['$ref' => '#/components/schemas/Address']]],
+        ]]]);
+
+        Assert::same(
+            $resolver->resolve(['$ref' => '#/components/schemas/User'], inSchema: true),
+            ['type' => 'object', 'properties' => ['home' => ['type' => 'string'], 'work' => ['type' => 'string']]],
+        );
+    }
+
+    /**
+     * Two schemas that reach each other are one cycle with two members, and
+     * a cycle met after a chain that has already spent the depth budget is
+     * still a cycle: the check comes first.
+     */
+    public function compilesMutualRecursionAndACycleBeyondTheDepthBudget(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => [
+            'A' => ['type' => 'object', 'properties' => ['b' => ['$ref' => '#/components/schemas/B']]],
+            'B' => ['type' => 'object', 'properties' => ['a' => ['$ref' => '#/components/schemas/A']]],
+        ]]], maximumReferenceDepth: 2);
+
+        $resolved = $resolver->resolve(['$ref' => '#/components/schemas/A'], inSchema: true);
+
+        Assert::same(array_keys($resolved['$defs']), ['components.schemas.A']);
+        Assert::same($resolved['properties']['b']['properties']['a'], ['$ref' => '#/$defs/components.schemas.A', 'type' => 'object']);
+    }
+
+    public function keepsA31SiblingOfABackReferenceAsAConjunction(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => ['Node' => [
+            'type' => 'object',
+            'properties' => ['parent' => ['$ref' => '#/components/schemas/Node', 'description' => 'up', 'maxProperties' => 3]],
+        ]]]]);
+
+        $resolved = $resolver->resolve(['$ref' => '#/components/schemas/Node'], inSchema: true);
+
+        Assert::same($resolved['properties']['parent'], [
+            'allOf' => [['$ref' => '#/$defs/components.schemas.Node', 'type' => 'object'], ['maxProperties' => 3]],
+            'type' => 'object',
+            'description' => 'up',
+        ]);
+    }
+
+    /**
+     * The siblings of a 3.1 schema reference are resolved — a reference
+     * among them is a reference — while under 3.0 they are ignored whole, a
+     * broken reference among them included.
+     */
+    public function resolvesTheSiblingsOfAReferenceByDialect(): void
+    {
+        $document = ['a' => ['type' => 'object'], 'b' => ['type' => 'integer']];
+
+        $resolved = (new JsonPointerResolver(document: $document))
+            ->resolve(['$ref' => '#/a', 'properties' => ['n' => ['$ref' => '#/b']]], inSchema: true);
+        Assert::same($resolved['allOf'][1], ['properties' => ['n' => ['type' => 'integer']]]);
+
+        $ignored = (new JsonPointerResolver(document: $document, dialect: SchemaDialect::OpenApi30))
+            ->resolve(['$ref' => '#/a', 'properties' => ['n' => ['$ref' => '#/missing']]], inSchema: true);
+        Assert::same($ignored, ['type' => 'object']);
+    }
+
+    public function refusesACycleThatHoldsNoSchema(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => [
+            'A' => ['$ref' => '#/components/schemas/B'],
+            'B' => ['$ref' => '#/components/schemas/A'],
+        ]]]);
+
+        try {
+            $resolver->resolve(['$ref' => '#/components/schemas/A'], inSchema: true);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI $ref "#/components/schemas/A" in OpenAPI document resolves to nothing but a reference to itself');
+
+            return;
+        }
+
+        Assert::true(actual: false, message: 'Expected a self-reference exception');
+    }
+
+    /**
+     * A compiled schema handed back for a second pass — the compiler resolves
+     * the Path Item, then the Request Body inside it again — keeps the local
+     * refs the first pass emitted, rather than looking them up in a document
+     * that has no `$defs`.
+     */
+    public function leavesAnEmittedLocalDefsRefAlone(): void
+    {
+        $resolver = new JsonPointerResolver(document: []);
+        $compiled = ['type' => 'array', 'items' => ['$ref' => '#/$defs/x'], '$defs' => ['x' => ['type' => 'string']]];
+
+        Assert::same($resolver->resolve(['schema' => $compiled]), ['schema' => $compiled]);
     }
 
     public function rejectsDocumentsThatExhaustTheSharedNodeBudget(): void
@@ -168,14 +318,16 @@ final class JsonPointerResolverTest
             'b' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
         ]);
 
-        // Only what the merged node needs at the top is lifted. Lifting the
-        // reference too would restart the merge from a node that already
-        // carries the conjunction, and nest it inside itself.
+        // The chain is resolved to its end before the merge, so an alias
+        // lifts the same decoding keywords a direct reference does: the
+        // parameter decoder reads `type` off the top either way.
         Assert::same($resolver->resolve(['$ref' => '#/a', 'additionalProperties' => false], inSchema: true), [
             'allOf' => [
                 ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
                 ['additionalProperties' => false],
             ],
+            'type' => 'object',
+            'properties' => ['id' => ['type' => 'integer']],
         ]);
 
         // A reference that carries an asserting sibling of its own is a
@@ -189,6 +341,7 @@ final class JsonPointerResolverTest
                 ['allOf' => [['type' => 'object'], ['minProperties' => 1]], 'type' => 'object'],
                 ['additionalProperties' => false],
             ],
+            'type' => 'object',
         ]);
     }
 

@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Fixed.** A schema that refers to itself — a tree whose `children` are
+  trees, a comment thread, a nested error — can be loaded. Every `$ref` was
+  inlined, so a self-reference expanded until the depth guard tripped and the
+  document was refused as `$ref chain is too deep (possible circular
+  reference)`. The members of a reference cycle are now kept as the Schema
+  Object's `$defs`, named after their JSON Pointer
+  (`#/components/schemas/Node` → `components.schemas.Node`, `a.json:Node` from
+  another file), and the reference back to one becomes a local
+  `{$ref: '#/$defs/…'}` carrying the target's `type` — the form the validation
+  backend evaluates natively; the schema the cycle starts from is inlined
+  where it is first met and kept as a def as well. The directional
+  `readOnly`/`writeOnly` rewrite (`SchemaCheck::effective()`) reaches into
+  `$defs`, so a `readOnly` member of a tree node is not required at any depth
+  of a request. A schema without a cycle compiles exactly as before, with no
+  `$defs`; a cycle outside a schema (a Path Item or Response reaching itself)
+  and a cycle with no schema in it (`A: {$ref: B}`, `B: {$ref: A}`) stay
+  refused, now by name. The cycle is found before the depth is charged, so a
+  cycle at the end of a long chain is a cycle, not a deep chain, and the
+  depth message drops its "(possible circular reference)". (#159)
+- **Fixed.** `{}` in a subschema position — `items: {}`, `properties: {x:
+  {}}`, `additionalProperties: {}` — was refused as a list where a schema was
+  expected: the empty object decodes to the empty array, which
+  `array_is_list()` calls a list. It is the schema with no keywords, admits
+  everything, and now goes back on the wire as `{}`; so does a schema that
+  normalizes down to nothing, such as OAS 3.0's `{nullable: true}`, which the
+  backend used to reject as `[]`. GitHub's published REST description
+  declares both shapes.
+- **Added.** `Limits::$resolvedNodes` (default 1 000 000): the
+  reference-resolution budget was a constant of 100 000 inside the resolver,
+  absent from `Limits` while the README listed it among the budgets, and a
+  large flat document tripped it with no way to raise it. A shared component
+  is visited once per use, so a description costs more resolution than it
+  has nodes — GitHub's REST API (1 239 operations, 13 MB) needs about 360 000,
+  and loads with `documentBytes` raised. Stripe's `spec3.json` still does
+  not: its components form a DAG that inlining expands past twenty million
+  nodes for a single schema, which is a different limitation, tracked
+  separately.
+- **Changed.** A 3.1 schema reference that is an alias of another
+  (`a: {$ref: b}`) lifts `type`, `items` and `properties` to the top of the
+  conjunction it forms with its siblings, as a direct reference always did;
+  the chain is resolved to its end before the merge.
+
 ## 0.12.2 — 2026-09-19
 
 - **Added.** `SchemaCheck::isMultipleOf(int|float $value, int|float $divisor): bool`

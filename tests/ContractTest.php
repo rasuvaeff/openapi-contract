@@ -533,6 +533,108 @@ final class ContractTest
     }
 
     /**
+     * A tree, a thread, a nested error: a schema whose member is the schema
+     * itself. It used to be refused as a chain too deep; it compiles to a
+     * `$defs` member the back-reference points to, and the backend follows
+     * the reference — so the leaf three levels down is judged, in the
+     * direction the message is read in.
+     */
+    public function validatesARecursiveSchemaAtEveryDepth(): void
+    {
+        $contract = Contract::fromArray($this->treeDocument('3.1.0'));
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/tree', ['Content-Type' => 'application/json'], $body);
+        $response = static fn(string $body): Response => new Response(200, ['Content-Type' => 'application/json'], $body);
+
+        $valid = '{"name":"a","children":[{"name":"b","children":[{"name":"c","children":[{"name":"d"}]}]}]}';
+        Assert::true($contract->validateRequest($request($valid))->isValid());
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request('{"name":"a","children":[{"name":"b","children":[{"nam":"c"}]}]}'))->violations),
+            ['request.body.schema'],
+        );
+        // `id` is readOnly: never demanded on a request, at any depth, and
+        // demanded at every depth of a response.
+        Assert::true($contract->validateRequest($request('{"name":"a","children":[{"name":"b","id":1}]}'))->isValid());
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateResponse('tree.create', $response($valid))->violations),
+            ['response.body.schema'],
+        );
+        Assert::true($contract->validateResponse('tree.create', $response('{"id":1,"name":"a","children":[{"id":2,"name":"b","children":[{"id":3,"name":"c"}]}]}'))->isValid());
+
+        $schema = $contract->operation('tree.create')->requestBody['content']['application/json']['schema'];
+        Assert::same(array_keys($schema['$defs']), ['components.schemas.Node']);
+        Assert::same($schema['properties']['children']['items'], ['$ref' => '#/$defs/components.schemas.Node', 'type' => 'object']);
+    }
+
+    /**
+     * Under 3.0 the same tree spells nullability as a keyword, and the
+     * `$defs` member is normalized by the dialect like every other schema.
+     */
+    public function validatesARecursiveSchemaUnderOpenApi30(): void
+    {
+        $contract = Contract::fromArray($this->treeDocument('3.0.3'));
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/tree', ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($request('{"name":"a","children":[{"name":"b","note":null,"children":[{"name":"c","note":null}]}]}'))->isValid());
+        Assert::false($contract->validateRequest($request('{"name":"a","children":[{"name":"b","children":[{"name":"c","note":5}]}]}'))->isValid());
+    }
+
+    /**
+     * `{}` is the schema with no keywords and admits everything; it decodes
+     * to the empty array, which used to be refused as a list where a schema
+     * was expected — GitHub's REST description declares `items: {}` — and,
+     * once accepted, has to go back on the wire as `{}`, because `[]` is not
+     * a schema to the backend. A 3.0 `{nullable: true}` normalizes down to
+     * the same empty schema.
+     */
+    public function acceptsAnEmptySubschemaWhereverASchemaMayStand(): void
+    {
+        $document = ['openapi' => '3.0.3', 'paths' => ['/h' => ['post' => [
+            'operationId' => 'h',
+            'requestBody' => ['content' => ['application/json' => ['schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'anything' => ['type' => 'array', 'items' => []],
+                    'parent' => ['nullable' => true],
+                    'open' => [],
+                ],
+                'additionalProperties' => [],
+            ]]]],
+            'responses' => ['204' => ['description' => 'ok']],
+        ]]]];
+        $contract = Contract::fromArray($document);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/h', ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateRequest($request('{"anything":[1,"x",null,{}],"parent":null,"open":[],"extra":{"a":1}}'))->isValid());
+        Assert::false($contract->validateRequest($request('{"anything":"not a list"}'))->isValid());
+    }
+
+    /** @return array<string, mixed> */
+    private function treeDocument(string $version): array
+    {
+        $note = str_starts_with($version, '3.0.') ? ['type' => 'string', 'nullable' => true] : ['type' => ['string', 'null']];
+        $schema = ['$ref' => '#/components/schemas/Node'];
+
+        return ['openapi' => $version, 'info' => ['title' => 't', 'version' => '1'],
+            'paths' => ['/tree' => ['post' => [
+                'operationId' => 'tree.create',
+                'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => $schema]]],
+                'responses' => ['200' => ['description' => 'ok', 'content' => ['application/json' => ['schema' => $schema]]]],
+            ]]],
+            'components' => ['schemas' => ['Node' => [
+                'type' => 'object',
+                'required' => ['name', 'id'],
+                'additionalProperties' => false,
+                'properties' => [
+                    'id' => ['type' => 'integer', 'readOnly' => true],
+                    'name' => ['type' => 'string'],
+                    'note' => $note,
+                    'children' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Node']],
+                ],
+            ]]],
+        ];
+    }
+
+    /**
      * The byte budget measures the document; this one measures what it
      * expands into, which for YAML aliases is unrelated.
      */
@@ -551,6 +653,28 @@ final class ContractTest
         }
 
         Assert::same(Contract::fromArray($document, new Limits(documentNodes: 200))->operations()[0]->path, '/h');
+    }
+
+    /**
+     * Resolution visits a shared component once per use, so it is bounded
+     * by a budget of its own — the caller's, since the largest published
+     * descriptions need more of it than a small default would give.
+     */
+    public function refusesADocumentOverTheConfiguredResolutionBudget(): void
+    {
+        $document = ['openapi' => '3.1.0', 'paths' => ['/h' => ['get' => [
+            'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['$ref' => '#/components/schemas/Q']]],
+            'responses' => ['200' => []],
+        ]]], 'components' => ['schemas' => ['Q' => ['type' => 'string']]]];
+
+        try {
+            Contract::fromArray($document, new Limits(resolvedNodes: 5));
+            Assert::true(actual: false, message: 'Expected the resolution budget to refuse the document');
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'OpenAPI document exceeds the reference-resolution budget of 5 nodes');
+        }
+
+        Assert::same(Contract::fromArray($document, new Limits(resolvedNodes: 100))->operations()[0]->path, '/h');
     }
 
     public function countsEveryNodeOfADocumentOnce(): void

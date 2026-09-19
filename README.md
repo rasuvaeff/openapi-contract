@@ -112,7 +112,11 @@ nodes a document expands into, a reference-resolution budget, and — for
 multi-file documents — file-count, byte and node budgets shared across the
 whole reference graph. The node budget is the one that bounds YAML: anchors
 and aliases produce nodes out of no bytes at all, so a file well inside the
-byte budget can still expand into hundreds of millions of nodes.
+byte budget can still expand into hundreds of millions of nodes. The
+resolution budget (`resolvedNodes`) bounds the work of inlining: a component
+shared by many operations is visited once per use, so a large description
+costs more resolution than it has nodes — GitHub's REST API, at 1 239
+operations, needs about 360 000 of the default million.
 
 #### Budgets
 
@@ -127,6 +131,7 @@ $contract = Contract::fromFile('openapi.yaml', new Limits(
     messageBodyBytes: 8 * 1024 * 1024, // default 1 MiB
     documentFiles: 256,                // default 64
     documentNodes: 20_000_000,         // default 5 000 000
+    resolvedNodes: 4_000_000,          // default 1 000 000
 ));
 ```
 
@@ -174,7 +179,17 @@ every `$ref` on the way to a schema resolved, `required` a boolean,
 `content` keyed by media type, `encoding` and `headers` keyed by property and
 header name, and every `schema` a boolean or a keyword map (the empty map
 being the unconstrained schema); what the document wrote beside those keys
-is kept as written. `CompiledResponses` is keyed by status code as PHP reads
+is kept as written. A schema that refers to itself — a tree whose
+`children` are trees, a thread, a nested error — cannot be inlined, so the
+members of every reference cycle are kept as the schema's `$defs`, named
+after their JSON Pointer (`#/components/schemas/Node` becomes
+`components.schemas.Node`, a member of another file `a.json:Node`), and the
+reference back to one is a local `{$ref: '#/$defs/…'}` carrying the
+target's `type`; the schema the cycle starts from is inlined where it is
+first met and kept as a def as well. A schema without a cycle has no
+`$defs`. A reference cycle outside a schema — a Path Item or a Response
+that reaches itself — is refused, as is a cycle with no schema in it.
+ `CompiledResponses` is keyed by status code as PHP reads
 it (`"200"` is `int 200`), by the `NXX` range, or by `default`. Compiled parameters carry `allowReserved` for those consumers:
 validation never reads it, because a value that leaves a reserved character
 unencoded cannot be told from the delimiter it looks like — the package reads
@@ -391,7 +406,7 @@ carries a `readOnly` `id` is judged by `id`'s schema and a closed object
 (`additionalProperties: false`) still admits it, exactly as both
 specifications have it ("the required will take effect on the response
 only"). The rewrite recurses through `properties`, `items`,
-`additionalProperties` and the composition keywords, leaves `not` alone, and
+`additionalProperties`, the composition keywords and `$defs`, leaves `not` alone, and
 is what makes the same value and the same schema answer differently in the two
 directions.
 
