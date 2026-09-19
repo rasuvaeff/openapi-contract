@@ -444,6 +444,14 @@ and never evicts: a `Contract` holds finitely many schemas, but a
 `SchemaCheck` fed an unbounded stream of distinct schemas grows with it —
 keep one per document, not one per generator.
 
+`SchemaCheck::isMultipleOf($value, $divisor)` is the `multipleOf` verdict
+itself, static and exported for a consumer that has to predict it — a
+generator deciding whether the `number` branch of a `oneOf` admits an integer
+it is about to keep on the `integer` branch asks this instead of keeping a
+second copy of the rule. It judges on the decimals the two numbers spell
+(`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly, on
+every machine.
+
 ### Violation codes
 
 The complete set. A code is a stable identifier callers may switch on; the

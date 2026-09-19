@@ -268,6 +268,10 @@ API reference:
   (`required` entries of foreign properties dropped, subschemas kept,
   recursive, `not` untouched, dialect-independent, idempotent), for a
   consumer that generates values for one direction.
+- `SchemaCheck::isMultipleOf(int|float $value, int|float $divisor): bool` —
+  the static `multipleOf` verdict on the decimals the numbers spell, for a
+  consumer that must predict it (a generator keeping an integer on the
+  `integer` branch of a `oneOf` only when the `number` branch refuses it).
 - `SchemaDirection` (enum): `Request`, `Response`. Decides which properties
   are required — a `readOnly` one is not required on a request, a `writeOnly`
   one not on a response; both stay declared and typed.

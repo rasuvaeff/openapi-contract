@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.2 — 2026-09-19
+
+- **Added.** `SchemaCheck::isMultipleOf(int|float $value, int|float $divisor): bool`
+  — the `multipleOf` verdict of 0.12.1, static and exported, so a consumer
+  that has to predict it asks this rather than keeps a second copy of the
+  rule. `rasuvaeff/property-testing-openapi` decided whether the `number`
+  branch of a `oneOf` admits an integer by the float rule the contract left
+  in 0.12.1, and disagreed on 4670 of the integers in ±100000 for
+  `multipleOf: 0.7` (#154, property-testing-openapi#132).
+- **Fixed.** The decimal predicate took `abs()` of an integer, which turns
+  `PHP_INT_MIN` into a float and loses its low digits; the sign is trimmed
+  from the spelling instead (#154).
+
 ## 0.12.1 — 2026-09-19
 
 - **Fixed.** The `multipleOf` verdict depended on whether `ext-bcmath` was
