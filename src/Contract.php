@@ -128,7 +128,7 @@ final readonly class Contract
         if (DocumentNodes::within($document, $limits->documentNodes) === null) {
             throw new InvalidContract(sprintf('OpenAPI document expands to more than %d nodes', $limits->documentNodes));
         }
-        $compiled = (new DocumentCompiler())->compile($document);
+        $compiled = (new DocumentCompiler())->compile($document, resolvedNodes: $limits->resolvedNodes);
 
         return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
     }
@@ -162,7 +162,7 @@ final readonly class Contract
     {
         $limits ??= new Limits();
         $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes, $limits->documentNodes);
-        $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph);
+        $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph, $limits->resolvedNodes);
 
         return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
     }

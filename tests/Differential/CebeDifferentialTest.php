@@ -80,12 +80,14 @@ final class CebeDifferentialTest
         // Pinned divergence: cebe/php-openapi does not terminate on this
         // cross-file cycle (verified 2026-08-31 — resolution loops until the
         // process is killed), so the oracle side is deliberately not executed.
-        // Our depth budget turns the same document into a fast, stable error.
+        // The cycle holds no schema — `A: {$ref: B}`, `B: {$ref: A}` — so
+        // there is nothing to defer to, and the same document is a fast,
+        // stable error here.
         try {
             Contract::fromFile($this->fixture('cycle'));
-            Assert::true(actual: false, message: 'Expected a reference depth exception');
+            Assert::true(actual: false, message: 'Expected a self-reference exception');
         } catch (InvalidContract $exception) {
-            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep (possible circular reference)');
+            Assert::same($exception->getMessage(), 'OpenAPI $ref "a.json#/A" in OpenAPI document "entry.json" resolves to nothing but a reference to itself');
         }
     }
 
@@ -100,7 +102,7 @@ final class CebeDifferentialTest
             Contract::fromFile($entry);
             Assert::true(actual: false, message: 'Expected a reference depth exception');
         } catch (InvalidContract $exception) {
-            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep (possible circular reference)');
+            Assert::same($exception->getMessage(), 'OpenAPI $ref chain is too deep');
         }
 
         $document = Reader::readFromJsonFile($entry, OpenApi::class, resolveReferences: true);

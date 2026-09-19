@@ -20,6 +20,13 @@ namespace Rasuvaeff\OpenApiContract;
  * document within `documentBytes` can hold, so it refuses amplification
  * without refusing size.
  *
+ * `resolvedNodes` bounds the work of resolving references: every `$ref` is
+ * inlined where it is used, so a component shared by many operations is
+ * visited once per use, and a large document costs more resolution than it
+ * has nodes. The default leaves room above the largest published
+ * descriptions — GitHub's REST API, 1 239 operations, resolves in about
+ * 360 000 — without admitting a document that resolves without end.
+ *
  * @api
  */
 final readonly class Limits
@@ -28,12 +35,14 @@ final readonly class Limits
     public const int DEFAULT_MESSAGE_BODY_BYTES = 1024 * 1024;
     public const int DEFAULT_DOCUMENT_FILES = 64;
     public const int DEFAULT_DOCUMENT_NODES = 5_000_000;
+    public const int DEFAULT_RESOLVED_NODES = 1_000_000;
 
     public function __construct(
         public int $documentBytes = self::DEFAULT_DOCUMENT_BYTES,
         public int $messageBodyBytes = self::DEFAULT_MESSAGE_BODY_BYTES,
         public int $documentFiles = self::DEFAULT_DOCUMENT_FILES,
         public int $documentNodes = self::DEFAULT_DOCUMENT_NODES,
+        public int $resolvedNodes = self::DEFAULT_RESOLVED_NODES,
     ) {
         if ($documentBytes < 1) {
             throw new InvalidLimits('Document byte budget must be positive');
@@ -46,6 +55,9 @@ final readonly class Limits
         }
         if ($documentNodes < 1) {
             throw new InvalidLimits('Document node budget must be positive');
+        }
+        if ($resolvedNodes < 1) {
+            throw new InvalidLimits('Reference-resolution budget must be positive');
         }
     }
 }

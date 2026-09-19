@@ -195,6 +195,39 @@ final class SchemaCheckTest
     }
 
     /**
+     * A `$defs` member is a schema a local `$ref` reaches — the compiled form
+     * of a recursive schema — and is read in the same direction: a
+     * `readOnly` member of a tree node is not required at any depth of a
+     * request. The rewrite stays a fixed point of itself on that form too.
+     */
+    public function effectiveReachesIntoDefs(): void
+    {
+        $node = [
+            'type' => 'object',
+            'required' => ['id', 'name'],
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'name' => ['type' => 'string'],
+                'children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/Node']],
+            ],
+        ];
+        $schema = [...$node, '$defs' => ['Node' => $node]];
+        $check = new SchemaCheck();
+
+        $request = $check->effective($schema, SchemaDirection::Request);
+        Assert::same($request['required'], ['name']);
+        Assert::same($request['$defs']['Node']['required'], ['name']);
+        Assert::same($request['$defs']['Node']['properties']['id'], ['type' => 'integer', 'readOnly' => true]);
+        Assert::same($check->effective($request, SchemaDirection::Request), $request);
+        Assert::same($check->effective($schema, SchemaDirection::Response)['$defs']['Node']['required'], ['id', 'name']);
+
+        // Judged through the same form: the id is admitted, never demanded, three levels down.
+        $tree = json_decode('{"name":"a","children":[{"name":"b","children":[{"name":"c","children":[{"name":"d"}]}]}]}');
+        Assert::true($check->accepts($tree, $schema, SchemaDialect::OpenApi31));
+        Assert::false($check->accepts($tree, $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+    }
+
+    /**
      * OAS 3.0 spells nullability as a keyword, 3.1 as a type union. The same
      * schema is therefore read two ways: under 3.0 it admits `null`, and
      * under 3.1 `nullable` is not a keyword at all and the schema is refused

@@ -8,6 +8,7 @@ use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Reference\DocumentGraph;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\InvalidContract;
+use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
@@ -53,7 +54,7 @@ final readonly class DocumentCompiler
     private const array SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'properties'];
 
     /** @param array<string, mixed> $document */
-    public function compile(array $document, ?DocumentGraph $graph = null): CompiledDocument
+    public function compile(array $document, ?DocumentGraph $graph = null, int $resolvedNodes = Limits::DEFAULT_RESOLVED_NODES): CompiledDocument
     {
         $version = $document['openapi'] ?? null;
         if (!is_string($version) || !preg_match('/^3\.(0|1)\.[0-9]+$/', $version)) {
@@ -71,7 +72,7 @@ final readonly class DocumentCompiler
             );
         }
 
-        $resolver = new JsonPointerResolver($document, $dialect, graph: $graph);
+        $resolver = new JsonPointerResolver($document, $dialect, maximumResolvedNodes: $resolvedNodes, graph: $graph);
         $rootServers = $this->servers($document['servers'] ?? null);
         $securitySchemes = (new SecuritySchemeCompiler())->compile($document['components'] ?? null, $dialect, $resolver);
         $schemeNames = array_keys($securitySchemes);

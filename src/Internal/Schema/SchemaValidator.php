@@ -40,7 +40,7 @@ final class SchemaValidator
      * alone on purpose — what a `readOnly` property means under a negation
      * is not something either specification says.
      */
-    private const array DIRECTIONAL_KEYWORDS = ['properties', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
+    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
 
     /**
      * Every keyword under which the compiler emits a subschema, by the shape
@@ -237,8 +237,8 @@ final class SchemaValidator
      * type and a closed one rejected the property the document declared.
      *
      * The rewrite recurses through `properties`, `items`,
-     * `additionalProperties` and the composition keywords — including into
-     * the foreign property itself, whose own members may be flagged.
+     * `additionalProperties`, the composition keywords and `$defs` — including
+     * into the foreign property itself, whose own members may be flagged.
      *
      * Direction is the *only* reason a `required` entry is dropped. A member
      * this method does not recurse into — a boolean schema, or any shape it
@@ -259,7 +259,27 @@ final class SchemaValidator
             if (!array_key_exists($keyword, $schema)) {
                 continue;
             }
-            if ($keyword === 'properties' && is_array($schema[$keyword])) {
+            if ($keyword === '$defs' && is_array($schema[$keyword])) {
+                // A def is a schema a local `$ref` reaches — the member of a
+                // reference cycle the compiler could not inline — and is
+                // read in the same direction as the schema that holds it.
+                // Not a property: nothing here drops a `required` entry.
+                $defs = [];
+                /** @var array<array-key, mixed> $defMap */
+                $defMap = $schema[$keyword];
+                foreach (array_keys($defMap) as $name) {
+                    /** @var mixed $def */
+                    $def = $defMap[$name];
+                    if (!is_array($def) || array_is_list($def)) {
+                        $defs[$name] = $def;
+
+                        continue;
+                    }
+                    /** @var array<string, mixed> $def */
+                    $defs[$name] = $this->effectiveSchema($def, $direction);
+                }
+                $schema['$defs'] = $defs;
+            } elseif ($keyword === 'properties' && is_array($schema[$keyword])) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $foreign */

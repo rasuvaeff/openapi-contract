@@ -164,7 +164,7 @@ final readonly class SchemaCompiler
                 // The member schemas stay dialect-gated: OAS 3.0 admits a
                 // boolean only for `additionalProperties`, not inside
                 // `properties`.
-                fn(mixed $value): bool|array => $this->normalizeSchemaValue($value, $dialect, $keyword),
+                fn(mixed $value): bool|array|\stdClass => $this->normalizeSchemaValue($value, $dialect, $keyword),
                 $values,
             );
 
@@ -253,9 +253,9 @@ final readonly class SchemaCompiler
     }
 
     /**
-     * @return bool|array<string, mixed>
+     * @return bool|array<string, mixed>|\stdClass
      */
-    private function normalizeSchemaValue(mixed $value, SchemaDialect $dialect, string $keyword, bool $booleanAllowed = false): bool|array
+    private function normalizeSchemaValue(mixed $value, SchemaDialect $dialect, string $keyword, bool $booleanAllowed = false): bool|array|\stdClass
     {
         if (is_bool($value)) {
             if (!$booleanAllowed && $dialect === SchemaDialect::OpenApi30) {
@@ -267,12 +267,18 @@ final readonly class SchemaCompiler
         if (!is_array($value)) {
             throw UnsupportedSchema::atKeyword($keyword, 'expected a schema object');
         }
-        if (array_is_list($value)) {
+        if ($value !== [] && array_is_list($value)) {
             throw UnsupportedSchema::atKeyword($keyword, 'expected a schema object');
         }
 
         /** @var array<string, mixed> $value */
-        return $this->normalizeNode($value, $dialect);
+        $normalized = $this->normalizeNode($value, $dialect);
+
+        // `{}` decodes to the empty array, which is a list to `array_is_list()`
+        // and the schema with no keywords — the unconstrained one — to us; a
+        // 3.0 `{nullable: true}` normalizes down to the same. It goes back on
+        // the wire as `{}`, because `[]` is not a schema to the backend.
+        return $normalized === [] ? new \stdClass() : $normalized;
     }
 
     private function dialectValue(mixed $value): string
