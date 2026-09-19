@@ -20,10 +20,11 @@ OpenAPI 3.0 and 3.1 contracts.
 - PHP 8.3 – 8.5
 - `psr/http-message` implementations for the exchanges you validate
 - `symfony/yaml` only when loading YAML documents (suggested, not required)
-- `ext-bcmath` is optional: with it, `multipleOf` is evaluated in decimal
-  arithmetic by the backend; without it, in floating point with a tolerance
-  of `1e-14`, which is exact for every divisor a document is likely to
-  declare and can disagree at the edges of that precision
+- no extension beyond `json`: `multipleOf` is judged on the decimals the
+  document and the message spell (`64.1` is a multiple of `0.1`;
+  `64.10000000000001` is not), exactly, whether or not `ext-bcmath` is
+  loaded — the backend's own arithmetic, which read the parsed doubles and
+  answered differently with and without the extension, is not used (#151)
 
 ## Installation
 

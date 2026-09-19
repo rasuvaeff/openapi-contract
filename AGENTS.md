@@ -51,6 +51,13 @@ make release-check
   `default`; do not emit body/header errors if no Response Object matched.
 - Validation backends are implementation details. Public diagnostics and
   operation models must not expose backend-specific classes.
+- `multipleOf` is not the backend's: `Internal\Schema\Backend\Parser` compiles
+  every schema to a Draft 2020-12 whose `multipleOf` parser is
+  `DecimalMultipleOfKeywordParser`, judging on the shortest round-trip
+  decimals (`DecimalMultiple::holds()`) rather than on the parsed doubles.
+  The backend's own keyword answered differently with and without
+  `ext-bcmath` (#151); a keyword parsed twice is judged twice, so the parser
+  is replaced in the draft, never appended beside it.
 - Diagnostics are bounded and redacted. Credentials never belong in rendered
   expected/actual values.
 - Use `property-testing-testo` for algebraic laws, round-trips, generation

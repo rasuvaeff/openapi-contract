@@ -56,6 +56,72 @@ final class SchemaValidatorTest
         ];
     }
 
+    /**
+     * `multipleOf` is judged on the decimals the document and the request
+     * spell, not on the doubles PHP holds them in: `64.1` is a multiple of
+     * `0.1` to the specification, one ulp off `641 × 0.1` to the backend's
+     * float path, and `64.10000000000001` to its bcmath path — the verdict
+     * used to depend on which extension the machine had loaded (#151).
+     */
+    #[DataProvider('multipleOfProvider')]
+    public function judgesMultipleOfOnTheDecimalsWhateverIsLoaded(int|float $value, int|float $multiple, bool $valid): void
+    {
+        Assert::same(
+            (new SchemaValidator())->isValid($value, ['type' => 'number', 'multipleOf' => $multiple], SchemaDialect::OpenApi31),
+            $valid,
+        );
+    }
+
+    public static function multipleOfProvider(): iterable
+    {
+        yield 'the decimal nearest 641 × 0.1' => [64.1, 0.1, true];
+        yield 'the product 641 × 0.1 is not a decimal multiple' => [641 * 0.1, 0.1, false];
+        yield 'a decimal at a hundred' => [123.4, 0.1, true];
+        yield 'a large decimal multiple of a thousandth' => [521642427059.686, 0.001, true];
+        yield 'a whole multiple' => [6.3, 0.7, true];
+        yield 'an integer multiple of a decimal' => [7, 0.001, true];
+        yield 'an integer multiple of a decimal with a zero fraction' => [7.0, 0.5, true];
+        yield 'off by one thousandth' => [64.15, 0.1, false];
+        yield 'an integer multiple' => [8, 4, true];
+        yield 'not an integer multiple' => [9, 4, false];
+        yield 'a negative multiple' => [-2.5, 0.5, true];
+        yield 'zero' => [0, 0.3, true];
+        yield 'zero as a float' => [0.0, 0.3, true];
+        yield 'exponent spellings' => [1.0e25, 1.0e-7, true];
+        yield 'a wide quotient is still exact' => [1.0e300, 2.5e-300, true];
+        yield 'a wide quotient that is no multiple' => [1.0e300, 7.0e-7, false];
+        yield 'a divisor with more trailing zeros than the value' => [1.5e-300, 3.0e10, false];
+        yield 'a divisor wider than the value' => [0.3, 0.7, false];
+    }
+
+    /**
+     * The law behind the table: a decimal multiple of a decimal divisor
+     * holds, and the point half way to the next one never does — for every
+     * width of value and divisor a document is likely to declare.
+     */
+    #[Property(runs: 300)]
+    public function decimalMultiplesHoldAndHalfStepsDoNot(int $multiplier, int $unit, int $decimals): void
+    {
+        $divisor = (float) sprintf('%d.%0' . $decimals . 'd', intdiv($unit, 10 ** $decimals), $unit % (10 ** $decimals));
+        $multiple = (float) sprintf('%d.%0' . $decimals . 'd', intdiv($unit * $multiplier, 10 ** $decimals), ($unit * $multiplier) % (10 ** $decimals));
+        $halfStep = (float) sprintf('%d.%0' . ($decimals + 1) . 'd', intdiv($unit * (2 * $multiplier + 1), 2 * 10 ** $decimals), ($unit * (2 * $multiplier + 1)) % (2 * 10 ** $decimals) * 5);
+        Classify::cover($multiple >= 64.0, 'past the float path tolerance', 30.0);
+        $validator = new SchemaValidator();
+
+        Assert::true($validator->isValid($multiple, ['type' => 'number', 'multipleOf' => $divisor], SchemaDialect::OpenApi31), sprintf('%s is a multiple of %s', json_encode($multiple), json_encode($divisor)));
+        Assert::false($validator->isValid($halfStep, ['type' => 'number', 'multipleOf' => $divisor], SchemaDialect::OpenApi31), sprintf('%s is no multiple of %s', json_encode($halfStep), json_encode($divisor)));
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function decimalMultiplesHoldAndHalfStepsDoNotGenerators(): array
+    {
+        return [
+            'multiplier' => Gen::intBetween(0, 100_000),
+            'unit' => Gen::intBetween(1, 9_999),
+            'decimals' => Gen::intBetween(1, 3),
+        ];
+    }
+
     #[Property(runs: 100)]
     public function integerBoundsRemainValid(int $value): void
     {

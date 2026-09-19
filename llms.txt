@@ -133,8 +133,9 @@ Rules:
   string formats is a pinned divergence from league/openapi-psr7-validator;
 - accepted and never read (no verdict depends on them): `allowEmptyValue`,
   `discriminator`, `xml`, `externalDocs`, `deprecated`;
-- `ext-bcmath` is optional: with it `multipleOf` is evaluated in decimal
-  arithmetic, without it in floating point with a `1e-14` tolerance;
+- `multipleOf` is judged on the decimals the document and the message spell
+  (`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly and
+  independently of `ext-bcmath` (#151);
 - three pinned divergences from the specification: a percent-encoded `|` or
   space inside a `pipeDelimited`/`spaceDelimited` value is folded into the
   delimiter (as PHP's own query parsing does, so `?ids=a%7Cb` is two elements

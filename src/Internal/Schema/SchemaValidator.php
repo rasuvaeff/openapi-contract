@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 
 use Opis\JsonSchema\Errors\ValidationError;
-use Opis\JsonSchema\Parsers\SchemaParser;
 use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Schemas\ExceptionSchema;
 use Opis\JsonSchema\Validator as OpisValidator;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\Parser;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Rasuvaeff\OpenApiContract\SchemaDirection;
 
@@ -60,7 +60,9 @@ final class SchemaValidator
     public function __construct(
         private readonly SchemaCompiler $compiler = new SchemaCompiler(),
     ) {
-        $parser = new SchemaParser(options: [
+        // The one draft every schema is compiled to, with `multipleOf` judged
+        // on the decimals rather than on the doubles (#151).
+        $parser = new Parser(options: [
             'allowDataKeyword' => false,
             'allowDefaults' => false,
             'allowFilters' => false,
