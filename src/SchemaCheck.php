@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract;
 
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\DecimalMultiple;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 
 /**
@@ -64,6 +65,25 @@ final readonly class SchemaCheck
         SchemaDirection $direction = SchemaDirection::Request,
     ): bool {
         return $this->schemas->isValid($value, $schema, $dialect, $direction);
+    }
+
+    /**
+     * Whether `$value` is a multiple of `$divisor` the way `multipleOf` is
+     * judged: on the decimals the two numbers spell — the shortest spelling
+     * that reads back as the same double, which is what a document and a
+     * message wrote — divided exactly, never on the doubles PHP holds them
+     * in. `64.1` is a multiple of `0.1`; `64.10000000000001` is not; the
+     * answer is the same whatever extension the machine has loaded.
+     *
+     * Exported so a consumer that has to predict the verdict — a generator
+     * deciding whether the `number` branch of a `oneOf` admits an integer it
+     * is about to keep on the `integer` branch — asks this rather than keeps
+     * a second copy of it. A `$divisor` of zero, and a value or divisor that
+     * is not finite, are no multiple of anything.
+     */
+    public static function isMultipleOf(int|float $value, int|float $divisor): bool
+    {
+        return DecimalMultiple::holds($value, $divisor);
     }
 
     /**

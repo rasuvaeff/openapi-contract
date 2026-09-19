@@ -77,7 +77,9 @@ final readonly class DecimalMultiple
      */
     private static function decimal(int|float $number): array
     {
-        $spelled = json_encode(abs($number), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
+        // ltrim, not abs(): abs(PHP_INT_MIN) is a float and loses the low
+        // digits of the one integer it cannot hold.
+        $spelled = ltrim(json_encode($number, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION), '-');
         $exponent = 0;
         $mantissa = $spelled;
         $exponentAt = strpbrk($spelled, 'eE');

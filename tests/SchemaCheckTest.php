@@ -80,6 +80,42 @@ final class SchemaCheckTest
      * not part of a response, so the same value and the same schema answer
      * differently depending on which half of the exchange is asked about.
      */
+    /**
+     * The exported predicate is the validator's own verdict: whatever
+     * `accepts()` says of `{type: number, multipleOf: d}` for a value,
+     * `isMultipleOf()` says of the pair — including the pair the two old
+     * backend paths disagreed on (#154).
+     */
+    #[DataProvider('multipleOfPairProvider')]
+    public function isMultipleOfIsTheVerdictAcceptsApplies(int|float $value, int|float $divisor): void
+    {
+        $check = new SchemaCheck();
+
+        Assert::same(
+            SchemaCheck::isMultipleOf($value, $divisor),
+            $check->accepts($value, ['type' => 'number', 'multipleOf' => $divisor], SchemaDialect::OpenApi31),
+        );
+    }
+
+    public static function multipleOfPairProvider(): iterable
+    {
+        yield 'the decimal the float path rejected' => [64.1, 0.1];
+        yield 'the product the decimal path accepted' => [64.10000000000001, 0.1];
+        yield 'an integer the float rule refused for 0.7' => [58254, 0.7];
+        yield 'an integer that is no multiple of 0.7' => [58255, 0.7];
+        yield 'integers' => [9, 4];
+        yield 'a whole float' => [7.0, 0.5];
+    }
+
+    public function isMultipleOfKeepsTheLowDigitsOfTheSmallestInteger(): void
+    {
+        Assert::true(SchemaCheck::isMultipleOf(PHP_INT_MIN, 0.5));
+        Assert::false(SchemaCheck::isMultipleOf(PHP_INT_MIN, 0.3));
+        Assert::true(SchemaCheck::isMultipleOf(PHP_INT_MIN, 2));
+        Assert::false(SchemaCheck::isMultipleOf(1.0, 0.0));
+        Assert::false(SchemaCheck::isMultipleOf(INF, 2.5));
+    }
+
     public function theDirectionDecidesWhichPropertiesApply(): void
     {
         $schema = [
