@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.12.0",
+    "contractVersionAtRecording": "0.12.1",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -1211,6 +1211,17 @@
                                     "type": "number",
                                     "minimum": 0.123456789012345,
                                     "maximum": 0.1234567890123456
+                                }
+                            },
+                            {
+                                "name": "step",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "number",
+                                    "multipleOf": 0.1,
+                                    "minimum": 0,
+                                    "maximum": 1000
                                 }
                             },
                             {
@@ -7843,7 +7854,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=0.123456789012345&step=-1&big=123456789012345679&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7852,7 +7863,7 @@
                 "misuse": {
                     "kind": "boundary",
                     "location": "query",
-                    "name": "v"
+                    "name": "step"
                 }
             }
         },
@@ -7862,7 +7873,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=-0.876543210987655&step=630.4&big=123456789012345678&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7881,7 +7892,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=-0.876543210987655&big=123456789012345679&expr=a%2Bb",
+                "target": "/precise?v=0.12345678901234543&step=-1&big=123456789012345678&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -7890,7 +7901,7 @@
                 "misuse": {
                     "kind": "boundary",
                     "location": "query",
-                    "name": "v"
+                    "name": "step"
                 }
             }
         },
@@ -7900,7 +7911,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.123456789012345&step=287.8&big=123456789012345679&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7919,7 +7930,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.12345678901234554&step=630.4&big=123456789012345678&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7938,7 +7949,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=__openapi_invalid_enum__",
+                "target": "/precise?v=0.12345678901234543&step=143&big=123456789012345678&expr=__openapi_invalid_enum__",
                 "headers": [],
                 "body": null
             },
@@ -7957,7 +7968,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=not-an-integer&expr=g/h",
+                "target": "/precise?v=0.123456789012345&step=287.8&big=not-an-integer&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7976,7 +7987,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=not-a-number&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=0.12345678901234554&step=630.4&big=not-an-integer&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -7985,7 +7996,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "query",
-                    "name": "v"
+                    "name": "big"
                 }
             }
         },
@@ -7995,7 +8006,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=not-a-number&big=123456789012345679&expr=a%2Bb",
+                "target": "/precise?v=0.12345678901234543&step=not-a-number&big=123456789012345678&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -8004,7 +8015,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "query",
-                    "name": "v"
+                    "name": "step"
                 }
             }
         },
@@ -8014,7 +8025,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=0.123456789012345&step=287.8&big=123456789012345679&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8028,7 +8039,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.1234567890123453&big=123456789012345678&expr=c%20d",
+                "target": "/precise?v=0.1234567890123453&step=631&big=123456789012345680&expr=a%2Bb",
                 "headers": [],
                 "body": null
             },
@@ -8042,7 +8053,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=0.12345678901234554&step=630.4&big=123456789012345678&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8056,7 +8067,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=a%2Bb",
+                "target": "/precise?v=0.12345678901234543&step=143&big=123456789012345678&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -8070,7 +8081,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=c%20d",
+                "target": "/precise?v=0.123456789012345&step=660.9&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8084,7 +8095,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234544&big=123456789012345678&expr=e%26f",
+                "target": "/precise?v=0.12345678901234544&step=1000&big=123456789012345678&expr=c%20d",
                 "headers": [],
                 "body": null
             },
@@ -8098,7 +8109,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
+                "target": "/precise?v=0.123456789012345&step=356.2&big=123456789012345678&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8112,7 +8123,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
+                "target": "/precise?v=0.123456789012345&step=830.3&big=123456789012345678&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8126,7 +8137,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.12345678901234525&big=123456789012345679&expr=e%26f",
+                "target": "/precise?v=0.12345678901234525&step=883.9&big=123456789012345679&expr=g/h",
                 "headers": [],
                 "body": null
             },
@@ -8140,7 +8151,7 @@
             "operationId": "precise.get",
             "request": {
                 "method": "GET",
-                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
+                "target": "/precise?v=0.123456789012345&step=424.4&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
             },
