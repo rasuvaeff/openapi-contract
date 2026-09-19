@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.11.0",
+    "contractVersionAtRecording": "v0.12.0",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -1013,6 +1013,237 @@
                         }
                     }
                 },
+                "/labels": {
+                    "get": {
+                        "operationId": "labels.get",
+                        "parameters": [
+                            {
+                                "name": "X-City",
+                                "in": "header",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "New York",
+                                        "\u017elu\u0165",
+                                        "plain"
+                                    ]
+                                }
+                            },
+                            {
+                                "name": "X-Kinds",
+                                "in": "header",
+                                "style": "simple",
+                                "explode": false,
+                                "schema": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 2,
+                                    "items": {
+                                        "type": "string",
+                                        "enum": [
+                                            "big apple",
+                                            "a,b",
+                                            "c"
+                                        ]
+                                    }
+                                }
+                            }
+                        ],
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/sparse": {
+                    "post": {
+                        "operationId": "sparse.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "minProperties": 1,
+                                        "maxProperties": 1,
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "a": {
+                                                "type": "integer"
+                                            },
+                                            "b": {
+                                                "type": "integer"
+                                            },
+                                            "c": {
+                                                "type": "integer"
+                                            },
+                                            "d": {
+                                                "type": "integer"
+                                            },
+                                            "e": {
+                                                "type": "integer"
+                                            },
+                                            "f": {
+                                                "type": "integer"
+                                            },
+                                            "g": {
+                                                "type": "integer"
+                                            },
+                                            "h": {
+                                                "type": "integer"
+                                            },
+                                            "i": {
+                                                "type": "integer"
+                                            },
+                                            "j": {
+                                                "type": "integer"
+                                            },
+                                            "k": {
+                                                "type": "integer"
+                                            },
+                                            "l": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/amounts": {
+                    "post": {
+                        "operationId": "amounts.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "amount"
+                                        ],
+                                        "properties": {
+                                            "amount": {
+                                                "oneOf": [
+                                                    {
+                                                        "type": "integer",
+                                                        "minimum": -9,
+                                                        "maximum": 9
+                                                    },
+                                                    {
+                                                        "type": "number",
+                                                        "minimum": 0,
+                                                        "maximum": 9,
+                                                        "multipleOf": 0.5
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/settings": {
+                    "post": {
+                        "operationId": "settings.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/x-www-form-urlencoded": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "theme"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 4
+                                            },
+                                            "theme": {
+                                                "type": "object",
+                                                "minProperties": 1,
+                                                "properties": {
+                                                    "mode": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "dark",
+                                                            "light"
+                                                        ]
+                                                    },
+                                                    "size": {
+                                                        "type": "integer",
+                                                        "minimum": 1,
+                                                        "maximum": 3
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/precise": {
+                    "get": {
+                        "operationId": "precise.get",
+                        "parameters": [
+                            {
+                                "name": "v",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "number",
+                                    "minimum": 0.123456789012345,
+                                    "maximum": 0.1234567890123456
+                                }
+                            },
+                            {
+                                "name": "big",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "integer",
+                                    "minimum": 123456789012345678,
+                                    "maximum": 123456789012345680
+                                }
+                            },
+                            {
+                                "name": "expr",
+                                "in": "query",
+                                "required": true,
+                                "allowReserved": true,
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "a+b",
+                                        "c d",
+                                        "e&f",
+                                        "g/h"
+                                    ]
+                                }
+                            }
+                        ],
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
                 "/unions/{id}": {
                     "get": {
                         "operationId": "unions.get",
@@ -1203,6 +1434,372 @@
         }
     },
     "cases": [
+        {
+            "name": "amounts.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/media-type/1",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":1.5}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/media-type/2",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-1}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/media-type/3",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-7}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "amounts.create/valid/1",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":1.5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/10",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":5.5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/2",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/3",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-7}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/4",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-9}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/5",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":0.5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/6",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-9}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/7",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":3.5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/8",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":6.5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "amounts.create/valid/9",
+            "document": "zoo",
+            "operationId": "amounts.create",
+            "request": {
+                "method": "POST",
+                "target": "/amounts",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"amount\":-6}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
         {
             "name": "bounded.create/additional-properties/1",
             "document": "legacy",
@@ -4059,6 +4656,273 @@
             }
         },
         {
+            "name": "labels.get/enum/1",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "__openapi_invalid_enum__"
+                    ],
+                    "X-Kinds": [
+                        "big apple"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "header",
+                    "name": "X-City"
+                }
+            }
+        },
+        {
+            "name": "labels.get/enum/2",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "__openapi_invalid_enum__"
+                    ],
+                    "X-Kinds": [
+                        "big apple,big apple"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "header",
+                    "name": "X-City"
+                }
+            }
+        },
+        {
+            "name": "labels.get/enum/3",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "__openapi_invalid_enum__"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "header",
+                    "name": "X-City"
+                }
+            }
+        },
+        {
+            "name": "labels.get/valid/1",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "\u017elu\u0165"
+                    ],
+                    "X-Kinds": [
+                        "big apple"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/10",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "plain"
+                    ],
+                    "X-Kinds": [
+                        "c"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/2",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "New York"
+                    ],
+                    "X-Kinds": [
+                        "big apple,big apple"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/3",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "\u017elu\u0165"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/4",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "\u017elu\u0165"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/5",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "plain"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/6",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "plain"
+                    ],
+                    "X-Kinds": [
+                        "big apple,big apple"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/7",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "New York"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/8",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "New York"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "labels.get/valid/9",
+            "document": "zoo",
+            "operationId": "labels.get",
+            "request": {
+                "method": "GET",
+                "target": "/labels",
+                "headers": {
+                    "X-City": [
+                        "\u017elu\u0165"
+                    ]
+                },
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "merged.create/json-syntax/1",
             "document": "zoo",
             "operationId": "merged.create",
@@ -5508,7 +6372,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"iaig\":{},\"lpk\":{}}"
+                    "content": "{\"iaig\":{},\"kq\":{\"n\":1}}"
                 }
             },
             "expect": {
@@ -5534,7 +6398,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"phcc\":{},\"zqggkauw\":{\"n\":0}}"
+                    "content": "{\"phcc\":{},\"ggkauwt\":{\"n\":1}}"
                 }
             },
             "expect": {
@@ -5602,7 +6466,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"iaig\":{},\"lpk\":{}}"
+                    "content": "{\"iaig\":{},\"kq\":{\"n\":1}}"
                 }
             },
             "expect": {
@@ -5623,7 +6487,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"phcc\":{},\"zqggkauw\":{\"n\":0}}"
+                    "content": "{\"phcc\":{},\"ggkauwt\":{\"n\":1}}"
                 }
             },
             "expect": {
@@ -5822,7 +6686,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":7,\"__openapi_extra_property__\":true}"
+                    "content": "{\"12\":0,\"__openapi_extra_property__\":true}"
                 }
             },
             "expect": {
@@ -5978,7 +6842,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":7,\"0\":\"aaaaa\"}"
+                    "content": "{\"12\":0,\"0\":\"aaaaa\"}"
                 }
             },
             "expect": {
@@ -6030,7 +6894,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":1,\"0\":4096}"
+                    "content": "{\"12\":\"not-a-integer\"}"
                 }
             },
             "expect": {
@@ -6038,7 +6902,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "0"
+                    "name": "12"
                 }
             }
         },
@@ -6056,7 +6920,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":\"not-a-integer\"}"
+                    "content": "{\"12\":0,\"0\":4096}"
                 }
             },
             "expect": {
@@ -6064,7 +6928,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "12"
+                    "name": "0"
                 }
             }
         },
@@ -6212,7 +7076,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":7}"
+                    "content": "{\"12\":0}"
                 }
             },
             "expect": {
@@ -6301,7 +7165,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":7}"
+                    "content": "{\"12\":0}"
                 }
             },
             "expect": {
@@ -6364,7 +7228,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":3}"
+                    "content": "{\"12\":6}"
                 }
             },
             "expect": {
@@ -6427,7 +7291,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"12\":4}"
+                    "content": "{\"12\":8}"
                 }
             },
             "expect": {
@@ -6974,6 +7838,317 @@
             }
         },
         {
+            "name": "precise.get/boundary/1",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "v"
+                }
+            }
+        },
+        {
+            "name": "precise.get/boundary/2",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "v"
+                }
+            }
+        },
+        {
+            "name": "precise.get/boundary/3",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=-0.876543210987655&big=123456789012345679&expr=a%2Bb",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "v"
+                }
+            }
+        },
+        {
+            "name": "precise.get/enum/1",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=__openapi_invalid_enum__",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "query",
+                    "name": "expr"
+                }
+            }
+        },
+        {
+            "name": "precise.get/enum/2",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=__openapi_invalid_enum__",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "query",
+                    "name": "expr"
+                }
+            }
+        },
+        {
+            "name": "precise.get/enum/3",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=__openapi_invalid_enum__",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "query",
+                    "name": "expr"
+                }
+            }
+        },
+        {
+            "name": "precise.get/type/1",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=not-an-integer&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "big"
+                }
+            }
+        },
+        {
+            "name": "precise.get/type/2",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=not-a-number&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "v"
+                }
+            }
+        },
+        {
+            "name": "precise.get/type/3",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=not-a-number&big=123456789012345679&expr=a%2Bb",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "v"
+                }
+            }
+        },
+        {
+            "name": "precise.get/valid/1",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/10",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.1234567890123453&big=123456789012345678&expr=c%20d",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/2",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234554&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/3",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234543&big=123456789012345679&expr=a%2Bb",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/4",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=c%20d",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/5",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234544&big=123456789012345678&expr=e%26f",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/6",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/7",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=g/h",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/8",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.12345678901234525&big=123456789012345679&expr=e%26f",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "precise.get/valid/9",
+            "document": "zoo",
+            "operationId": "precise.get",
+            "request": {
+                "method": "GET",
+                "target": "/precise?v=0.123456789012345&big=123456789012345680&expr=e%26f",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "profiles.create/additional-properties/1",
             "document": "zoo",
             "operationId": "profiles.create",
@@ -6987,7 +8162,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\",\"__openapi_extra_property__\":true}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\",\"__openapi_extra_property__\":true}"
                 }
             },
             "expect": {
@@ -7013,7 +8188,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\",\"__openapi_extra_property__\":true}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\",\"__openapi_extra_property__\":true}"
                 }
             },
             "expect": {
@@ -7039,7 +8214,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\",\"__openapi_extra_property__\":true}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\",\"__openapi_extra_property__\":true}"
                 }
             },
             "expect": {
@@ -7065,7 +8240,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":-1,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":-1,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7091,7 +8266,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\",\"count\":-1}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\",\"count\":-1}"
                 }
             },
             "expect": {
@@ -7117,7 +8292,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\",\"count\":-1}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\",\"count\":-1}"
                 }
             },
             "expect": {
@@ -7143,7 +8318,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1__openapi_misuse__\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":4,\"version\":\"v1__openapi_misuse__\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7169,7 +8344,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\",\"version\":\"v1__openapi_misuse__\"}"
+                    "content": "{\"version\":\"v1__openapi_misuse__\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\"}"
                 }
             },
             "expect": {
@@ -7195,7 +8370,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1__openapi_misuse__\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\",\"version\":\"v1__openapi_misuse__\"}"
                 }
             },
             "expect": {
@@ -7221,7 +8396,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\",\"kind\":\"__openapi_misuse__\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\",\"kind\":\"__openapi_misuse__\"}"
                 }
             },
             "expect": {
@@ -7247,7 +8422,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"__openapi_misuse__\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\",\"kind\":\"__openapi_misuse__\"}"
                 }
             },
             "expect": {
@@ -7273,7 +8448,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\",\"kind\":\"__openapi_misuse__\"}"
+                    "content": "{\"kind\":\"__openapi_misuse__\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\"}"
                 }
             },
             "expect": {
@@ -7299,7 +8474,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"not-an-email\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"not-an-email\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7325,7 +8500,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"not-an-email\",\"token\":\"a1acf358\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"not-an-email\",\"token\":\"584e6f39\"}"
                 }
             },
             "expect": {
@@ -7351,7 +8526,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"not-an-email\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"not-an-email\",\"token\":\"a8be78b1\"}"
                 }
             },
             "expect": {
@@ -7377,7 +8552,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"aaaaaaaaa\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"aaaaaaaaa\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7403,7 +8578,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\",\"name\":\"aaaaaaaaa\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\",\"name\":\"aaaaaaaaa\"}"
                 }
             },
             "expect": {
@@ -7429,7 +8604,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"aaaaaaaaa\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\",\"name\":\"aaaaaaaaa\"}"
                 }
             },
             "expect": {
@@ -7455,7 +8630,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"\"}"
                 }
             },
             "expect": {
@@ -7481,7 +8656,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"\"}"
                 }
             },
             "expect": {
@@ -7507,7 +8682,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"\"}"
                 }
             },
             "expect": {
@@ -7533,7 +8708,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":4096}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":4096}"
                 }
             },
             "expect": {
@@ -7559,7 +8734,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\",\"count\":\"not-a-integer\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":4096}"
                 }
             },
             "expect": {
@@ -7567,7 +8742,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "count"
+                    "name": "token"
                 }
             }
         },
@@ -7585,7 +8760,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":4096,\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":4096}"
                 }
             },
             "expect": {
@@ -7593,7 +8768,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "name"
+                    "name": "token"
                 }
             }
         },
@@ -7689,7 +8864,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7715,7 +8890,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\"}"
                 }
             },
             "expect": {
@@ -7741,7 +8916,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\"}"
                 }
             },
             "expect": {
@@ -7767,7 +8942,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"[d\\uc29b<\",\"email\":\"47cqg70qpa8ir@ouppz79guc7ffx1.com\",\"token\":\"910c188d\"}"
+                    "content": "{\"count\":4,\"version\":\"v1\",\"name\":\"\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\",\"email\":\"70qpa8irwouppz7@guc7ffx1.com\",\"token\":\"910c188d\"}"
                 }
             },
             "expect": {
@@ -7809,7 +8984,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"s5ipgbltvltl@y2mnltges1t.com\",\"token\":\"a1acf358\"}"
+                    "content": "{\"version\":\"v1\",\"email\":\"lcy2mnltges1txo0@4i.dev\",\"token\":\"584e6f39\"}"
                 }
             },
             "expect": {
@@ -7830,7 +9005,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"p\",\"email\":\"zt8133@ndgiiafpkao.net\",\"token\":\"622fc13a\"}"
+                    "content": "{\"kind\":\"person\",\"email\":\"fpkaof4w0gten@orq0.org\",\"token\":\"a8be78b1\"}"
                 }
             },
             "expect": {
@@ -7851,7 +9026,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"version\":\"v1\",\"name\":\"\\u00d4\\u014b\",\"email\":\"wilnwhlnai@u0k.net\",\"token\":\"3075596d\"}"
+                    "content": "{\"kind\":\"bot\",\"name\":\"q\",\"email\":\"ilnwhlnai8u@koqludz.dev\",\"token\":\"6d682e5e\"}"
                 }
             },
             "expect": {
@@ -7872,7 +9047,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":7,\"kind\":\"person\",\"email\":\"y2t49isypy@nvpy1iztvl4aor48.com\",\"token\":\"a99e1270\"}"
+                    "content": "{\"count\":7,\"kind\":\"person\",\"email\":\"isypyxnvpy1i@tvl4aor48jnofn.org\",\"token\":\"270e5a00\"}"
                 }
             },
             "expect": {
@@ -7893,7 +9068,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"kind\":\"bot\",\"email\":\"l42sfzhfzod32w@v60qe.dev\",\"token\":\"25daf962\"}"
+                    "content": "{\"version\":\"v1\",\"name\":\"2\\u67f1\",\"email\":\"od32wyv60q@xpojj.net\",\"token\":\"962b5514\"}"
                 }
             },
             "expect": {
@@ -7914,7 +9089,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":1,\"version\":\"v1\",\"name\":\"\\ud8a5\\udc17FK\\ufc7eIi\\ud9c3\\ude7fC\",\"email\":\"qultgo12@tbyaxrihfacin.dev\",\"token\":\"4e973383\"}"
+                    "content": "{\"count\":1,\"version\":\"v1\",\"name\":\"\\ud97c\\udd5d\\ud8c3\\ude11\\ud974\\udea8 \\u01bd<\\u0230\\\"\",\"email\":\"ultgo12mtbyax@ihfaci.org\",\"token\":\"64e97338\"}"
                 }
             },
             "expect": {
@@ -7935,7 +9110,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"count\":1,\"kind\":\"bot\",\"email\":\"6hi3@qf50h6.com\",\"token\":\"dfd2b2e6\"}"
+                    "content": "{\"count\":1,\"kind\":\"bot\",\"email\":\"h6zjr5n4x80@3yrl2zr.com\",\"token\":\"a9a2695d\"}"
                 }
             },
             "expect": {
@@ -7956,7 +9131,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"\\udbaa\\udcff\\udb59\\udea1K:5\\u0308\\udba7\\ude8f\",\"email\":\"za@y.org\",\"token\":\"8a8deac8\"}"
+                    "content": "{\"kind\":\"person\",\"name\":\"S\\udae7\\udeeaT\\u00e4L]C\",\"email\":\"y@9esyfogayessufu.net\",\"token\":\"53679081\"}"
                 }
             },
             "expect": {
@@ -8040,7 +9215,7 @@
             "operationId": "reserved.get",
             "request": {
                 "method": "GET",
-                "target": "/reserved?path=%09%E5%83%A0&items=q%26+%7B%5B+,%F0%AC%8F%80a%F2%9C%BA%9B,%60%3D%CC%88&map=zpz,x%C4%94%5C%E9%A6%9C,bnxcfy,%EE%9D%B6%E2%80%8FB",
+                "target": "/reserved?path=%09%E5%83%A0&items=q%26%2B%7B%5B%2B,%F0%AC%8F%80a%F2%9C%BA%9B,%60%3D%CC%88&map=zpz,x%C4%94%5C%E9%A6%9C,bnxcfy,%EE%9D%B6%E2%80%8FB",
                 "headers": [],
                 "body": null
             },
@@ -8523,6 +9698,738 @@
                 "target": "/search/all?limit=5&cursor=%F3%BA%A3%BF%F3%A6%9A%A1",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/1",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "name=%28ZX%F0%A5%9D%8F&mode=light"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/10",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "name=cC&mode=dark&size=1"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/2",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "size=3"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/3",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "mode=dark"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/4",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "mode=light"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/5",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "name=%E8%A6%AD%C4%A1_&size=3"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/6",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "mode=dark"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/7",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "name=N&mode=light&size=2"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/8",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "name=%5B&mode=dark"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "settings.create/valid/9",
+            "document": "zoo",
+            "operationId": "settings.create",
+            "request": {
+                "method": "POST",
+                "target": "/settings",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-www-form-urlencoded"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "size=2"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":-988,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"d\":1,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":0,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/body-type/1",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":-988,\"l\":\"not-a-integer\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "l"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/body-type/2",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"d\":1,\"l\":\"not-a-integer\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "l"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/body-type/3",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":0,\"f\":\"not-a-integer\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "f"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/media-type/1",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":-988}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/media-type/2",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"d\":1}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/media-type/3",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "sparse.create/valid/1",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":-988}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/10",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":-1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/2",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"d\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/3",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":0}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/4",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":463}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/5",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":819}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/6",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"c\":-171}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/7",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":696}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/8",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"a\":596}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "sparse.create/valid/9",
+            "document": "zoo",
+            "operationId": "sparse.create",
+            "request": {
+                "method": "POST",
+                "target": "/sparse",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"b\":178}"
+                }
             },
             "expect": {
                 "valid": true
@@ -9224,7 +11131,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"aaaaaaaaa\",\"profile\":{\"slug\":\"HlbU\\u00c7&\"}}"
+                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00I[d\\uc29b\",\"profile\":{\"slug\":\"HlbU\\u00c7&\"},\"history\":[{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"}]}"
                 }
             },
             "expect": {
@@ -9232,7 +11139,7 @@
                 "misuse": {
                     "kind": "length",
                     "location": "body",
-                    "name": "name"
+                    "name": "history"
                 }
             }
         },
@@ -9250,7 +11157,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"\\u97dd\",\"profile\":{\"slug\":\"\\uda21\\udf71\"},\"history\":[{\"note\":\"(ZX\\ud855\\udf4f\"},{\"note\":\"(ZX\\ud855\\udf4f\"},{\"note\":\"(ZX\\ud855\\udf4f\"}]}"
+                    "content": "{\"name\":\"\\u97dd\",\"profile\":{\"slug\":\"\\uda21\\udf71\"},\"history\":[{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"}]}"
                 }
             },
             "expect": {
@@ -9276,7 +11183,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"\\udbcd\\udfa3\\u85e8p\",\"profile\":{\"slug\":\"t{\\u0308\\u00a3\\u0308$\"},\"history\":[{\"note\":\"(ZX\\ud855\\udf4f\"},{\"note\":\"(ZX\\ud855\\udf4f\"},{\"note\":\"(ZX\\ud855\\udf4f\"}]}"
+                    "content": "{\"name\":\"\\udbcd\\udfa3\\u85e8p\",\"profile\":{\"slug\":\"t{\\u0308\\u00a3\\u0308$\"},\"history\":[{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"},{\"at\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1Hlb\"}]}"
                 }
             },
             "expect": {
@@ -9302,7 +11209,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"\\udb8e\\ude65\\ud99f\\udf00I[d\\uc29b\",\"profile\":{\"slug\":\"HlbU\\u00c7&\"},\"history\":\"not-a-array\"}"
+                    "content": "{\"name\":4096,\"profile\":{\"slug\":\"HlbU\\u00c7&\"}}"
                 }
             },
             "expect": {
@@ -9310,7 +11217,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "history"
+                    "name": "name"
                 }
             }
         },
@@ -9328,7 +11235,7 @@
                 },
                 "body": {
                     "encoding": "utf8",
-                    "content": "{\"name\":\"\\u97dd\",\"profile\":\"not-a-object\"}"
+                    "content": "{\"name\":\"\\u97dd\",\"profile\":{\"slug\":\"\\uda21\\udf71\"},\"history\":\"not-a-array\"}"
                 }
             },
             "expect": {
@@ -9336,7 +11243,7 @@
                 "misuse": {
                     "kind": "type",
                     "location": "body",
-                    "name": "profile"
+                    "name": "history"
                 }
             }
         },
