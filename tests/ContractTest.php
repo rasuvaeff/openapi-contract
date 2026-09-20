@@ -15,6 +15,7 @@ use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentNodes;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\OperationSchemas;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
+use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
@@ -35,6 +36,7 @@ use Testo\Test;
 #[Covers(DocumentCompiler::class)]
 #[Covers(DocumentNodes::class)]
 #[Covers(OperationSchemas::class)]
+#[Covers(JsonPointerResolver::class)]
 #[Covers(InvalidContract::class)]
 #[Covers(UnknownOperation::class)]
 #[Covers(UnsupportedSerialization::class)]

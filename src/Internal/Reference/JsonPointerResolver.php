@@ -340,7 +340,6 @@ final class JsonPointerResolver
         }
 
         $this->path[$target] = false;
-        $defsBefore = $this->defs;
 
         try {
             $resolved = $this->resolveIn($this->lookup($targetFile, $fragment, $reference, $file), $targetFile, $referenceDepth, $inSchema, $schemaDepth);
@@ -355,15 +354,14 @@ final class JsonPointerResolver
         }
         if (is_array($resolved)) {
             // What a later reuse of this resolution has to bring with it:
-            // every def registered below it, because the local refs the
-            // resolution emitted point into them. Outside a schema nothing
-            // is tracked — the defs a nested schema collected are embedded
-            // in its own resolved subtree, which carries them itself.
-            // Materialized like the body, for the same reason.
-            $this->sharedDefs[$target] = array_map(
-                $this->materialize(...),
-                $this->defs !== null && $defsBefore !== null ? array_diff_key($this->defs, $defsBefore) : [],
-            );
+            // the defs registered below it, because the local refs the
+            // resolution emitted point into them. A Schema Object starts
+            // with none, so the map at the end of the resolution is the
+            // resolution's own; outside a schema nothing is tracked — the
+            // defs a nested schema collected are embedded in its own
+            // resolved subtree, which carries them itself. Materialized
+            // like the body, for the same reason.
+            $this->sharedDefs[$target] = array_map($this->materialize(...), $this->defs ?? []);
             // Stored materialized — no deferred reference left inside — so
             // that every later Schema Object reusing it walks a tree whose
             // materialize() pass is a comparison and not a copy.

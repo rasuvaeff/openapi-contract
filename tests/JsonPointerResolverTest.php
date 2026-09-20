@@ -222,6 +222,58 @@ final class JsonPointerResolverTest
     }
 
     /**
+     * The reuse of a protected inline is a schema reference like the first
+     * use was: under 3.1 its asserting siblings are a conjunction, and the
+     * decoding keywords of the remembered resolution are lifted so the node
+     * still reads as one schema to the wire decoders.
+     */
+    public function mergesSiblingsIntoAProtectedReuseAsIntoTheFirstUse(): void
+    {
+        $document = ['a' => ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]]];
+        $resolver = new JsonPointerResolver(document: $document);
+        $node = ['$ref' => '#/a', 'minProperties' => 1];
+
+        $first = $resolver->resolve(['properties' => ['p' => $node]], inSchema: true);
+        Assert::same($first['properties']['p'], [
+            'allOf' => [
+                ['type' => 'object', 'properties' => ['id' => ['type' => 'integer']]],
+                ['minProperties' => 1],
+            ],
+            'type' => 'object',
+            'properties' => ['id' => ['type' => 'integer']],
+        ]);
+
+        $second = $resolver->resolve(['properties' => ['q' => $node]], inSchema: true);
+        Assert::same($second['properties']['q'], $first['properties']['p']);
+    }
+
+    /**
+     * What a reuse carries is the delta of the resolution it reuses — the
+     * defs registered along it — and not the defs of the whole document:
+     * a later Schema Object that reached a different component does not
+     * inherit a def nothing in it references.
+     */
+    public function carriesOnlyTheDefsOfTheRememberedResolution(): void
+    {
+        $document = ['components' => ['schemas' => [
+            'One' => ['type' => 'object', 'properties' => [
+                'first' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Shared']],
+                'again' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Shared']],
+            ]],
+            'Shared' => ['type' => 'object', 'properties' => ['k' => ['type' => 'string']]],
+            'Two' => ['type' => 'object', 'properties' => [
+                'later' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Shared']],
+            ]],
+        ]]];
+        $resolver = new JsonPointerResolver(document: $document);
+
+        $resolver->resolve(['$ref' => '#/components/schemas/One'], inSchema: true);
+        $second = $resolver->resolve(['$ref' => '#/components/schemas/Two'], inSchema: true);
+
+        Assert::same(array_keys($second['$defs']), ['components.schemas.Shared']);
+    }
+
+    /**
      * Two schemas that reach each other are one cycle with two members, and
      * a cycle met after a chain that has already spent the depth budget is
      * still a cycle: the check comes first.
