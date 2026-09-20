@@ -381,8 +381,14 @@ final readonly class RequestValidator
         } catch (BodyDecodingFailed $exception) {
             return [$this->bodyViolation($matched, 'request.body.decode', $exception->getMessage())];
         }
-        if ($schema !== null && !$this->schemas->isValid($value, $schema, $dialect)) {
-            return [$this->bodyViolation($matched, 'request.body.schema', 'Request body does not match its schema', $value)];
+        if ($schema !== null) {
+            return $this->bodySchemaViolations(
+                'Request',
+                $matched,
+                $this->operationPointer($matched) . '/requestBody/content/' . $this->escape($mediaType) . '/schema',
+                $schema,
+                $this->schemas->failures($value, $schema, $dialect),
+            );
         }
 
         return [];
@@ -413,7 +419,7 @@ final readonly class RequestValidator
             operation: $matched->operation->key,
             location: 'body',
             instancePath: '$',
-            specPointer: sprintf('/paths/%s/%s/requestBody', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+            specPointer: $this->operationPointer($matched) . '/requestBody',
             expected: $matched->operation->requestBody,
             actual: $actual,
             message: $message,

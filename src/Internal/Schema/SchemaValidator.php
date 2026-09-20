@@ -55,6 +55,19 @@ final class SchemaValidator
         'map' => ['$defs', 'properties'],
     ];
 
+    /**
+     * How many errors the backend collects under one keyword before it stops
+     * — per keyword, so a tree of errors has more leaves than this.
+     */
+    private const int MAX_ERRORS = 20;
+
+    /**
+     * How many leaf failures {@see failures()} reports for one value. The
+     * same count as the backend's, so the first page of a body that is wrong
+     * everywhere is the same size whichever way the errors nest.
+     */
+    private const int MAX_FAILURES = self::MAX_ERRORS;
+
     private readonly OpisValidator $validator;
 
     public function __construct(
@@ -86,7 +99,7 @@ final class SchemaValidator
         );
         $this->validator = new OpisValidator(
             loader: $loader,
-            max_errors: 20,
+            max_errors: self::MAX_ERRORS,
             stop_at_first_error: false,
         );
     }
@@ -110,16 +123,314 @@ final class SchemaValidator
      */
     public function isValid(mixed $value, array $schema, SchemaDialect $dialect, SchemaDirection $direction = SchemaDirection::Request): bool
     {
+        return !$this->validationError($value, $schema, $dialect, $direction) instanceof ValidationError;
+    }
+
+    /**
+     * The leaf failures of a value against a schema, in the backend's order,
+     * without the backend: where in the value each assertion failed, and
+     * which. Empty when the value is valid.
+     *
+     * The list is bounded by {@see MAX_FAILURES}: the backend stops
+     * collecting at {@see MAX_ERRORS} errors per keyword, but a tree of
+     * errors has more leaves than that, and one violation per leaf is a
+     * diagnostic, not an inventory.
+     *
+     * @param array<string, mixed> $schema
+     * @return list<SchemaFailure>
+     */
+    public function failures(
+        mixed $value,
+        array $schema,
+        SchemaDialect $dialect,
+        SchemaDirection $direction = SchemaDirection::Request,
+    ): array {
+        $error = $this->validationError($value, $schema, $dialect, $direction);
+        if (!$error instanceof ValidationError) {
+            return [];
+        }
+
+        $failures = [];
+        foreach ($this->leaves($error) as $leaf) {
+            // Two branches of a union that both demand the member the value
+            // lacks report the same leaf twice; once says it.
+            $failures[implode('/', $leaf->path) . '#' . $leaf->keyword] ??= $leaf;
+        }
+
+        return array_slice(array_values($failures), 0, self::MAX_FAILURES);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     */
+    private function validationError(
+        mixed $value,
+        array $schema,
+        SchemaDialect $dialect,
+        SchemaDirection $direction,
+    ): ?ValidationError {
         $compiled = $this->compiledSchema($schema, $dialect, $direction);
 
         try {
-            return !$this->validator->schemaValidation($value, $compiled) instanceof ValidationError;
+            $error = $this->validator->schemaValidation($value, $compiled);
         } catch (\Throwable $exception) {
             // Backends are implementation details: a document the compiler
             // accepted but the backend chokes on leaves as a package type, on
             // the exit `compile()` above already uses.
             throw UnsupportedSchema::fromBackend($exception);
         }
+
+        return $error instanceof ValidationError ? $error : null;
+    }
+
+    /**
+     * The leaves below one backend error: the error itself when it has no
+     * sub-errors, else the leaves of each sub-error — or, for a discriminated
+     * union, of the one branch the discriminator names.
+     *
+     * @return list<SchemaFailure>
+     */
+    private function leaves(ValidationError $error): array
+    {
+        $children = $this->subErrors($error);
+        $discriminated = $this->discriminate($error, $children);
+        if ($discriminated instanceof SchemaFailure) {
+            return [$discriminated];
+        }
+        if ($discriminated !== null) {
+            $children = $discriminated;
+        }
+        if ($children === []) {
+            return $this->leaf($error);
+        }
+
+        $leaves = [];
+        foreach ($children as $child) {
+            $leaves = [...$leaves, ...$this->leaves($child)];
+        }
+
+        return $leaves;
+    }
+
+    /**
+     * A backend error with nothing below it. `required` is reported on the
+     * object that lacks the member, and the member is what the reader is
+     * after: one failure per missing name, at the path the member would
+     * have had, with nothing as its value.
+     *
+     * @return list<SchemaFailure>
+     */
+    private function leaf(ValidationError $error): array
+    {
+        $path = $this->dataPath($error);
+        $expected = $this->assertion($error);
+        if ($error->keyword() === 'required') {
+            /** @var mixed $missing */
+            $missing = $error->args()['missing'] ?? null;
+            $leaves = [];
+            /** @var mixed $name */
+            foreach (is_array($missing) ? $missing : [] as $name) {
+                if (is_string($name)) {
+                    $leaves[] = new SchemaFailure(path: [...$path, $name], keyword: 'required', actual: null, expected: $expected);
+                }
+            }
+            if ($leaves !== []) {
+                return $leaves;
+            }
+        }
+
+        return [new SchemaFailure(path: $path, keyword: $error->keyword(), actual: $error->data()->value(), expected: $expected)];
+    }
+
+    /**
+     * The assertion an error is about: the keyword and its value in the
+     * subschema that carries it, as the compiler spelled it.
+     *
+     * @return array<string, mixed>
+     */
+    private function assertion(ValidationError $error, ?string $keyword = null): array
+    {
+        $keyword ??= $error->keyword();
+        $schema = $error->schema()->info()->data();
+        if (!$schema instanceof \stdClass || !property_exists($schema, $keyword)) {
+            return [];
+        }
+
+        /** @var mixed $value */
+        $value = json_decode(json_encode($schema->{$keyword}, JSON_THROW_ON_ERROR), associative: true, flags: JSON_THROW_ON_ERROR);
+
+        return [$keyword => $value];
+    }
+
+    /** @return list<ValidationError> */
+    private function subErrors(ValidationError $error): array
+    {
+        $children = [];
+        /** @var mixed $child */
+        foreach ($error->subErrors() as $child) {
+            if ($child instanceof ValidationError) {
+                $children[] = $child;
+            }
+        }
+
+        return $children;
+    }
+
+    /** @return list<string|int> */
+    private function dataPath(ValidationError $error): array
+    {
+        $path = [];
+        /** @var mixed $part */
+        foreach ($error->data()->fullPath() as $part) {
+            if (is_string($part) || is_int($part)) {
+                $path[] = $part;
+            }
+        }
+
+        return $path;
+    }
+
+    /**
+     * `discriminator` is an OpenAPI annotation the backend does not read: a
+     * `oneOf`/`anyOf` beside one is evaluated branch by branch, as the README
+     * pins, and reported branch by branch — the errors of every branch the
+     * value was never meant for, beside the one it was. When the value names
+     * a branch, only that branch's errors are followed; when it names none,
+     * that is the failure, and the one the reader is after.
+     *
+     * A branch is named through `mapping` — a `$ref` or a component name —
+     * or, without one, by the component name the value spells. The compiler
+     * keeps a referenced branch as a local `$ref` into the schema's `$defs`,
+     * named after the component's JSON Pointer, and that name is what the
+     * value is matched against; a branch written inline has no name and is
+     * never chosen.
+     *
+     * @param list<ValidationError> $children
+     *
+     * @return null|SchemaFailure|list<ValidationError> the branch's errors,
+     *         the failure that no branch is named, or null when the error is
+     *         not a discriminated union or the value carries no discriminator
+     */
+    private function discriminate(ValidationError $error, array $children): SchemaFailure|array|null
+    {
+        $keyword = $error->keyword();
+        if (($keyword !== 'oneOf' && $keyword !== 'anyOf') || $children === []) {
+            return null;
+        }
+        $schema = $error->schema()->info()->data();
+        if (!$schema instanceof \stdClass) {
+            return null;
+        }
+        /** @var mixed $discriminator */
+        $discriminator = $schema->discriminator ?? null;
+        if (!$discriminator instanceof \stdClass) {
+            return null;
+        }
+        /** @var mixed $propertyName */
+        $propertyName = $discriminator->propertyName ?? null;
+        /** @var mixed $value */
+        $value = $error->data()->value();
+        if (!is_string($propertyName) || !$value instanceof \stdClass) {
+            return null;
+        }
+        /** @var mixed $discriminatorValue */
+        $discriminatorValue = $value->{$propertyName} ?? null;
+        if (!is_string($discriminatorValue)) {
+            return null;
+        }
+        /** @var mixed $mapping */
+        $mapping = $discriminator->mapping ?? null;
+        /** @var mixed $mapped */
+        $mapped = $mapping instanceof \stdClass ? $mapping->{$discriminatorValue} ?? null : null;
+        $name = $this->componentName(is_string($mapped) ? $mapped : $discriminatorValue);
+        /** @var mixed $branches */
+        $branches = $schema->{$keyword} ?? null;
+        $index = is_array($branches) ? $this->branchIndex($branches, $name) : null;
+        if ($index === null) {
+            return new SchemaFailure(
+                path: [...$this->dataPath($error), $propertyName],
+                keyword: 'discriminator',
+                actual: $discriminatorValue,
+                expected: $this->assertion($error, 'discriminator'),
+            );
+        }
+        foreach ($children as $child) {
+            $path = $child->schema()->info()->path();
+            if (($path[count($path) - 1] ?? null) === $index && ($path[count($path) - 2] ?? null) === $keyword) {
+                return [$child];
+            }
+        }
+
+        // The named branch accepted the value: a `oneOf` that matched more
+        // than one branch. The reader was told which branch was meant; the
+        // rest of the report is the backend's.
+        return null;
+    }
+
+    /**
+     * The `$defs` name a discriminator target denotes: a component name is
+     * `#/components/schemas/<name>`, a reference is its JSON Pointer with the
+     * separators spelled as `.`, as the compiler names a def. A reference
+     * into another file keeps only the fragment: the file's display path is
+     * the compiler's to know, and the fragment is compared as a suffix. The
+     * specification lets a mapping value be either, and tells them apart by
+     * nothing; a value with a fragment, a `/` or a document extension is a
+     * reference, anything else is a name.
+     */
+    private function componentName(string $target): string
+    {
+        $hash = strpos($target, '#');
+        if ($hash === false && !str_contains($target, '/') && preg_match('/\.(?:json|ya?ml)\z/i', $target) !== 1) {
+            return 'components.schemas.' . $target;
+        }
+        // Past the `#/`; a fragment of `#` alone, or none, names the file's root.
+        $pointer = $hash === false ? '' : substr($target, $hash + 2);
+
+        return ($hash === 0 ? '' : ':') . ($pointer === '' ? 'document' : str_replace('/', '.', $pointer));
+    }
+
+    /**
+     * The local `$defs` reference a compiled branch is, or null for a branch
+     * written inline. A 3.1 branch whose `$ref` carried sibling assertions
+     * is compiled to `allOf` with the reference first, and is read there.
+     */
+    private function branchReference(\stdClass $branch): ?string
+    {
+        /** @var mixed $reference */
+        $reference = $branch->{'$ref'} ?? null;
+        if ($reference === null) {
+            /** @var mixed $conjunction */
+            $conjunction = $branch->allOf ?? null;
+            /** @var mixed $first */
+            $first = is_array($conjunction) ? $conjunction[0] ?? null : null;
+            /** @var mixed $reference */
+            $reference = $first instanceof \stdClass ? $first->{'$ref'} ?? null : null;
+        }
+
+        return is_string($reference) && str_starts_with($reference, '#/$defs/') ? $reference : null;
+    }
+
+    /**
+     * @param array<array-key, mixed> $branches
+     */
+    private function branchIndex(array $branches, string $name): ?int
+    {
+        /** @var mixed $branch */
+        foreach (array_values($branches) as $index => $branch) {
+            $reference = $branch instanceof \stdClass ? $this->branchReference($branch) : null;
+            if ($reference === null) {
+                continue;
+            }
+            // Read as spelled: a component name admits neither `/` nor `~`,
+            // so the pointer escapes only ever sit in a file's display path,
+            // which a fragment comparison never reaches.
+            $def = substr($reference, strlen('#/$defs/'));
+            if ($def === $name || (str_starts_with($name, ':') && str_ends_with($def, $name))) {
+                return $index;
+            }
+        }
+
+        return null;
     }
 
     /**

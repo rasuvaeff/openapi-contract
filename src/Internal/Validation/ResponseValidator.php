@@ -57,7 +57,7 @@ final readonly class ResponseValidator
                 operation: $matched->operation->key,
                 location: 'status',
                 instancePath: '$',
-                specPointer: sprintf('/paths/%s/%s/responses', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+                specPointer: $this->operationPointer($matched) . '/responses',
                 expected: 'HTTP status between 100 and 599',
                 actual: $status,
                 message: sprintf('Response status %d is not a valid HTTP status code', $status),
@@ -70,7 +70,7 @@ final readonly class ResponseValidator
                 operation: $matched->operation->key,
                 location: 'status',
                 instancePath: '$',
-                specPointer: sprintf('/paths/%s/%s/responses', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+                specPointer: $this->operationPointer($matched) . '/responses',
                 expected: array_keys($matched->operation->responses),
                 actual: $response->getStatusCode(),
                 message: sprintf('Response status %d is not declared', $response->getStatusCode()),
@@ -79,12 +79,7 @@ final readonly class ResponseValidator
 
         $definition = $selected->definition;
         $violations = [];
-        $basePointer = sprintf(
-            '/paths/%s/%s/responses/%s',
-            $this->escape($matched->operation->path),
-            strtolower($matched->operation->method),
-            $this->escape($selected->key),
-        );
+        $basePointer = $this->operationPointer($matched) . '/responses/' . $this->escape($selected->key);
 
         /** @var mixed $headersValue */
         $headersValue = $definition['headers'] ?? [];
@@ -207,20 +202,27 @@ final readonly class ResponseValidator
         // side can make sense of is a contract error in both, where it used to
         // raise here and pass silently there.
         $schema = $this->values->schema($schemaValue);
-        $schemaValid = $schema === null
-            ? !$this->declaresNothingValid($mediaDefinition)
-            : $this->schemas->isValid($value, $schema, $dialect, direction: SchemaDirection::Response);
-        if (!$schemaValid) {
-            $violations[] = new Violation(
-                code: 'response.body.schema',
-                operation: $matched->operation->key,
-                location: 'body',
-                instancePath: '$',
-                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
-                expected: $schema,
-                actual: $value,
-                message: 'Response body does not match its schema',
-            );
+        if ($schema === null) {
+            if ($this->declaresNothingValid($mediaDefinition)) {
+                $violations[] = new Violation(
+                    code: 'response.body.schema',
+                    operation: $matched->operation->key,
+                    location: 'body',
+                    instancePath: '$',
+                    specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                    expected: $schema,
+                    actual: $value,
+                    message: 'Response body does not match its schema',
+                );
+            }
+        } else {
+            $violations = [...$violations, ...$this->bodySchemaViolations(
+                'Response',
+                $matched,
+                $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                $schema,
+                $this->schemas->failures($value, $schema, $dialect, direction: SchemaDirection::Response),
+            )];
         }
 
         return new ValidationResult($violations);

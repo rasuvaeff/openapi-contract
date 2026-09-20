@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaCompiler;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaFailure;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Rasuvaeff\OpenApiContract\SchemaDirection;
@@ -22,6 +23,7 @@ use Testo\Test;
 #[Test]
 #[Covers(SchemaValidator::class)]
 #[Covers(SchemaCompiler::class)]
+#[Covers(SchemaFailure::class)]
 #[Covers(UnsupportedSchema::class)]
 #[Covers(SchemaDialect::class)]
 final class SchemaValidatorTest
@@ -608,4 +610,169 @@ final class SchemaValidatorTest
         Assert::false((new SchemaValidator())->isValid((object) [], $schema, SchemaDialect::OpenApi31));
     }
 
+    /**
+     * The leaf failures behind a verdict (#160): where in the value, and
+     * which keyword. `required` is reported per missing member at the path
+     * it would have had; a leaf two branches report alike is reported once;
+     * the list is bounded.
+     */
+    public function reportsLeafFailuresWithTheirPathAndKeyword(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'required' => ['a', 'b'],
+            'properties' => [
+                'a' => ['type' => 'integer', 'minimum' => 0],
+                'list' => ['type' => 'array', 'items' => ['type' => 'object', 'required' => ['n'], 'properties' => ['n' => ['type' => 'string']]]],
+            ],
+        ];
+
+        Assert::same($validator->failures(json_decode('{"a":1,"b":true}'), $schema, SchemaDialect::OpenApi31), []);
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"a":-1,"list":[{"n":"ok"},{"n":2},{}]}'), $schema, SchemaDialect::OpenApi31)),
+            [
+                ['b', 'required', null],
+                ['a', 'minimum', -1],
+                ['list.1.n', 'type', 2],
+                ['list.2.n', 'required', null],
+            ],
+        );
+        Assert::same($this->render($validator->failures('text', $schema, SchemaDialect::OpenApi31)), [['', 'type', 'text']]);
+        // Each leaf carries the one assertion it failed, as the subschema spells it.
+        Assert::same(
+            array_map(static fn(SchemaFailure $failure): array => $failure->expected, $validator->failures(json_decode('{"a":-1,"list":[{}]}'), $schema, SchemaDialect::OpenApi31)),
+            [['required' => ['a', 'b']], ['minimum' => 0], ['required' => ['n']]],
+        );
+        // Two leaves under one member, told apart by the rest of the path.
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"a":1,"b":1,"list":[{"n":1},{"n":2}]}'), $schema, SchemaDialect::OpenApi31)),
+            [['list.0.n', 'type', 1], ['list.1.n', 'type', 2]],
+        );
+        // Both branches lack the same member: once.
+        Assert::same(
+            $this->render($validator->failures(json_decode('{}'), ['oneOf' => [
+                ['type' => 'object', 'required' => ['id']],
+                ['type' => 'object', 'required' => ['id', 'name']],
+            ]], SchemaDialect::OpenApi31)),
+            [['id', 'required', null], ['name', 'required', null]],
+        );
+        $wide = $validator->failures(array_fill(0, 50, 'x'), ['type' => 'array', 'items' => ['type' => 'integer']], SchemaDialect::OpenApi31);
+        Assert::same(count($wide), 20);
+        Assert::same($wide[19]->path, [19]);
+        // The backend's bound is per keyword; the leaves of a tree are cut to the same count.
+        $properties = [];
+        $value = [];
+        foreach (range(0, 29) as $i) {
+            $properties['p' . $i] = ['type' => 'object', 'properties' => ['q' => ['type' => 'integer'], 'r' => ['type' => 'integer']]];
+            $value['p' . $i] = ['q' => 'x', 'r' => 'y'];
+        }
+        $deep = $validator->failures(json_decode(json_encode($value, JSON_THROW_ON_ERROR)), ['type' => 'object', 'properties' => $properties], SchemaDialect::OpenApi31);
+        Assert::same(count($deep), 20);
+        Assert::same($deep[19]->path, ['p9', 'r']);
+    }
+
+    /**
+     * A discriminated union's diagnostics follow the branch the value names
+     * — through `mapping` as a reference or a component name, or implicitly
+     * by component name — and say so when it names none. The compiled form
+     * is what the validator reads: a referenced branch is a local `$ref`
+     * into `$defs`, named after the component's JSON Pointer.
+     */
+    #[DataProvider('discriminatorProvider')]
+    public function followsTheDiscriminatorToOneBranch(array $discriminator, string $value, array $expected): void
+    {
+        $schema = [
+            'oneOf' => [
+                ['type' => 'object', 'required' => ['kind', 'legs'], 'properties' => ['kind' => ['const' => 'spider'], 'legs' => ['type' => 'integer']]],
+                ['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'],
+                ['allOf' => [['$ref' => '#/$defs/components.schemas.Dog', 'type' => 'object'], ['required' => ['kind']]], 'type' => 'object'],
+                ['$ref' => '#/$defs/pets.json:components.schemas.Fish', 'type' => 'object'],
+                ['$ref' => '#/$defs/birds.json:document', 'type' => 'object'],
+            ],
+            'discriminator' => $discriminator,
+            '$defs' => [
+                'components.schemas.Cat' => ['type' => 'object', 'required' => ['kind', 'meow'], 'properties' => ['kind' => ['type' => 'string'], 'meow' => ['type' => 'string']]],
+                'components.schemas.Dog' => ['type' => 'object', 'required' => ['bark'], 'properties' => ['kind' => ['type' => 'string'], 'bark' => ['type' => 'integer']]],
+                'pets.json:components.schemas.Fish' => ['type' => 'object', 'required' => ['kind', 'fin'], 'properties' => ['fin' => ['type' => 'integer']]],
+                'birds.json:document' => ['type' => 'object', 'required' => ['kind', 'wing'], 'properties' => ['wing' => ['type' => 'integer']]],
+            ],
+        ];
+
+        Assert::same(
+            $this->render((new SchemaValidator())->failures(json_decode($value), $schema, SchemaDialect::OpenApi31)),
+            $expected,
+        );
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, list<array{string, string, mixed}>}> */
+    public static function discriminatorProvider(): iterable
+    {
+        $mapping = ['propertyName' => 'kind', 'mapping' => [
+            'cat' => '#/components/schemas/Cat',
+            'dog' => 'Dog',
+            'fish' => 'pets.json#/components/schemas/Fish',
+            'bird' => 'birds.JSON',
+            'spider' => 'Spider',
+        ]];
+        $implicit = ['propertyName' => 'kind'];
+        $every = [['legs', 'required', null], ['kind', 'const', 'cat'], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]];
+
+        yield 'mapped by reference' => [$mapping, '{"kind":"cat","meow":3}', [['meow', 'type', 3]]];
+        yield 'mapped by component name, branch in allOf form' => [$mapping, '{"kind":"dog","bark":"x"}', [['bark', 'type', 'x']]];
+        yield 'mapped into another file' => [$mapping, '{"kind":"fish","fin":"x"}', [['fin', 'type', 'x']]];
+        yield 'mapped to a whole file' => [$mapping, '{"kind":"bird","wing":"x"}', [['wing', 'type', 'x']]];
+        yield 'mapped to an inline branch, which has no name' => [$mapping, '{"kind":"spider","legs":"x"}', [['kind', 'discriminator', 'spider']]];
+        yield 'mapped to nothing' => [$mapping, '{"kind":"fox","meow":3}', [['kind', 'discriminator', 'fox']]];
+        yield 'implicit component name' => [$implicit, '{"kind":"Cat","meow":3}', [['meow', 'type', 3]]];
+        yield 'implicit name of no component' => [$implicit, '{"kind":"Fox","meow":3}', [['kind', 'discriminator', 'Fox']]];
+        yield 'named branch accepts, another does too: the union is the failure' => [$implicit, '{"kind":"Cat","meow":"m","bark":1}', [['', 'oneOf', ['kind' => 'Cat', 'meow' => 'm', 'bark' => 1]]]];
+        yield 'no discriminator member: every branch, the shared leaf once' => [$implicit, '{"meow":3}', [['kind', 'required', null], ['legs', 'required', null], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]]];
+        yield 'discriminator member not a string: every branch' => [$implicit, '{"kind":1,"meow":3}', [['legs', 'required', null], ['kind', 'const', 1], ['kind', 'type', 1], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]]];
+        yield 'no property name: every branch' => [['mapping' => ['cat' => 'Cat']], '{"kind":"cat","meow":3}', $every];
+        yield 'not an object: the value itself' => [$implicit, '"cat"', [['', 'type', 'cat']]];
+    }
+
+    public function reportsTheDiscriminatorAsTheFailedAssertion(): void
+    {
+        $discriminator = ['propertyName' => 'kind', 'mapping' => ['cat' => 'Cat']];
+        $schema = [
+            'oneOf' => [['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object']],
+            'discriminator' => $discriminator,
+            '$defs' => ['components.schemas.Cat' => ['type' => 'object', 'required' => ['meow']]],
+        ];
+
+        $failures = (new SchemaValidator())->failures(json_decode('{"kind":"fox"}'), $schema, SchemaDialect::OpenApi31);
+        Assert::same(count($failures), 1);
+        Assert::same($failures[0]->expected, ['discriminator' => $discriminator]);
+    }
+
+    public function followsANestedDiscriminatorAtItsOwnPath(): void
+    {
+        $schema = ['type' => 'object', 'properties' => ['pets' => ['type' => 'array', 'items' => [
+            'anyOf' => [['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object']],
+            'discriminator' => ['propertyName' => 'kind'],
+        ]]], '$defs' => ['components.schemas.Cat' => ['type' => 'object', 'required' => ['meow'], 'properties' => ['meow' => ['type' => 'string']]]]];
+
+        Assert::same(
+            $this->render((new SchemaValidator())->failures(json_decode('{"pets":[{"kind":"Cat","meow":"m"},{"kind":"Cat"},{"kind":"Fox"}]}'), $schema, SchemaDialect::OpenApi31)),
+            [['pets.1.meow', 'required', null], ['pets.2.kind', 'discriminator', 'Fox']],
+        );
+    }
+
+    /**
+     * @param list<SchemaFailure> $failures
+     * @return list<array{string, string, mixed}>
+     */
+    private function render(array $failures): array
+    {
+        return array_map(
+            static fn(SchemaFailure $failure): array => [
+                implode('.', $failure->path),
+                $failure->keyword,
+                $failure->actual instanceof \stdClass ? (array) $failure->actual : $failure->actual,
+            ],
+            $failures,
+        );
+    }
 }

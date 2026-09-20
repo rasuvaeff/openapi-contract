@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.15.0 — 2026-09-20
+
+- **Added.** `Contract::validateWebhook(string $name, RequestInterface
+  $request, ?ResponseInterface $response = null)` validates an incoming
+  webhook delivery against the OpenAPI 3.1 `webhooks` map (#158). Each
+  entry compiles to one `Operation` per method, a Path Item without a
+  path: no template, no path parameters (`in: path` is refused), no server
+  matching — the delivery's URL is the receiver's own. Parameters in the
+  query, header and cookie, the request body and, when a response is
+  passed, the receiver's answer go through the ordinary pipeline; an
+  undeclared name or method is one `request.operation.unknown` violation.
+  `Contract::webhooks()` lists them by name; `operations()` and `match()`
+  keep to path operations; `operation()` and `validateResponse()` answer a
+  webhook's key — its `operationId`, else `WEBHOOK <METHOD> <name>`.
+  `Operation` gains a defaulted `webhook` parameter (append-only: named
+  arguments) carrying the map key, and violations point under
+  `/webhooks/<name>`. A 3.1 document declaring only `webhooks` loads; the
+  refusal now applies to a document with neither `paths` nor `webhooks`
+  operations, and a 3.0 document carrying `webhooks` is refused as such.
+- **Changed.** A body that fails its schema is reported per leaf failure
+  (#160): each `request.body.schema` / `response.body.schema` violation
+  names the failing member in `instancePath` (`$.age`,
+  `$.children[2].name`), the assertion in the new `Violation::$keyword`
+  (`minimum`, `type`, `required`, ...; `null` on every other violation),
+  and carries that one assertion as `expected` — `{"minimum": 0}` rather
+  than the media type's schema. A `required` member the value lacks is
+  reported at the path it would have had with `null` as `actual`; the
+  list is bounded at twenty leaves; a leaf two union branches report
+  alike is reported once; a failure of the value itself keeps `$`. The
+  codes are unchanged — this is a diagnostic change — but a consumer that
+  asserted exactly one body violation, or `instancePath === '$'`, now
+  sees more. `ValidationResultFormatter` prints a `keyword` line where
+  one is set and renders a body member's `actual` as it renders a
+  parameter's — the credential name pattern applies to the member path
+  and to the names inside it, so `$.age` prints `-1` and `$.password`
+  prints `[redacted]`; a whole-body violation at `$` stays redacted
+  wholesale.
+- **Changed.** For a `oneOf`/`anyOf` that declares a `discriminator`, the
+  body diagnostics follow the branch the `propertyName` value names —
+  through `mapping`, as a `$ref` or a component name, else by the
+  component name the value spells — instead of reporting every branch's
+  errors; a value naming no branch is one violation at the discriminator
+  member with the keyword `discriminator`. The verdict is untouched: every
+  branch is still evaluated. So that a branch keeps its name, a `$ref`
+  branch of a discriminated union is now compiled as the local
+  `{$ref: '#/$defs/…'}` a shared component takes rather than inlined; a
+  consumer that read such a branch's members off `Operation` follows the
+  reference into the schema's `$defs`, as it already does for a cycle.
+
 ## 0.14.0 — 2026-09-20
 
 - **Fixed.** A document whose `components` form a shared-component DAG —

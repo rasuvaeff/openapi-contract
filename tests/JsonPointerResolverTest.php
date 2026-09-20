@@ -562,4 +562,121 @@ final class JsonPointerResolverTest
             Assert::same($exception->getMessage(), 'Only same-document JSON Pointer references are supported, got "a/x"');
         }
     }
+    /**
+     * A discriminator names its branches — through `mapping`, or by
+     * component name — and a branch inlined where it was met has no name
+     * left for a value to be matched against. The referenced branches of a
+     * discriminated union are therefore kept as local `$ref`s into `$defs`,
+     * whatever their depth; an inline branch stays inline, and a union
+     * without a discriminator compiles as before.
+     */
+    public function keepsTheReferencedBranchesOfADiscriminatedUnionAsDefs(): void
+    {
+        $document = ['components' => ['schemas' => [
+            'Cat' => ['type' => 'object', 'properties' => ['meow' => ['type' => 'string']]],
+            'Dog' => ['type' => 'object', 'properties' => ['bark' => ['type' => 'integer']]],
+        ]]];
+        $cat = $document['components']['schemas']['Cat'];
+        $dog = $document['components']['schemas']['Dog'];
+        $union = static fn(string $keyword, array $extra = []): array => [
+            $keyword => [['$ref' => '#/components/schemas/Cat'], ['$ref' => '#/components/schemas/Dog'], ['type' => 'null']],
+            ...$extra,
+        ];
+        $discriminated = static fn(string $keyword): array => $union($keyword, ['discriminator' => ['propertyName' => 'kind']]);
+        $deferred = [
+            ['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'],
+            ['$ref' => '#/$defs/components.schemas.Dog', 'type' => 'object'],
+            ['type' => 'null'],
+        ];
+        $defs = ['components.schemas.Cat' => $cat, 'components.schemas.Dog' => $dog];
+
+        foreach (['oneOf', 'anyOf'] as $keyword) {
+            $resolver = new JsonPointerResolver($document);
+            Assert::same(
+                $resolver->resolve($discriminated($keyword), inSchema: true),
+                [$keyword => $deferred, 'discriminator' => ['propertyName' => 'kind'], '$defs' => $defs],
+            );
+            // Nested below the root, and under a property the decoders read.
+            Assert::same(
+                $resolver->resolve(['type' => 'object', 'properties' => ['pet' => $discriminated($keyword)]], inSchema: true),
+                ['type' => 'object', 'properties' => ['pet' => [$keyword => $deferred, 'discriminator' => ['propertyName' => 'kind']]], '$defs' => $defs],
+            );
+            Assert::same(
+                (new JsonPointerResolver($document))->resolve($union($keyword), inSchema: true),
+                [$keyword => [$cat, $dog, ['type' => 'null']]],
+            );
+        }
+        // Not a discriminator without a property name; `allOf` is never chosen among.
+        Assert::same(
+            (new JsonPointerResolver($document))->resolve($union('oneOf', ['discriminator' => ['mapping' => []]]), inSchema: true),
+            ['oneOf' => [$cat, $dog, ['type' => 'null']], 'discriminator' => ['mapping' => []]],
+        );
+        Assert::same(
+            (new JsonPointerResolver($document))->resolve($union('allOf', ['discriminator' => ['propertyName' => 'kind']]), inSchema: true),
+            ['allOf' => [$cat, $dog, ['type' => 'null']], 'discriminator' => ['propertyName' => 'kind']],
+        );
+    }
+
+    /**
+     * Under 3.1 a branch `$ref` with sibling assertions is a conjunction, and
+     * the reference stays first in it; under 3.0 the siblings are ignored,
+     * as everywhere. A branch that is a local `$defs` reference already — a
+     * compiled schema handed back — is left as it is.
+     */
+    public function keepsTheReferenceFirstInADiscriminatedBranchWithSiblings(): void
+    {
+        $document = ['components' => ['schemas' => ['Cat' => ['type' => 'object']]]];
+        $schema = [
+            'oneOf' => [
+                ['$ref' => '#/components/schemas/Cat', 'required' => ['meow'], 'title' => 'A cat'],
+                ['$ref' => '#/$defs/local', 'type' => 'object'],
+            ],
+            'discriminator' => ['propertyName' => 'kind'],
+            '$defs' => ['local' => ['type' => 'object']],
+        ];
+
+        Assert::same(
+            (new JsonPointerResolver($document, SchemaDialect::OpenApi31))->resolve($schema, inSchema: true)['oneOf'],
+            [
+                ['allOf' => [['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'], ['required' => ['meow']]], 'type' => 'object', 'title' => 'A cat'],
+                ['$ref' => '#/$defs/local', 'type' => 'object'],
+            ],
+        );
+        Assert::same(
+            (new JsonPointerResolver($document, SchemaDialect::OpenApi30))->resolve($schema, inSchema: true)['oneOf'],
+            [
+                ['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'],
+                ['$ref' => '#/$defs/local', 'type' => 'object'],
+            ],
+        );
+    }
+
+    /**
+     * A branch that reaches back to the schema being resolved is a cycle
+     * first: it is deferred the way every cycle is, and registered once.
+     */
+    public function defersACyclicDiscriminatedBranchOnce(): void
+    {
+        $document = ['components' => ['schemas' => [
+            'Node' => [
+                'type' => 'object',
+                'properties' => ['child' => [
+                    'oneOf' => [['$ref' => '#/components/schemas/Node'], ['$ref' => '#/components/schemas/Leaf']],
+                    'discriminator' => ['propertyName' => 'kind'],
+                ]],
+            ],
+            'Leaf' => ['type' => 'string'],
+        ]]];
+
+        $resolved = (new JsonPointerResolver($document))->resolve(['$ref' => '#/components/schemas/Node'], inSchema: true);
+        Assert::same(
+            $resolved['properties']['child']['oneOf'],
+            [
+                ['$ref' => '#/$defs/components.schemas.Node', 'type' => 'object'],
+                ['$ref' => '#/$defs/components.schemas.Leaf', 'type' => 'string'],
+            ],
+        );
+        Assert::same(array_keys($resolved['$defs']), ['components.schemas.Leaf', 'components.schemas.Node']);
+        Assert::same($resolved['$defs']['components.schemas.Node']['properties']['child']['oneOf'][0], ['$ref' => '#/$defs/components.schemas.Node', 'type' => 'object']);
+    }
 }

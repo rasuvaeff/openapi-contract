@@ -145,8 +145,9 @@ Rules:
   integers — `int32` (−2³¹…2³¹−1), `int64` (−2⁶³…2⁶³−1); annotation only —
   `byte`, `binary`, `password`, `float`, `double`, anything unknown. Asserting
   string formats is a pinned divergence from league/openapi-psr7-validator;
-- accepted and never read (no verdict depends on them): `allowEmptyValue`,
-  `discriminator`, `xml`, `externalDocs`, `deprecated`;
+- accepted and never read for a verdict (none depends on them):
+  `allowEmptyValue`, `discriminator` (read only to choose which branch's
+  failures a body violation reports), `xml`, `externalDocs`, `deprecated`;
 - `multipleOf` is judged on the decimals the document and the message spell
   (`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly and
   independently of `ext-bcmath` (#151);
@@ -174,8 +175,23 @@ API reference:
   with `Limits::DEFAULT_DOCUMENT_BYTES` / `DEFAULT_MESSAGE_BODY_BYTES` /
   `DEFAULT_DOCUMENT_FILES` / `DEFAULT_DOCUMENT_NODES` /
   `DEFAULT_RESOLVED_NODES` as the constants behind them.
-- `Contract::operations(): list<Operation>`;
-  `Contract::operation(string $key): Operation` throws `UnknownOperation`.
+- `Contract::operations(): list<Operation>` — path operations only;
+  `Contract::operation(string $key): Operation` throws `UnknownOperation`
+  and answers webhook keys too.
+- `Contract::webhooks(): array<string, list<Operation>>` — the 3.1
+  `webhooks` map compiled, keyed by name, one `Operation` per declared
+  method in document order. A webhook is a Path Item without a path: `path`
+  is `''`, `servers` is `[]`, `in: path` parameters are `InvalidContract`,
+  `match()` never returns one; identity is `operationId` or
+  `WEBHOOK <METHOD> <name>`; `Operation::$webhook` carries the name (`null`
+  on a path operation); violations point under `/webhooks/<name>`. A 3.1
+  document may declare only `webhooks`; neither `paths` nor `webhooks`
+  operations, or `webhooks` under 3.0, is `InvalidContract`.
+- `Contract::validateWebhook(string $name, RequestInterface $request, ?ResponseInterface $response = null): ValidationResult`
+  — the delivery against `webhooks.<name>` and the request's method (query/
+  header/cookie parameters, body), plus the response as `validateExchange()`
+  would when one is passed; an undeclared name or method is one
+  `request.operation.unknown` violation.
 - `Contract::securitySchemes(): array<string, CompiledSecurityScheme>` —
   `components.securitySchemes` keyed by the names `Operation::$security`
   refers to; each entry is `type` plus exactly the fields its type defines
@@ -195,7 +211,8 @@ API reference:
   > root precedence, variable defaults substituted; undeclared variables,
   non-enum defaults, unsupported schemes, and userinfo/query/fragment fail
   closed at compile time; read a base path as `$servers[$i]['base']`),
-  `dialect`.
+  `dialect`, `webhook` (`?string`, the `webhooks` map key; append-only
+  constructor, use named arguments).
 - `Contract::match(RequestInterface): ?MatchedOperation` — method, server
   base paths, concrete-before-templated precedence, split on the raw `/`
   then a single percent-decode per segment (`/pets/a%2Fb` matches
@@ -263,10 +280,13 @@ API reference:
 - `ValidationResult` (readonly): `violations` (`list<Violation>`),
   `isValid(): bool`, `assertValid(): void` throws `ContractViolation`.
 - `ValidationResultFormatter::format(ValidationResult): string` renders every
-  violation in stable order with bounded fields/values/depth/items. A body
-  `actual` and a cookie `actual` are redacted wholesale; another parameter's `actual` is rendered with members
-  whose name matches `authorization|api[-_]?key|token|secret|password|cookie`
-  replaced, and is redacted outright when the instance path itself matches.
+  violation in stable order with bounded fields/values/depth/items, plus a
+  `keyword` line when set. A whole-body `actual` (instance path `$`) and a
+  cookie `actual` are redacted wholesale; a body member's or a parameter's
+  `actual` is rendered with members whose name matches
+  `authorization|api[-_]?key|token|secret|password|cookie` replaced, and is
+  redacted outright when the instance path itself matches (`$.password`,
+  `$.user.token`).
 - Schema compilation is cached per `Contract` / `SchemaCheck` instance,
   keyed by schema, direction and dialect; the cache never evicts, so hold one
   instance per document. A hand-passed schema may `$ref` only inside itself
@@ -300,7 +320,23 @@ API reference:
 - `Violation` (readonly): `code` (stable, e.g. `request.parameter.missing`,
   `response.body.schema`), `operation`, `location`, `instancePath`,
   `specPointer` (JSON Pointer into the document), `expected`, `actual`
-  (bounded), `message`.
+  (bounded), `message`, `keyword` (`?string`; the failed assertion on a
+  body schema violation, `null` elsewhere).
+- A body that fails its schema yields one `*.body.schema` violation PER LEAF
+  failure: `instancePath` is the member (`$.age`, `$.items[2].id`,
+  `$['a b']`), `keyword` the assertion (`minimum`, `type`, `required`, ...),
+  `expected` that one assertion (`{"minimum": 0}`), `actual` the member's
+  value (`null` for a `required` member the value lacks, reported at the
+  path it would have had). At most 20 leaves, in the backend's order, a
+  leaf two union branches report alike once; a failure of the value itself
+  (root `type`, `oneOf` matching none or several) keeps `instancePath` `$`.
+  Under a `discriminator`, only the named branch's leaves are reported
+  (`mapping` as `$ref` or component name, else the value as component
+  name); a value naming no branch is one violation at the discriminator
+  member with `keyword` `discriminator`. Verdicts are unchanged; violation
+  counts and paths are diagnostics, not contract. A `$ref` branch of a
+  discriminated union compiles to a local `{$ref: '#/$defs/…'}` so the
+  branch keeps its name.
 - Violation codes (complete set; the code is the stable contract, the
   formatter's message text is a diagnostic that may be reworded):
   `request.operation.unknown`, `request.server.mismatch`,

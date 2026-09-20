@@ -80,11 +80,13 @@ final readonly class Contract
 
     /**
      * @param list<Operation> $operations
+     * @param array<string, list<Operation>> $webhooks
      * @param array<string, CompiledSecurityScheme> $securitySchemes
      */
     private function __construct(
         private SchemaDialect $dialect,
         private array $operations,
+        private array $webhooks,
         private array $securitySchemes,
         Limits $limits,
     ) {
@@ -98,7 +100,11 @@ final readonly class Contract
         $routes = [];
         $byKey = [];
         $sites = new OperationSchemas();
-        foreach ($operations as $operation) {
+        $allOperations = $operations;
+        foreach ($webhooks as $webhookOperations) {
+            $allOperations = [...$allOperations, ...$webhookOperations];
+        }
+        foreach ($allOperations as $operation) {
             $byKey[$operation->key] = $operation;
             // Every schema the validators will read, compiled now, in the
             // direction they will read it in. What the compiler could not
@@ -130,7 +136,7 @@ final readonly class Contract
         }
         $compiled = (new DocumentCompiler())->compile($document, resolvedNodes: $limits->resolvedNodes);
 
-        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
+        return new self($compiled->dialect, $compiled->operations, $compiled->webhooks, $compiled->securitySchemes, $limits);
     }
 
     public static function fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null): self
@@ -164,13 +170,28 @@ final readonly class Contract
         $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes, $limits->documentNodes);
         $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph, $limits->resolvedNodes);
 
-        return new self($compiled->dialect, $compiled->operations, $compiled->securitySchemes, $limits);
+        return new self($compiled->dialect, $compiled->operations, $compiled->webhooks, $compiled->securitySchemes, $limits);
     }
 
     /** @return list<Operation> */
     public function operations(): array
     {
         return $this->operations;
+    }
+
+    /**
+     * The operations compiled from the document's `webhooks` map, keyed by
+     * webhook name, in document order — one per method the Path Item
+     * declares. They are not in {@see operations()}: nothing in a request
+     * URI names a webhook, so {@see match()} never returns one; they are in
+     * {@see operation()} by their key, so {@see validateResponse()} judges
+     * what the receiver answered.
+     *
+     * @return array<string, list<Operation>>
+     */
+    public function webhooks(): array
+    {
+        return $this->webhooks;
     }
 
     /**
@@ -187,6 +208,53 @@ final readonly class Contract
     public function operation(string $key): Operation
     {
         return $this->byKey[$key] ?? throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
+    }
+
+    /**
+     * Validates a webhook delivery against the operation the document
+     * declares for it under `webhooks.<name>` and the request's method, and
+     * — when the receiver's answer is given — the response as
+     * {@see validateExchange()} would. There is no matching: the receiver
+     * knows which webhook it is handling, and the request URI is its own.
+     */
+    public function validateWebhook(string $name, RequestInterface $request, ?ResponseInterface $response = null): ValidationResult
+    {
+        $operations = $this->webhooks[$name] ?? null;
+        $method = strtoupper($request->getMethod());
+        if ($operations === null) {
+            return $this->unknownWebhook($name, $method, sprintf('Webhook "%s" is not present in the OpenAPI document', $name));
+        }
+        $matched = null;
+        foreach ($operations as $operation) {
+            if ($operation->method === $method) {
+                $matched = new MatchedOperation($operation, []);
+
+                break;
+            }
+        }
+        if (!$matched instanceof MatchedOperation) {
+            return $this->unknownWebhook($name, $method, sprintf('Webhook "%s" declares no operation for method %s', $name, $method));
+        }
+        $result = $this->requests->validate($matched, $request, $this->dialect);
+        if (!$response instanceof ResponseInterface) {
+            return $result;
+        }
+
+        return new ValidationResult([...$result->violations, ...$this->responses->validate($matched, $response, $this->dialect)->violations]);
+    }
+
+    private function unknownWebhook(string $name, string $method, string $message): ValidationResult
+    {
+        return new ValidationResult([new Violation(
+            code: 'request.operation.unknown',
+            operation: 'unknown',
+            location: 'request',
+            instancePath: '$',
+            specPointer: '/webhooks',
+            expected: 'declared webhook operation',
+            actual: $method . ' ' . $name,
+            message: $message,
+        )]);
     }
 
     public function match(RequestInterface $request): ?MatchedOperation

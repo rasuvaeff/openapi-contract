@@ -378,9 +378,15 @@ final class JsonPointerResolver
      */
     private function resolveMembers(array $node, string $file, int $referenceDepth, bool $inSchema, int $schemaDepth): array
     {
+        $discriminated = $inSchema && $this->isDiscriminated($node);
         /** @var mixed $value */
         foreach ($node as $key => $value) {
             if (!is_array($value) || $this->isData($key, $inSchema)) {
+                continue;
+            }
+            if ($discriminated && ($key === 'oneOf' || $key === 'anyOf') && array_is_list($value)) {
+                $node[$key] = $this->resolveBranches($value, $file, $referenceDepth, $schemaDepth + 2);
+
                 continue;
             }
             // A Schema Object is entered through a `schema` key and never
@@ -391,6 +397,73 @@ final class JsonPointerResolver
         }
 
         return $node;
+    }
+
+    /**
+     * Whether a Schema Object declares a `discriminator` its `oneOf`/`anyOf`
+     * branches are chosen among.
+     *
+     * @param array<array-key, mixed> $node
+     */
+    private function isDiscriminated(array $node): bool
+    {
+        /** @var mixed $discriminator */
+        $discriminator = $node['discriminator'] ?? null;
+
+        return is_array($discriminator) && is_string($discriminator['propertyName'] ?? null);
+    }
+
+    /**
+     * The branches of a discriminated union, each `$ref` among them kept as
+     * the reference it is. A `discriminator` names its branches — through
+     * its `mapping`, or implicitly by component name — and a branch inlined
+     * where it was first met has no name left for the value to be matched
+     * against: the diagnostics that follow the discriminator to one branch
+     * could never find it. So a referenced branch is deferred to `$defs`
+     * whatever its depth, the form a cycle's back-reference and a shared
+     * component already take, and the local `$ref` it becomes carries the
+     * component's name. A branch written inline stays inline. The backend
+     * evaluates both forms alike, and nothing the wire decoders read sits
+     * inside a branch.
+     *
+     * @param list<mixed> $branches
+     *
+     * @return list<mixed>
+     */
+    private function resolveBranches(array $branches, string $file, int $referenceDepth, int $schemaDepth): array
+    {
+        /** @var mixed $branch */
+        foreach ($branches as $index => $branch) {
+            if (!is_array($branch)) {
+                continue;
+            }
+            /** @var mixed $reference */
+            $reference = $branch['$ref'] ?? null;
+            if (!is_string($reference) || str_starts_with($reference, '#/$defs/') || $this->defs === null) {
+                $branches[$index] = $this->resolveIn($branch, $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+
+                continue;
+            }
+            [$targetFile, $fragment] = $this->target($reference, $file);
+            $siblings = $branch;
+            unset($siblings['$ref']);
+            if ($siblings !== [] && $this->dialect !== SchemaDialect::OpenApi30) {
+                $siblings = $this->resolveMembers($siblings, $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+            }
+            $target = $this->resolveIn(['$ref' => $reference], $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+            if (is_array($target)) {
+                // Resolved and remembered under its target — the def is that
+                // memory, so the branch costs a reference and not a copy.
+                $name = $this->defName($targetFile, $fragment);
+                if (!array_key_exists($name, $this->defs)) {
+                    $this->defs[$name] = $this->shared[$targetFile . $fragment] ?? $target;
+                }
+                $target = new DeferredReference($reference, $name, array_intersect_key($target, self::DEFERRED_SHAPE_KEYWORDS));
+            }
+            $branches[$index] = $this->merge($siblings, $target, inSchema: true);
+        }
+
+        return $branches;
     }
 
     /**
