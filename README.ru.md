@@ -48,8 +48,9 @@ $contract = Contract::fromFile('openapi.yaml'); // нужен symfony/yaml
 
 Загрузка fail-closed: неподдерживаемая версия OpenAPI бросает
 `UnsupportedVersion`; неизвестный JSON Schema dialect, remote-ссылки,
-неоднозначные path templates, дубли operation identity и малформенные формы
-документа — `InvalidContract`; parameter `content` и неподдержанные styles —
+неоднозначные path templates, дубли operation identity, документ без
+операций ни в `paths`, ни в `webhooks`, и малформенные формы документа —
+`InvalidContract`; parameter `content` и неподдержанные styles —
 `UnsupportedSerialization`.
 Каждый Schema Object, который прочтут валидаторы — у каждого параметра, у
 каждого media type запроса и ответа, у каждого заголовка ответа и заголовка
@@ -150,7 +151,7 @@ middleware это denial of service. Бюджет меньше 1 отверга�
 ```php
 foreach ($contract->operations() as $operation) {
     // Operation: key, operationId, method, path, parameters, requestBody,
-    // responses, security, servers, dialect
+    // responses, security, servers, dialect, webhook
 }
 
 $matched = $contract->match($request);        // MatchedOperation|null
@@ -233,6 +234,39 @@ URI. Matching учитывает server base paths, предпочитает к�
 может делить сегмент с литералами (`/report.{format}`, `/v{version}/items`,
 `/{a}-{b}`); литеральные части сопоставляются так, как записаны.
 
+#### Webhooks
+
+Карта `webhooks` OpenAPI 3.1 тоже компилируется — по одной `Operation` на
+каждый метод, объявленный записью, — а доставка проверяется по имени, под
+которым её знает получатель:
+
+```php
+$result = $contract->validateWebhook('payment.completed', $request);
+$result = $contract->validateWebhook('payment.completed', $request, $response); // весь обмен
+
+foreach ($contract->webhooks() as $name => $operations) {
+    // 'payment.completed' => [Operation, ...], в порядке документа
+}
+```
+
+Webhook — это Path Item без пути: нет шаблона, нет path-параметров
+(`in: path` отвергается как `InvalidContract`), нет сопоставления
+серверов — URL доставки принадлежит получателю, и ничто в нём не называет
+webhook, поэтому `match()` его никогда не вернёт, а `operations()`
+перечисляет только path-операции. Всё остальное — обычный конвейер
+запроса: `parameters` в query, header и cookie, `requestBody` по media
+type и `responses` для того, что ответил получатель, — они проверяются,
+когда ответ передан рядом с запросом. Identity webhook-операции —
+`operationId`, если он есть, иначе `WEBHOOK <METHOD> <name>`; по этому
+ключу она доступна через `operation()` и `validateResponse()`, несёт ключ
+карты в `Operation::$webhook` (`null` у path-операции), а её нарушения
+указывают в документ под `/webhooks/<name>`. Доставка с именем, которого
+документ не объявляет, или методом, которого не объявляет запись, — одно
+нарушение `request.operation.unknown`, как и несопоставленный запрос.
+Документ 3.1 может объявлять только `webhooks`; документ без операций ни
+в `paths`, ни в `webhooks` отвергается, как и документ 3.0 с членом
+`webhooks`, которого в той версии нет.
+
 Servers компилируются в полную модель (`Operation::$servers`): scheme, host,
 port и base path с precedence operation > path > root и подстановкой
 defaults у server variables. Absolute server ограничивает каждый компонент
@@ -312,7 +346,31 @@ foreach ($result->violations as $violation) {
 
 `ValidationResult` — immutable список `Violation` со стабильными кодами
 (`request.parameter.missing`, `response.body.schema`, ...) и JSON Pointer в
-OpenAPI-документ. Выбор ответа: точный статус, затем `NXX`-диапазон, затем
+OpenAPI-документ. Тело, не прошедшее схему, отчитывается по каждому
+листовому сбою, а не одним нарушением на всё тело: каждое
+`request.body.schema` / `response.body.schema` называет в `instancePath`
+сбойный член (`$.age`, `$.children[2].name`, `$['a b']` для имени, не
+являющегося идентификатором), в `keyword` — нарушенное утверждение
+(`minimum`, `type`, `required`, ...; у всех остальных нарушений `null`) и
+несёт в `expected` именно это утверждение — `{"minimum": 0}`, а не схему
+media type. `required`-член, которого нет в значении, отчитывается по пути,
+который у него был бы, с `null` в `actual`. Список ограничен двадцатью
+листами в порядке бэкенда; лист, который одинаково сообщают две ветви
+union, сообщается один раз; сбой самого значения — неверный `type` в корне,
+`oneOf`, которому не подошла ни одна ветвь или подошли две, — сохраняет
+`instancePath` `$`. Коды — контракт; число нарушений на тело и их пути —
+диагностика, и потребитель, утверждавший ровно одно нарушение по телу с
+`$`, теперь увидит больше. У `oneOf`/`anyOf` с `discriminator` диагностика
+идёт по ветви, которую называет значение `propertyName` — через `mapping`
+(как `$ref` или имя компонента), иначе по имени компонента, которое значение
+пишет само, — вместо ошибок всех ветвей; значение, не называющее ни одной
+ветви, — одно нарушение на члене-дискриминаторе с keyword `discriminator`.
+Вердикт не меняется: все ветви по-прежнему вычисляются, как закреплено в
+[Кодах нарушений](#коды-нарушений). Чтобы ветвь можно было назвать,
+`$ref`-ветвь дискриминированного union компилируется в локальный
+`{$ref: '#/$defs/…'}` — форму, которую принимает общий компонент, — а не
+инлайнится; у ветви, написанной inline, имени нет, и она никогда не
+выбирается. Выбор ответа: точный статус, затем `NXX`-диапазон, затем
 `default`; неизвестный статус не порождает вымышленных body/header
 нарушений. Объявленный response-заголовок проверяется на присутствие, если он
 `required`, а присутствующий заголовок со `schema` декодируется стилем
@@ -388,15 +446,18 @@ JSON-тело декодируется с бюджетом вложенност�
 отчитывается как `request.body.json` / `response.body.json` — декодер не
 отличает переполнение бюджета от битого JSON, поэтому код говорит «not valid
 JSON» там, где точнее было бы «не прочитано». Бюджет не настраивается.
-`ValidationResultFormatter` выводит все нарушения в стабильном порядке и
-ограничивает поля, глубину, число элементов и expected/actual. Значение
-печатается только там, где его имя можно проверить: body редактируется
-целиком — имена его полей принадлежат приложению, а у нарушения по телу
-instance path равен `$`, — и так же cookie, которая по определению носитель
-credentials, как бы документ её ни назвал; параметр печатается, но каждый член, чьё имя
-совпадает с credential-паттерном (`authorization`, `api_key`, `token`,
-`secret`, `password`, `cookie`), заменяется, а параметр, чьё собственное имя
-совпадает, редактируется целиком. `ContractViolation` использует тот же
+`ValidationResultFormatter` выводит все нарушения в стабильном порядке,
+ограничивает поля, глубину, число элементов и expected/actual и печатает
+строку `keyword`, где он задан. Значение печатается только там, где его имя
+можно проверить: нарушение по телу целиком — instance path `$` —
+редактируется целиком, потому что имена его полей принадлежат приложению и
+проверять нечего, и так же cookie, которая по определению носитель
+credentials, как бы документ её ни назвал. Нарушение по телу, называющее
+свой член, печатается как параметр: каждый член, чьё имя совпадает с
+credential-паттерном (`authorization`, `api_key`, `token`, `secret`,
+`password`, `cookie`), заменяется, а член или параметр, чей собственный путь
+совпадает, редактируется целиком — `$.age` печатает `-1`, `$.password` и
+`$.user.token` печатают `[redacted]`. `ContractViolation` использует тот же
 вывод.
 
 ### Проверка одной схемы
@@ -493,7 +554,7 @@ $check->accepts($value, $schema, $operation->dialect);
 
 | Код | Когда |
 |---|---|
-| `request.operation.unknown` | запросу не соответствует ни одна операция |
+| `request.operation.unknown` | запросу не соответствует ни одна операция, или `validateWebhook()` получил имя либо метод, которых документ не объявляет |
 | `request.server.mismatch` | путь совпал, но ни один объявленный server — нет |
 | `request.parameter.missing` | отсутствует `required`-параметр |
 | `request.parameter.duplicate` | имя несёт больше одного значения там, где style допускает одно |
@@ -503,7 +564,7 @@ $check->accepts($value, $schema, $operation->dialect);
 | `request.body.media_type` | media type тела не объявлен (или у тела нет годного content) |
 | `request.body.json` | JSON-тело не парсится |
 | `request.body.decode` | form- или multipart-тело не декодируется как объявлено |
-| `request.body.schema` | тело не удовлетворяет схеме |
+| `request.body.schema` | тело не удовлетворяет схеме — по нарушению на каждый сбойный член, с `keyword` |
 | `request.body.unsupported` | не-JSON и не-form media type несёт схему, которую нельзя проверить на недекодированном payload |
 | `request.body.too_large` | тело больше настроенного `messageBodyBytes`, поэтому не читалось |
 | `request.body.non_seekable` | поток тела нельзя перемотать, поэтому он не вычитывается |
@@ -518,7 +579,7 @@ $check->accepts($value, $schema, $operation->dialect);
 | `response.body.missing` | ответ, объявивший схему, не прислал тела |
 | `response.body.media_type` | media type ответа не объявлен |
 | `response.body.json` | JSON-тело ответа не парсится |
-| `response.body.schema` | тело ответа не удовлетворяет схеме |
+| `response.body.schema` | тело ответа не удовлетворяет схеме — по нарушению на каждый сбойный член, с `keyword` |
 | `response.body.unsupported` | то же, что `request.body.unsupported`, на стороне ответа |
 | `response.body.too_large` | тело ответа больше настроенного `messageBodyBytes`, поэтому не читалось |
 | `response.body.non_seekable` | поток тела ответа нельзя перемотать |
@@ -545,11 +606,13 @@ $check->accepts($value, $schema, $operation->dialect);
 `deepObject` в этот список не входит: `f%5Ba%5D=1` и `f[a]=1` — один и тот же
 параметр и здесь, и в собственном разборе query у PHP.
 
-Пять ключевых слов принимаются и никогда не читаются, потому что ни одно не
-меняет вердикт, который пакет может выдать: `allowEmptyValue` (его смысл
-спецификацией не определён, а параметр с пустым значением судится по своей
-схеме), `discriminator` (подсказка потребителю, выбирающему ветвь `oneOf`;
-сами ветви всё равно вычисляются), `xml`, `externalDocs` и `deprecated`. На
+Пять ключевых слов принимаются и никогда не читаются ради вердикта, потому
+что ни одно не меняет тот, который пакет может выдать: `allowEmptyValue`
+(его смысл спецификацией не определён, а параметр с пустым значением
+судится по своей схеме), `discriminator` (подсказка потребителю,
+выбирающему ветвь `oneOf`; сами ветви всё равно вычисляются, а подсказка
+решает только то, сбои какой ветви сообщаются — см. [Валидация
+exchanges](#валидация-exchanges)), `xml`, `externalDocs` и `deprecated`. На
 скомпилированной операции они сохраняются как написаны.
 
 #### Форматы
@@ -581,7 +644,8 @@ $check->accepts($value, $schema, $operation->dialect);
 которую валидатор допускать не вправе. Пользовательские документы и тела
 сообщений читаются с byte- и JSON-depth-бюджетами; expected/actual в
 диагностике рендерятся в ограниченной форме без раскрытия
-credential-параметров.
+credential-параметров и членов тела, чьё имя совпадает с
+credential-паттерном.
 
 Ключевое слово `pattern` — это регулярное выражение из документа, и backend
 валидации исполняет его через `preg_match`. Контракт — доверенный вход (это
