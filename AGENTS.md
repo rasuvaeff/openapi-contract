@@ -113,6 +113,24 @@ make release-check
   off the root and its direct members — depths 1 and 2 — so widening what
   they read, or moving the deferral horizon up, has to happen in the same
   change as teaching `DeferredReference` to carry what they need.
+- **A `$ref` branch of a discriminated union is always deferred.** The
+  resolver keeps the referenced branches of a `oneOf`/`anyOf` that sits
+  beside a `discriminator` as local `{$ref: '#/$defs/…'}` nodes whatever
+  their depth, because `SchemaValidator::discriminate()` matches the
+  discriminator value against the def's name (the component's JSON
+  Pointer) to report one branch's leaves — an inlined branch has no name
+  left to match. No wire decoder reads a `oneOf`/`anyOf` member, so the
+  decoder-horizon rule above is not crossed; if one ever does, it has to
+  follow the reference.
+- **Body schema violations are one per leaf, bounded.**
+  `SchemaValidator::failures()` flattens the backend's error tree to
+  `SchemaFailure` leaves (path, keyword, the one assertion as `expected`),
+  expands `required` to one leaf per missing member, dedupes by path and
+  keyword, and cuts at `MAX_FAILURES` (= the backend's `max_errors`).
+  `MessageReading::bodySchemaViolations()` turns them into violations for
+  both sides. The codes are the contract; counts, paths and wording are
+  diagnostics — but README EN/RU and llms.txt state them, so change all
+  three together.
 - **The directional rewrite drops `required` entries, not properties.**
   `SchemaValidator::effectiveSchema()` — exported as
   `SchemaCheck::effective()` — keeps a `readOnly`/`writeOnly` property
