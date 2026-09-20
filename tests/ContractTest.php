@@ -1534,6 +1534,7 @@ final class ContractTest
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
             'webhooks' => [
+                'x-internal' => ['post' => ['responses' => ['204' => []]]],
                 'newPet' => [
                     'parameters' => [['name' => 'X-Signature', 'in' => 'header', 'required' => true, 'schema' => ['type' => 'string']]],
                     'post' => [
@@ -1548,7 +1549,6 @@ final class ContractTest
                     ],
                     'delete' => ['responses' => ['204' => []]],
                 ],
-                'x-internal' => ['post' => ['responses' => ['204' => []]]],
             ],
         ]);
 
@@ -1582,14 +1582,18 @@ final class ContractTest
         Assert::same($invalid->violations[2]->keyword, 'type');
         Assert::same($invalid->violations[2]->operation, 'new-pet');
 
+        // The method is read case-insensitively, and both sides' violations are kept.
         $exchange = $contract->validateWebhook(
             'newPet',
-            new ServerRequest('POST', '/ignored?token=ok', $headers, '{"id":1}'),
+            new ServerRequest('post', '/ignored', $headers, '{"id":1}'),
             new Response(200, ['Content-Type' => 'application/json'], '{"ok":"yes"}'),
         );
         Assert::same(
             array_map(static fn(Violation $v): array => [$v->code, $v->instancePath, $v->specPointer], $exchange->violations),
-            [['response.body.schema', '$.ok', '/webhooks/newPet/post/responses/200/content/application~1json/schema']],
+            [
+                ['request.parameter.missing', 'token', '/webhooks/newPet/post/parameters/0'],
+                ['response.body.schema', '$.ok', '/webhooks/newPet/post/responses/200/content/application~1json/schema'],
+            ],
         );
         Assert::same($contract->validateResponse('new-pet', new Response(500))->violations[0]->specPointer, '/webhooks/newPet/post/responses');
         Assert::true($contract->validateResponse('new-pet', new Response(200, ['Content-Type' => 'application/json'], '{"ok":true}'))->isValid());
@@ -1680,6 +1684,8 @@ final class ContractTest
         yield 'empty name' => [['' => ['post' => ['responses' => ['204' => []]]]], 'OpenAPI webhooks keys must be non-empty strings'];
         yield 'not a path item' => [['newPet' => 'post'], 'OpenAPI webhook "newPet" must be an object'];
         yield 'operation not an object' => [['newPet' => ['post' => 'yes']], 'Webhook operation at POST "newPet" must be an object'];
+        yield 'parameters not a list' => [['newPet' => ['post' => ['parameters' => 'x', 'responses' => ['204' => []]]]], 'OpenAPI parameters of webhook operation POST "newPet" must be a list'];
+        yield 'path item parameters not a list' => [['newPet' => ['parameters' => 'x', 'post' => ['responses' => ['204' => []]]]], 'OpenAPI parameters of webhook "newPet" must be a list'];
         yield 'invalid operationId' => [['newPet' => ['post' => ['operationId' => '', 'responses' => ['204' => []]]]], 'Webhook operation at POST "newPet" has an invalid operationId'];
         yield 'no operation' => [['newPet' => ['description' => 'later']], 'OpenAPI webhook "newPet" declares no operations'];
         yield 'identity shared with a path operation' => [['newPet' => ['post' => ['operationId' => 'pets.create', 'responses' => ['204' => []]]]], 'Duplicate operation identity "pets.create"'];

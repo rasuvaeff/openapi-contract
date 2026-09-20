@@ -251,6 +251,19 @@ final class ResponseValidationTest
         );
     }
 
+    public function pointsAWebhookResponseViolationUnderTheWebhooksMap(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'webhooks' => ['pet' => ['post' => ['responses' => [
+            '200' => ['content' => ['application/json' => ['schema' => ['type' => 'object', 'required' => ['ok']]]]],
+        ]]]]]);
+
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->instancePath, $v->specPointer], $contract->validateResponse('WEBHOOK POST pet', new Response(200, ['Content-Type' => 'application/json'], '{}'))->violations),
+            [['response.body.schema', '$.ok', '/webhooks/pet/post/responses/200/content/application~1json/schema']],
+        );
+        Assert::same($contract->validateResponse('WEBHOOK POST pet', new Response(404))->violations[0]->specPointer, '/webhooks/pet/post/responses');
+    }
+
     public function reportsAMissingDeclaredResponseBody(): void
     {
         $contract = $this->contract();

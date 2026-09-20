@@ -228,6 +228,8 @@ final readonly class Contract
         foreach ($operations as $operation) {
             if ($operation->method === $method) {
                 $matched = new MatchedOperation($operation, []);
+
+                break;
             }
         }
         if (!$matched instanceof MatchedOperation) {

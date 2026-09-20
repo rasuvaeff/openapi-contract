@@ -431,6 +431,31 @@ final class RequestValidationTest
         );
     }
 
+    public function namesTheDiscriminatorMemberThatNamesNoBranch(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'webhooks' => ['pet' => ['post' => [
+            'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Cat']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ]]]],
+            'responses' => ['204' => []],
+        ]]], 'components' => ['schemas' => ['Cat' => ['type' => 'object', 'required' => ['meow']]]]]);
+
+        $result = $contract->validateWebhook('pet', new ServerRequest('POST', '/', ['Content-Type' => 'application/json'], '{"kind":"Fox"}'));
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->expected, $v->specPointer, $v->message], $result->violations),
+            [[
+                '$.kind',
+                'discriminator',
+                'Fox',
+                ['discriminator' => ['propertyName' => 'kind']],
+                '/webhooks/pet/post/requestBody/content/application~1json/schema',
+                'Request body member "$.kind" is the discriminator, and its value names no branch',
+            ]],
+        );
+        Assert::same($contract->validateWebhook('pet', new ServerRequest('POST', '/'))->violations[0]->specPointer, '/webhooks/pet/post/requestBody');
+    }
+
     /**
      * The decoded forms reach the same reporting: a form field is a member
      * with a path like any other.

@@ -154,7 +154,7 @@ final class SchemaValidator
         foreach ($this->leaves($error) as $leaf) {
             // Two branches of a union that both demand the member the value
             // lacks report the same leaf twice; once says it.
-            $failures[implode("\0", [...$leaf->path, $leaf->keyword])] ??= $leaf;
+            $failures[implode('/', $leaf->path) . '#' . $leaf->keyword] ??= $leaf;
         }
 
         return array_slice(array_values($failures), 0, self::MAX_FAILURES);
@@ -227,15 +227,14 @@ final class SchemaValidator
         if ($error->keyword() === 'required') {
             /** @var mixed $missing */
             $missing = $error->args()['missing'] ?? null;
-            if (is_array($missing) && $missing !== []) {
-                $leaves = [];
-                /** @var mixed $name */
-                foreach ($missing as $name) {
-                    if (is_string($name)) {
-                        $leaves[] = new SchemaFailure(path: [...$path, $name], keyword: 'required', actual: null, expected: $expected);
-                    }
+            $leaves = [];
+            /** @var mixed $name */
+            foreach (is_array($missing) ? $missing : [] as $name) {
+                if (is_string($name)) {
+                    $leaves[] = new SchemaFailure(path: [...$path, $name], keyword: 'required', actual: null, expected: $expected);
                 }
-
+            }
+            if ($leaves !== []) {
                 return $leaves;
             }
         }
@@ -384,9 +383,10 @@ final class SchemaValidator
         if ($hash === false && !str_contains($target, '/') && preg_match('/\.(?:json|ya?ml)\z/i', $target) !== 1) {
             return 'components.schemas.' . $target;
         }
-        $fragment = $hash === false ? '' : substr($target, $hash + 1);
+        // Past the `#/`; a fragment of `#` alone, or none, names the file's root.
+        $pointer = $hash === false ? '' : substr($target, $hash + 2);
 
-        return ($hash === 0 ? '' : ':') . ($fragment === '' ? 'document' : str_replace('/', '.', ltrim($fragment, '/')));
+        return ($hash === 0 ? '' : ':') . ($pointer === '' ? 'document' : str_replace('/', '.', $pointer));
     }
 
     /**
@@ -416,15 +416,15 @@ final class SchemaValidator
     private function branchIndex(array $branches, string $name): ?int
     {
         /** @var mixed $branch */
-        foreach ($branches as $index => $branch) {
-            if (!$branch instanceof \stdClass || !is_int($index)) {
-                continue;
-            }
-            $reference = $this->branchReference($branch);
+        foreach (array_values($branches) as $index => $branch) {
+            $reference = $branch instanceof \stdClass ? $this->branchReference($branch) : null;
             if ($reference === null) {
                 continue;
             }
-            $def = str_replace(['~1', '~0'], ['/', '~'], substr($reference, strlen('#/$defs/')));
+            // Read as spelled: a component name admits neither `/` nor `~`,
+            // so the pointer escapes only ever sit in a file's display path,
+            // which a fragment comparison never reaches.
+            $def = substr($reference, strlen('#/$defs/'));
             if ($def === $name || (str_starts_with($name, ':') && str_ends_with($def, $name))) {
                 return $index;
             }

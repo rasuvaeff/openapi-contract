@@ -187,8 +187,12 @@ after their JSON Pointer (`#/components/schemas/Node` becomes
 `components.schemas.Node`, a member of another file `a.json:Node`), and the
 reference back to one is a local `{$ref: '#/$defs/…'}` carrying the
 target's `type` and `format`; the schema the cycle starts from is inlined
-where it is first met and kept as a def as well. A schema without a cycle
-has no `$defs`. A reference cycle outside a schema — a Path Item or a
+where it is first met and kept as a def as well. A `$ref` branch of a
+`oneOf`/`anyOf` that declares a `discriminator` is kept as the same local
+`$ref`, whatever its depth, so the branch keeps the component's name for
+the diagnostics to match the discriminator value against; a branch written
+inline stays inline. A schema without a cycle, a shared component or a
+discriminated union has no `$defs`. A reference cycle outside a schema — a Path Item or a
 Response that reaches itself — is refused, as is a cycle with no schema in
 it.
 

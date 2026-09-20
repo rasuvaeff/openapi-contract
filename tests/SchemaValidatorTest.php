@@ -644,6 +644,11 @@ final class SchemaValidatorTest
             array_map(static fn(SchemaFailure $failure): array => $failure->expected, $validator->failures(json_decode('{"a":-1,"list":[{}]}'), $schema, SchemaDialect::OpenApi31)),
             [['required' => ['a', 'b']], ['minimum' => 0], ['required' => ['n']]],
         );
+        // Two leaves under one member, told apart by the rest of the path.
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"a":1,"b":1,"list":[{"n":1},{"n":2}]}'), $schema, SchemaDialect::OpenApi31)),
+            [['list.0.n', 'type', 1], ['list.1.n', 'type', 2]],
+        );
         // Both branches lack the same member: once.
         Assert::same(
             $this->render($validator->failures(json_decode('{}'), ['oneOf' => [
@@ -655,6 +660,16 @@ final class SchemaValidatorTest
         $wide = $validator->failures(array_fill(0, 50, 'x'), ['type' => 'array', 'items' => ['type' => 'integer']], SchemaDialect::OpenApi31);
         Assert::same(count($wide), 20);
         Assert::same($wide[19]->path, [19]);
+        // The backend's bound is per keyword; the leaves of a tree are cut to the same count.
+        $properties = [];
+        $value = [];
+        foreach (range(0, 29) as $i) {
+            $properties['p' . $i] = ['type' => 'object', 'properties' => ['q' => ['type' => 'integer'], 'r' => ['type' => 'integer']]];
+            $value['p' . $i] = ['q' => 'x', 'r' => 'y'];
+        }
+        $deep = $validator->failures(json_decode(json_encode($value, JSON_THROW_ON_ERROR)), ['type' => 'object', 'properties' => $properties], SchemaDialect::OpenApi31);
+        Assert::same(count($deep), 20);
+        Assert::same($deep[19]->path, ['p9', 'r']);
     }
 
     /**
@@ -669,11 +684,11 @@ final class SchemaValidatorTest
     {
         $schema = [
             'oneOf' => [
+                ['type' => 'object', 'required' => ['kind', 'legs'], 'properties' => ['kind' => ['const' => 'spider'], 'legs' => ['type' => 'integer']]],
                 ['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'],
                 ['allOf' => [['$ref' => '#/$defs/components.schemas.Dog', 'type' => 'object'], ['required' => ['kind']]], 'type' => 'object'],
                 ['$ref' => '#/$defs/pets.json:components.schemas.Fish', 'type' => 'object'],
                 ['$ref' => '#/$defs/birds.json:document', 'type' => 'object'],
-                ['type' => 'object', 'required' => ['kind', 'legs'], 'properties' => ['kind' => ['const' => 'spider'], 'legs' => ['type' => 'integer']]],
             ],
             'discriminator' => $discriminator,
             '$defs' => [
@@ -697,11 +712,11 @@ final class SchemaValidatorTest
             'cat' => '#/components/schemas/Cat',
             'dog' => 'Dog',
             'fish' => 'pets.json#/components/schemas/Fish',
-            'bird' => 'birds.json',
+            'bird' => 'birds.JSON',
             'spider' => 'Spider',
         ]];
         $implicit = ['propertyName' => 'kind'];
-        $every = [['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null], ['legs', 'required', null], ['kind', 'const', 'cat']];
+        $every = [['legs', 'required', null], ['kind', 'const', 'cat'], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]];
 
         yield 'mapped by reference' => [$mapping, '{"kind":"cat","meow":3}', [['meow', 'type', 3]]];
         yield 'mapped by component name, branch in allOf form' => [$mapping, '{"kind":"dog","bark":"x"}', [['bark', 'type', 'x']]];
@@ -712,8 +727,8 @@ final class SchemaValidatorTest
         yield 'implicit component name' => [$implicit, '{"kind":"Cat","meow":3}', [['meow', 'type', 3]]];
         yield 'implicit name of no component' => [$implicit, '{"kind":"Fox","meow":3}', [['kind', 'discriminator', 'Fox']]];
         yield 'named branch accepts, another does too: the union is the failure' => [$implicit, '{"kind":"Cat","meow":"m","bark":1}', [['', 'oneOf', ['kind' => 'Cat', 'meow' => 'm', 'bark' => 1]]]];
-        yield 'no discriminator member: every branch, the shared leaf once' => [$implicit, '{"meow":3}', [['kind', 'required', null], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null], ['legs', 'required', null]]];
-        yield 'discriminator member not a string: every branch' => [$implicit, '{"kind":1,"meow":3}', [['kind', 'type', 1], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null], ['legs', 'required', null], ['kind', 'const', 1]]];
+        yield 'no discriminator member: every branch, the shared leaf once' => [$implicit, '{"meow":3}', [['kind', 'required', null], ['legs', 'required', null], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]]];
+        yield 'discriminator member not a string: every branch' => [$implicit, '{"kind":1,"meow":3}', [['legs', 'required', null], ['kind', 'const', 1], ['kind', 'type', 1], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null]]];
         yield 'no property name: every branch' => [['mapping' => ['cat' => 'Cat']], '{"kind":"cat","meow":3}', $every];
         yield 'not an object: the value itself' => [$implicit, '"cat"', [['', 'type', 'cat']]];
     }
