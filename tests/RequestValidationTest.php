@@ -379,6 +379,96 @@ final class RequestValidationTest
         Assert::same($result->violations[0]->specPointer, '/paths/~1b/post/requestBody');
     }
 
+    /**
+     * A body that fails its schema used to be one violation at `$` (#160):
+     * the reader had the whole schema and no pointer into it. Now each leaf
+     * failure names its member and the keyword it failed.
+     */
+    public function namesTheFailingBodyMemberAndKeyword(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => [
+            'type' => 'object',
+            'required' => ['name'],
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'age' => ['type' => 'integer', 'minimum' => 0],
+                'a b' => ['type' => 'string'],
+                "it's" => ['type' => 'string'],
+                'tags' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]]],
+            ],
+        ]]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"name":"x","age":-1,"a b":1,"it\'s":2,"tags":[{"n":"a"},{"n":3}]}'));
+
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->location, $v->instancePath, $v->keyword, $v->actual, $v->message], $result->violations),
+            [
+                ['request.body.schema', 'body', '$.age', 'minimum', -1, 'Request body member "$.age" does not satisfy "minimum"'],
+                ['request.body.schema', 'body', "$['a b']", 'type', 1, 'Request body member "$[\'a b\']" does not satisfy "type"'],
+                ['request.body.schema', 'body', "$['it\\'s']", 'type', 2, 'Request body member "$[\'it\\\'s\']" does not satisfy "type"'],
+                ['request.body.schema', 'body', '$.tags[1].n', 'type', 3, 'Request body member "$.tags[1].n" does not satisfy "type"'],
+            ],
+        );
+        foreach ($result->violations as $violation) {
+            Assert::same($violation->specPointer, '/paths/~1b/post/requestBody/content/application~1json/schema');
+            Assert::same($violation->expected, $contract->operations()[0]->requestBody['content']['application/json']['schema']);
+        }
+
+        $missing = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"age":1}'))->violations;
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->message], $missing),
+            [['$.name', 'required', null, 'Request body member "$.name" is required and absent']],
+        );
+        // A failure of the value itself keeps the root path and no member.
+        $root = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '[]'))->violations;
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->message], $root),
+            [['$', 'type', [], 'Request body does not satisfy "type"']],
+        );
+    }
+
+    /**
+     * The decoded forms reach the same reporting: a form field is a member
+     * with a path like any other.
+     */
+    public function namesTheFailingFormFieldOfADecodedBody(): void
+    {
+        $contract = $this->bodyContract(['application/x-www-form-urlencoded' => ['schema' => [
+            'type' => 'object',
+            'properties' => ['age' => ['type' => 'integer', 'minimum' => 0]],
+        ]]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], 'age=-1'));
+
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual], $result->violations),
+            [['$.age', 'minimum', -1]],
+        );
+        Assert::same($result->violations[0]->specPointer, '/paths/~1b/post/requestBody/content/application~1x-www-form-urlencoded/schema');
+    }
+
+    /**
+     * One violation per leaf is a diagnostic, not an inventory: a body that
+     * is wrong everywhere reports its first twenty leaves, however they nest.
+     */
+    public function boundsTheLeafFailuresOfABody(): void
+    {
+        $flat = $this->bodyContract(['application/json' => ['schema' => ['type' => 'array', 'items' => ['type' => 'integer']]]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], json_encode(array_fill(0, 50, 'x'), JSON_THROW_ON_ERROR)));
+        Assert::same(count($flat->violations), 20);
+        Assert::same($flat->violations[19]->instancePath, '$[19]');
+
+        $properties = [];
+        $body = [];
+        foreach (range(0, 29) as $i) {
+            $properties['p' . $i] = ['type' => 'object', 'properties' => ['q' => ['type' => 'integer'], 'r' => ['type' => 'integer']]];
+            $body['p' . $i] = ['q' => 'x', 'r' => 'y'];
+        }
+        $nested = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object', 'properties' => $properties]]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], json_encode($body, JSON_THROW_ON_ERROR)));
+        Assert::same(count($nested->violations), 20);
+        Assert::same($nested->violations[0]->instancePath, '$.p0.q');
+        Assert::same($nested->violations[19]->instancePath, '$.p9.r');
+    }
+
     public function validatesCookieParameters(): void
     {
         $contract = $this->paramContract(['name' => 'sid', 'in' => 'cookie', 'required' => true, 'schema' => ['type' => 'integer']]);

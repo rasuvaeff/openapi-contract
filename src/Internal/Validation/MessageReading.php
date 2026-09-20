@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\MessageInterface;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaFailure;
+use Rasuvaeff\OpenApiContract\MatchedOperation;
+use Rasuvaeff\OpenApiContract\Violation;
 
 /**
  * Message-reading helpers shared by the request and response validators:
  * body access that preserves seekable stream positions, the schema a Media
- * Type Object declares, and JSON Pointer escaping. Media type normalization
+ * Type Object declares, JSON Pointer escaping, the pointer an operation
+ * lives at, and the body violations a schema's leaf failures become. Media type normalization
  * and matching itself lives in {@see MediaType}, which the body decoders
  * share too.
  *
@@ -82,6 +86,88 @@ trait MessageReading
     private function escape(string $value): string
     {
         return str_replace(['~', '/'], ['~0', '~1'], $value);
+    }
+
+    /**
+     * The JSON Pointer of the Operation Object: under `/paths` by its path,
+     * under `/webhooks` by its name.
+     */
+    private function operationPointer(MatchedOperation $matched): string
+    {
+        $operation = $matched->operation;
+
+        return sprintf(
+            '%s/%s/%s',
+            $operation->webhook === null ? '/paths' : '/webhooks',
+            $this->escape($operation->webhook ?? $operation->path),
+            strtolower($operation->method),
+        );
+    }
+
+    /**
+     * One violation per leaf failure of a body against its schema, in the
+     * backend's order. Each names the failing member by its path and the
+     * keyword it failed; a failure of the value itself — a wrong `type` at
+     * the root, a `oneOf` no branch or two branches of accept — keeps the
+     * path `$`, and the formatter's wholesale redaction with it.
+     *
+     * @param 'Request'|'Response' $side
+     * @param array<string, mixed> $schema
+     * @param list<SchemaFailure> $failures
+     * @return list<Violation>
+     */
+    private function bodySchemaViolations(
+        string $side,
+        MatchedOperation $matched,
+        string $schemaPointer,
+        array $schema,
+        array $failures,
+    ): array {
+        $violations = [];
+        foreach ($failures as $failure) {
+            $instancePath = $this->jsonPath($failure->path);
+            $violations[] = new Violation(
+                code: strtolower($side) . '.body.schema',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: $instancePath,
+                specPointer: $schemaPointer,
+                expected: $schema,
+                actual: $failure->actual,
+                message: match (true) {
+                    $failure->keyword === 'discriminator' => sprintf('%s body member "%s" is the discriminator, and its value names no branch', $side, $instancePath),
+                    $failure->keyword === 'required' => sprintf('%s body member "%s" is required and absent', $side, $instancePath),
+                    $instancePath === '$' => sprintf('%s body does not satisfy "%s"', $side, $failure->keyword),
+                    default => sprintf('%s body member "%s" does not satisfy "%s"', $side, $instancePath, $failure->keyword),
+                },
+                keyword: $failure->keyword,
+            );
+        }
+
+        return $violations;
+    }
+
+    /**
+     * A member path as the instance path spells it: `$`, then `.name` for a
+     * member whose name is an identifier, `['name']` for any other, and
+     * `[0]` for an index — the same notation the parameter violations use.
+     *
+     * @param list<string|int> $path
+     */
+    private function jsonPath(array $path): string
+    {
+        $rendered = '$';
+        foreach ($path as $part) {
+            if (is_int($part)) {
+                $rendered .= '[' . $part . ']';
+            } elseif (preg_match('/^[A-Za-z_][A-Za-z0-9_]*\z/', $part) === 1) {
+                $rendered .= '.' . $part;
+            } else {
+                $rendered .= "['" . str_replace(['\\', "'"], ['\\\\', "\\'"], $part) . "']";
+            }
+        }
+
+        return $rendered;
     }
 
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 
 use Psr\Http\Message\RequestInterface;
-use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaFailure;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\DuplicateParameterValue;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
@@ -383,10 +382,13 @@ final readonly class RequestValidator
             return [$this->bodyViolation($matched, 'request.body.decode', $exception->getMessage())];
         }
         if ($schema !== null) {
-            $failures = $this->schemas->failures($value, $schema, $dialect);
-            if ($failures !== []) {
-                return $this->bodySchemaViolations($matched, $mediaType, $schema, $failures);
-            }
+            return $this->bodySchemaViolations(
+                'Request',
+                $matched,
+                $this->operationPointer($matched) . '/requestBody/content/' . $this->escape($mediaType) . '/schema',
+                $schema,
+                $this->schemas->failures($value, $schema, $dialect),
+            );
         }
 
         return [];
@@ -417,78 +419,11 @@ final readonly class RequestValidator
             operation: $matched->operation->key,
             location: 'body',
             instancePath: '$',
-            specPointer: sprintf(
-                '%s/%s/%s/requestBody',
-                $matched->operation->webhook === null ? '/paths' : '/webhooks',
-                $this->escape($matched->operation->webhook ?? $matched->operation->path),
-                strtolower($matched->operation->method),
-            ),
+            specPointer: $this->operationPointer($matched) . '/requestBody',
             expected: $matched->operation->requestBody,
             actual: $actual,
             message: $message,
         );
-    }
-
-    /**
-     * @param array<string, mixed> $schema
-     * @param list<SchemaFailure> $failures
-     * @return list<Violation>
-     */
-    private function bodySchemaViolations(
-        MatchedOperation $matched,
-        string $mediaType,
-        array $schema,
-        array $failures,
-    ): array {
-        $basePointer = sprintf(
-            '%s/%s/%s/requestBody/content/%s/schema',
-            $matched->operation->webhook === null ? '/paths' : '/webhooks',
-            $this->escape($matched->operation->webhook ?? $matched->operation->path),
-            strtolower($matched->operation->method),
-            $this->escape($mediaType),
-        );
-        $violations = [];
-        foreach ($failures as $failure) {
-            $instancePath = $this->jsonPath($failure->path);
-            $member = $instancePath === '$' ? '' : sprintf(' member "%s"', $instancePath);
-            $message = $member === ''
-                ? 'Request body does not match its schema'
-                : sprintf('Request body%s does not satisfy "%s"', $member, $failure->keyword);
-            $violations[] = new Violation(
-                code: 'request.body.schema',
-                operation: $matched->operation->key,
-                location: 'body',
-                instancePath: $instancePath,
-                specPointer: $basePointer,
-                expected: $schema,
-                actual: $failure->actual,
-                message: $message,
-                keyword: $failure->keyword,
-            );
-        }
-
-        return $violations;
-    }
-
-    /** @param list<string|int> $path */
-    private function jsonPath(array $path): string
-    {
-        $result = '$';
-        foreach ($path as $part) {
-            if (is_int($part)) {
-                $result .= '[' . $part . ']';
-
-                continue;
-            }
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $part) === 1) {
-                $result .= '.' . $part;
-
-                continue;
-            }
-            $result .= "['" . str_replace(['\\', "'"], ['\\\\', "\\'"], $part) . "']";
-        }
-
-        return $result;
     }
 
     /**

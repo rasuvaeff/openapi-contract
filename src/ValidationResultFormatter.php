@@ -115,17 +115,22 @@ final readonly class ValidationResultFormatter
     }
 
     /**
-     * A body is user data of unknown shape: a schema failure anywhere in it
-     * can put credentials into the rendered diagnostic, its member names are
-     * the application's rather than the document's, and the instance path is
-     * `$` for a whole-body violation, so there is nothing to inspect. Bodies
-     * stay redacted wholesale rather than guessing which field was sensitive.
+     * A body is user data of unknown shape, and a violation of the body as a
+     * whole — the instance path `$`: a wrong `type` at the root, a `oneOf`
+     * no branch of accepts, an undecodable payload — carries all of it,
+     * member names that are the application's rather than the document's,
+     * with no name to check. Such a value stays redacted wholesale rather
+     * than guessing which field was sensitive. A body violation that names
+     * its member — `$.age`, `$.user.password` — is rendered like a
+     * parameter: the name pattern decides, on the path and on the member
+     * names inside a container, so `$.age` prints `-1` and `$.password`
+     * prints `[redacted]`.
      *
-     * A cookie is redacted the same way. It is a credential carrier by
-     * definition — a session identifier is what a cookie usually is — and the
-     * name pattern cannot know what the document called the parameter:
-     * `sid` matches nothing, and the value it carried used to be printed
-     * into the message an application logs.
+     * A cookie is redacted the same way as a whole body. It is a credential
+     * carrier by definition — a session identifier is what a cookie usually
+     * is — and the name pattern cannot know what the document called the
+     * parameter: `sid` matches nothing, and the value it carried used to be
+     * printed into the message an application logs.
      *
      * Everything else is named — by the instance path when the value is a
      * scalar, and by its own keys when it is a container, both of which the

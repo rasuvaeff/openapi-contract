@@ -228,6 +228,29 @@ final class ResponseValidationTest
      * request side has always reported `request.body.missing` for the mirror
      * case.
      */
+    public function namesTheFailingResponseBodyMemberAndKeyword(): void
+    {
+        $contract = $this->contentContract(['application/json' => ['schema' => [
+            'type' => 'object',
+            'required' => ['items'],
+            'properties' => ['items' => ['type' => 'array', 'items' => ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer']]]]],
+        ]]]);
+
+        $result = $this->validateBody($contract, '{"items":[{"id":1},{"id":"x"},{}]}');
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->location, $v->instancePath, $v->keyword, $v->actual, $v->message], $result->violations),
+            [
+                ['response.body.schema', 'body', '$.items[1].id', 'type', 'x', 'Response body member "$.items[1].id" does not satisfy "type"'],
+                ['response.body.schema', 'body', '$.items[2].id', 'required', null, 'Response body member "$.items[2].id" is required and absent'],
+            ],
+        );
+        Assert::same($result->violations[0]->specPointer, '/paths/~1h/get/responses/200/content/application~1json/schema');
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->message], $this->validateBody($contract, '"text"')->violations),
+            [['$', 'type', 'Response body does not satisfy "type"']],
+        );
+    }
+
     public function reportsAMissingDeclaredResponseBody(): void
     {
         $contract = $this->contract();

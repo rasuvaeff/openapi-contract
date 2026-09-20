@@ -98,8 +98,11 @@ final readonly class Operation
      *        check a value against one of them the way the contract does
      *        ({@see SchemaCheck}). Compilation fills it from the document's
      *        `openapi` version; a hand-built operation defaults to 3.1.
-     * @param ?string $webhook the OpenAPI 3.1 webhook map key for a webhook
-     *        operation; null for ordinary path operations
+     * @param ?non-empty-string $webhook the `webhooks` map key this operation
+     *        was compiled from, and `null` for a path operation. A webhook is
+     *        a Path Item without a path: `$path` is empty, `$servers` is
+     *        empty, and no path parameter is declared. Its identity is its
+     *        `operationId` when present, otherwise `WEBHOOK <METHOD> <name>`.
      *
      * @api append-only: a minor release may add a defaulted parameter at the
      *      end; construct with named arguments.

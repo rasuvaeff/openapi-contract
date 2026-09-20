@@ -19,6 +19,7 @@ use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\MatchedOperation;
+use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
 use Rasuvaeff\OpenApiContract\UnsupportedVersion;
@@ -1524,12 +1525,17 @@ final class ContractTest
         ];
     }
 
+    /**
+     * A webhook is a Path Item without a path (#158): compiled from the 3.1
+     * `webhooks` map, validated by name, absent from matching.
+     */
     public function compilesAndValidatesWebhookOperations(): void
     {
         $contract = Contract::fromArray([
             'openapi' => '3.1.0',
             'webhooks' => [
                 'newPet' => [
+                    'parameters' => [['name' => 'X-Signature', 'in' => 'header', 'required' => true, 'schema' => ['type' => 'string']]],
                     'post' => [
                         'operationId' => 'new-pet',
                         'parameters' => [['name' => 'token', 'in' => 'query', 'required' => true, 'schema' => ['type' => 'string']]],
@@ -1538,26 +1544,82 @@ final class ContractTest
                             'required' => ['id'],
                             'properties' => ['id' => ['type' => 'integer']],
                         ]]]],
-                        'responses' => ['200' => []],
+                        'responses' => ['200' => ['content' => ['application/json' => ['schema' => ['type' => 'object', 'required' => ['ok'], 'properties' => ['ok' => ['type' => 'boolean']]]]]]],
                     ],
+                    'delete' => ['responses' => ['204' => []]],
                 ],
+                'x-internal' => ['post' => ['responses' => ['204' => []]]],
             ],
         ]);
 
         Assert::same($contract->operations(), []);
         Assert::same(array_keys($contract->webhooks()), ['newPet']);
-        Assert::same($contract->webhooks()['newPet'][0]->key, 'new-pet');
-        Assert::true($contract->validateWebhook(
-            'newPet',
-            new ServerRequest('POST', '/ignored?token=ok', ['Content-Type' => 'application/json'], '{"id":1}'),
-        )->isValid());
-        $invalid = $contract->validateWebhook(
-            'newPet',
-            new ServerRequest('POST', '/ignored?token=ok', ['Content-Type' => 'application/json'], '{"id":"bad"}'),
+        Assert::same(
+            array_map(static fn(Operation $operation): string => $operation->key, $contract->webhooks()['newPet']),
+            ['new-pet', 'WEBHOOK DELETE newPet'],
         );
-        Assert::same($invalid->violations[0]->instancePath, '$.id');
-        Assert::same($invalid->violations[0]->keyword, 'type');
-        Assert::same($invalid->violations[0]->specPointer, '/webhooks/newPet/post/requestBody/content/application~1json/schema');
+        $operation = $contract->operation('new-pet');
+        Assert::same($operation->webhook, 'newPet');
+        Assert::same($operation->path, '');
+        Assert::same($operation->servers, []);
+        Assert::same($contract->operation('WEBHOOK DELETE newPet')->webhook, 'newPet');
+        Assert::null($contract->match(new ServerRequest('POST', '/newPet')));
+        Assert::same($contract->validateRequest(new ServerRequest('POST', '/newPet'))->violations[0]->code, 'request.operation.unknown');
+
+        $headers = ['Content-Type' => 'application/json', 'X-Signature' => 'sig'];
+        Assert::true($contract->validateWebhook('newPet', new ServerRequest('POST', '/ignored?token=ok', $headers, '{"id":1}'))->isValid());
+        Assert::true($contract->validateWebhook('newPet', new ServerRequest('DELETE', 'https://receiver.example/any/where', ['X-Signature' => 'sig']))->isValid());
+
+        $invalid = $contract->validateWebhook('newPet', new ServerRequest('POST', '/ignored', ['Content-Type' => 'application/json'], '{"id":"bad"}'));
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->location, $v->instancePath, $v->specPointer], $invalid->violations),
+            [
+                ['request.parameter.missing', 'header', 'X-Signature', '/webhooks/newPet/parameters/0'],
+                ['request.parameter.missing', 'query', 'token', '/webhooks/newPet/post/parameters/0'],
+                ['request.body.schema', 'body', '$.id', '/webhooks/newPet/post/requestBody/content/application~1json/schema'],
+            ],
+        );
+        Assert::same($invalid->violations[2]->keyword, 'type');
+        Assert::same($invalid->violations[2]->operation, 'new-pet');
+
+        $exchange = $contract->validateWebhook(
+            'newPet',
+            new ServerRequest('POST', '/ignored?token=ok', $headers, '{"id":1}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"ok":"yes"}'),
+        );
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->instancePath, $v->specPointer], $exchange->violations),
+            [['response.body.schema', '$.ok', '/webhooks/newPet/post/responses/200/content/application~1json/schema']],
+        );
+        Assert::same($contract->validateResponse('new-pet', new Response(500))->violations[0]->specPointer, '/webhooks/newPet/post/responses');
+        Assert::true($contract->validateResponse('new-pet', new Response(200, ['Content-Type' => 'application/json'], '{"ok":true}'))->isValid());
+    }
+
+    public function reportsAWebhookTheDocumentDoesNotDeclare(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/pets' => ['get' => ['responses' => ['200' => []]]]],
+            'webhooks' => ['newPet' => ['post' => ['responses' => ['204' => []]]]],
+        ]);
+
+        Assert::same(count($contract->operations()), 1);
+        Assert::same($contract->operations()[0]->webhook, null);
+        foreach ([
+            ['oldPet', 'POST', 'Webhook "oldPet" is not present in the OpenAPI document'],
+            ['newPet', 'GET', 'Webhook "newPet" declares no operation for method GET'],
+        ] as [$name, $method, $message]) {
+            $result = $contract->validateWebhook($name, new ServerRequest($method, '/x'), new Response(204));
+            Assert::same(count($result->violations), 1);
+            $violation = $result->violations[0];
+            Assert::same($violation->code, 'request.operation.unknown');
+            Assert::same($violation->operation, 'unknown');
+            Assert::same($violation->location, 'request');
+            Assert::same($violation->instancePath, '$');
+            Assert::same($violation->specPointer, '/webhooks');
+            Assert::same($violation->actual, $method . ' ' . $name);
+            Assert::same($violation->message, $message);
+        }
     }
 
     public function refusesAWebhookInAnOpenApi30Document(): void
@@ -1574,48 +1636,155 @@ final class ContractTest
         }
     }
 
+    /**
+     * A 3.1 document may legally declare only `components`. Refusing it is
+     * right — nothing is declared for a validator to check — but the message
+     * should say that, not that the document is malformed.
+     */
+    public function saysWhyADocumentWithNeitherPathsNorWebhooksIsRefused(): void
+    {
+        $message = 'OpenAPI document must contain a non-empty paths or webhooks object: this package validates '
+            . 'path and webhook operations, and a document declaring only components has none';
+        foreach ([
+            ['openapi' => '3.1.0', 'components' => ['schemas' => ['Pet' => ['type' => 'object']]]],
+            ['openapi' => '3.1.0', 'paths' => [], 'webhooks' => []],
+        ] as $document) {
+            try {
+                Contract::fromArray($document);
+                Assert::true(actual: false);
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), $message);
+            }
+        }
+    }
+
+    #[DataProvider('malformedWebhooksProvider')]
+    public function refusesAMalformedWebhooksMap(array $webhooks, string $message): void
+    {
+        try {
+            Contract::fromArray([
+                'openapi' => '3.1.0',
+                'paths' => ['/pets' => ['post' => ['operationId' => 'pets.create', 'responses' => ['201' => []]]]],
+                'webhooks' => $webhooks,
+            ]);
+            Assert::true(actual: false);
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), $message);
+        }
+    }
+
+    /** @return iterable<string, array{array<array-key, mixed>|string, string}> */
+    public static function malformedWebhooksProvider(): iterable
+    {
+        yield 'not an object' => [['post'], 'OpenAPI webhooks keys must be non-empty strings'];
+        yield 'empty name' => [['' => ['post' => ['responses' => ['204' => []]]]], 'OpenAPI webhooks keys must be non-empty strings'];
+        yield 'not a path item' => [['newPet' => 'post'], 'OpenAPI webhook "newPet" must be an object'];
+        yield 'operation not an object' => [['newPet' => ['post' => 'yes']], 'Webhook operation at POST "newPet" must be an object'];
+        yield 'invalid operationId' => [['newPet' => ['post' => ['operationId' => '', 'responses' => ['204' => []]]]], 'Webhook operation at POST "newPet" has an invalid operationId'];
+        yield 'no operation' => [['newPet' => ['description' => 'later']], 'OpenAPI webhook "newPet" declares no operations'];
+        yield 'identity shared with a path operation' => [['newPet' => ['post' => ['operationId' => 'pets.create', 'responses' => ['204' => []]]]], 'Duplicate operation identity "pets.create"'];
+        yield 'identity shared between webhooks' => [
+            [
+                'a' => ['post' => ['operationId' => 'same', 'responses' => ['204' => []]]],
+                'b' => ['post' => ['operationId' => 'same', 'responses' => ['204' => []]]],
+            ],
+            'Duplicate operation identity "same"',
+        ];
+        yield 'path parameter' => [
+            ['newPet' => ['post' => ['parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]], 'responses' => ['204' => []]]]],
+            'Webhook "newPet" declares path parameter "id", but a webhook has no path',
+        ];
+        yield 'path parameter on the path item' => [
+            ['newPet' => ['parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]], 'post' => ['responses' => ['204' => []]]]],
+            'Webhook "newPet" declares path parameter "id", but a webhook has no path',
+        ];
+    }
+
+    public function refusesPathsAndWebhooksThatAreNotObjects(): void
+    {
+        foreach ([
+            [['openapi' => '3.1.0', 'paths' => 'none'], 'OpenAPI paths must be an object'],
+            [['openapi' => '3.1.0', 'webhooks' => 'none'], 'OpenAPI webhooks must be an object'],
+        ] as [$document, $message]) {
+            try {
+                Contract::fromArray($document);
+                Assert::true(actual: false);
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), $message);
+            }
+        }
+    }
+
+    /**
+     * The discriminator names one branch, and the diagnostics follow it
+     * (#160): the errors of the branch the value was meant for, or the
+     * fact that the value names none. The verdict is the backend's — every
+     * branch is still evaluated.
+     */
     public function routesBodyDiagnosticsThroughItsDiscriminatorBranch(): void
     {
-        $contract = Contract::fromArray([
-            'openapi' => '3.1.0',
-            'paths' => ['/events' => ['post' => [
-                'operationId' => 'events.receive',
-                'requestBody' => ['content' => ['application/json' => ['schema' => [
-                    'oneOf' => [
-                        ['$ref' => '#/components/schemas/Cat'],
-                        ['$ref' => '#/components/schemas/Dog'],
-                    ],
-                    'discriminator' => [
-                        'propertyName' => 'kind',
-                        'mapping' => [
-                            'cat' => '#/components/schemas/Cat',
-                            'dog' => '#/components/schemas/Dog',
-                        ],
-                    ],
-                ]]]],
-                'responses' => ['204' => []],
-            ]]],
-            'components' => ['schemas' => [
-                'Cat' => ['type' => 'object', 'required' => ['kind', 'meow'], 'properties' => [
-                    'kind' => ['const' => 'cat'],
-                    'meow' => ['type' => 'string'],
-                ]],
-                'Dog' => ['type' => 'object', 'required' => ['kind', 'bark'], 'properties' => [
-                    'kind' => ['const' => 'dog'],
-                    'bark' => ['type' => 'integer'],
-                ]],
+        $pets = [
+            'Cat' => ['type' => 'object', 'required' => ['kind', 'meow'], 'properties' => [
+                'kind' => ['type' => 'string'],
+                'meow' => ['type' => 'string'],
             ]],
-        ]);
+            'Dog' => ['type' => 'object', 'required' => ['kind', 'bark'], 'properties' => [
+                'kind' => ['type' => 'string'],
+                'bark' => ['type' => 'integer'],
+            ]],
+        ];
+        foreach (['3.1.0', '3.0.3'] as $version) {
+            $contract = Contract::fromArray([
+                'openapi' => $version,
+                'paths' => ['/events' => ['post' => [
+                    'operationId' => 'events.receive',
+                    'requestBody' => ['content' => ['application/json' => ['schema' => [
+                        'oneOf' => [
+                            ['$ref' => '#/components/schemas/Cat'],
+                            ['$ref' => '#/components/schemas/Dog'],
+                        ],
+                        'discriminator' => [
+                            'propertyName' => 'kind',
+                            'mapping' => ['cat' => '#/components/schemas/Cat', 'dog' => 'Dog'],
+                        ],
+                    ]]]],
+                    'responses' => ['204' => []],
+                ]]],
+                'components' => ['schemas' => $pets],
+            ]);
+            $validate = static fn(string $body): array => array_map(
+                static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->message],
+                $contract->validateRequest(new ServerRequest('POST', '/events', ['Content-Type' => 'application/json'], $body))->violations,
+            );
 
-        $result = $contract->validateRequest(new ServerRequest(
-            'POST',
-            '/events',
-            ['Content-Type' => 'application/json'],
-            '{"kind":"cat","meow":3}',
-        ));
-        Assert::same(count($result->violations), 1);
-        Assert::same($result->violations[0]->instancePath, '$.meow');
-        Assert::same($result->violations[0]->keyword, 'type');
+            Assert::same($validate('{"kind":"cat","meow":"m"}'), []);
+            Assert::same($validate('{"kind":"cat","meow":3}'), [['$.meow', 'type', 'Request body member "$.meow" does not satisfy "type"']]);
+            Assert::same($validate('{"kind":"dog"}'), [['$.bark', 'required', 'Request body member "$.bark" is required and absent']]);
+            Assert::same(
+                $validate('{"kind":"fox","bark":"x"}'),
+                [['$.kind', 'discriminator', 'Request body member "$.kind" is the discriminator, and its value names no branch']],
+            );
+            // No discriminator value to follow: every branch's leaves, each once.
+            Assert::same(
+                $validate('{"meow":3}'),
+                [
+                    ['$.kind', 'required', 'Request body member "$.kind" is required and absent'],
+                    ['$.meow', 'type', 'Request body member "$.meow" does not satisfy "type"'],
+                    ['$.bark', 'required', 'Request body member "$.bark" is required and absent'],
+                ],
+            );
+            // The compiled branches keep the component's name, which is what
+            // the value is matched against.
+            $schema = $contract->operation('events.receive')->requestBody['content']['application/json']['schema'];
+            Assert::same(
+                $schema['oneOf'],
+                [
+                    ['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object'],
+                    ['$ref' => '#/$defs/components.schemas.Dog', 'type' => 'object'],
+                ],
+            );
+            Assert::same(array_keys($schema['$defs']), ['components.schemas.Cat', 'components.schemas.Dog']);
+        }
     }
 
     public function rejectsMalformedResponseContentAndSchemaKeys(): void

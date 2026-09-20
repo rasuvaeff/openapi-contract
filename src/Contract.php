@@ -179,7 +179,16 @@ final readonly class Contract
         return $this->operations;
     }
 
-    /** @return array<string, list<Operation>> */
+    /**
+     * The operations compiled from the document's `webhooks` map, keyed by
+     * webhook name, in document order — one per method the Path Item
+     * declares. They are not in {@see operations()}: nothing in a request
+     * URI names a webhook, so {@see match()} never returns one; they are in
+     * {@see operation()} by their key, so {@see validateResponse()} judges
+     * what the receiver answered.
+     *
+     * @return array<string, list<Operation>>
+     */
     public function webhooks(): array
     {
         return $this->webhooks;
@@ -201,33 +210,48 @@ final readonly class Contract
         return $this->byKey[$key] ?? throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
     }
 
-    public function validateWebhook(string $name, RequestInterface $request): ValidationResult
+    /**
+     * Validates a webhook delivery against the operation the document
+     * declares for it under `webhooks.<name>` and the request's method, and
+     * — when the receiver's answer is given — the response as
+     * {@see validateExchange()} would. There is no matching: the receiver
+     * knows which webhook it is handling, and the request URI is its own.
+     */
+    public function validateWebhook(string $name, RequestInterface $request, ?ResponseInterface $response = null): ValidationResult
     {
         $operations = $this->webhooks[$name] ?? null;
-        if ($operations === null) {
-            return $this->unknownWebhook($name, $request);
-        }
         $method = strtoupper($request->getMethod());
+        if ($operations === null) {
+            return $this->unknownWebhook($name, $method, sprintf('Webhook "%s" is not present in the OpenAPI document', $name));
+        }
+        $matched = null;
         foreach ($operations as $operation) {
             if ($operation->method === $method) {
-                return $this->requests->validate(new MatchedOperation($operation, []), $request, $this->dialect);
+                $matched = new MatchedOperation($operation, []);
             }
         }
+        if (!$matched instanceof MatchedOperation) {
+            return $this->unknownWebhook($name, $method, sprintf('Webhook "%s" declares no operation for method %s', $name, $method));
+        }
+        $result = $this->requests->validate($matched, $request, $this->dialect);
+        if (!$response instanceof ResponseInterface) {
+            return $result;
+        }
 
-        return $this->unknownWebhook($name, $request);
+        return new ValidationResult([...$result->violations, ...$this->responses->validate($matched, $response, $this->dialect)->violations]);
     }
 
-    private function unknownWebhook(string $name, RequestInterface $request): ValidationResult
+    private function unknownWebhook(string $name, string $method, string $message): ValidationResult
     {
         return new ValidationResult([new Violation(
             code: 'request.operation.unknown',
-            operation: $name,
+            operation: 'unknown',
             location: 'request',
             instancePath: '$',
             specPointer: '/webhooks',
             expected: 'declared webhook operation',
-            actual: strtoupper($request->getMethod()) . ' ' . $name,
-            message: sprintf('Webhook "%s" has no operation for method %s', $name, strtoupper($request->getMethod())),
+            actual: $method . ' ' . $name,
+            message: $message,
         )]);
     }
 
