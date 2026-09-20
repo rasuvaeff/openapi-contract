@@ -33,6 +33,9 @@ final readonly class ValidationResultFormatter
             $lines[] = '   location: ' . $this->field($violation->location);
             $lines[] = '   instancePath: ' . $this->field($violation->instancePath);
             $lines[] = '   specPointer: ' . $this->field($violation->specPointer);
+            if ($violation->keyword !== null) {
+                $lines[] = '   keyword: ' . $this->field($violation->keyword);
+            }
             $lines[] = '   expected: ' . $this->value($violation->expected);
             $lines[] = '   actual: ' . ($this->redactsActual($violation) ? $this->value(self::REDACTED) : $this->value($violation->actual, maskNames: true));
             $lines[] = '   message: ' . $this->field($violation->message);
@@ -134,7 +137,7 @@ final readonly class ValidationResultFormatter
      */
     private function redactsActual(Violation $violation): bool
     {
-        if ($violation->location === 'body' || $violation->location === 'cookie') {
+        if (($violation->location === 'body' && $violation->instancePath === '$') || $violation->location === 'cookie') {
             return true;
         }
 

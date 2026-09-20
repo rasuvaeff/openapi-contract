@@ -62,7 +62,18 @@ final readonly class DocumentCompiler
         }
         $dialect = str_starts_with($version, '3.0.') ? SchemaDialect::OpenApi30 : SchemaDialect::OpenApi31;
         $this->assertDocumentDialect($document, $dialect);
-        if (!isset($document['paths']) || !is_array($document['paths']) || $document['paths'] === []) {
+        if ($dialect === SchemaDialect::OpenApi30 && array_key_exists('webhooks', $document)) {
+            throw new InvalidContract('OpenAPI 3.0 does not support a webhooks object');
+        }
+        if (array_key_exists('paths', $document) && !is_array($document['paths'])) {
+            throw new InvalidContract('OpenAPI paths must be an object');
+        }
+        if (array_key_exists('webhooks', $document) && !is_array($document['webhooks'])) {
+            throw new InvalidContract('OpenAPI webhooks must be an object');
+        }
+        $paths = $document['paths'] ?? [];
+        $rawWebhooks = $document['webhooks'] ?? [];
+        if (($paths === [] || !is_array($paths)) && ($rawWebhooks === [] || !is_array($rawWebhooks))) {
             // A 3.1 document may legally carry only `webhooks` or `components`
             // — it is the *validator* that has nothing to work with, not the
             // document that is malformed, and the message should say which.
@@ -81,7 +92,6 @@ final readonly class DocumentCompiler
             : [];
         $operations = [];
         $templates = [];
-        $paths = $document['paths'];
         /** @var mixed $pathItem */
         foreach ($paths as $path => $pathItem) {
             if (!is_string($path)) {
@@ -161,7 +171,75 @@ final readonly class DocumentCompiler
             }
         }
 
-        if ($operations === []) {
+        /** @var array<string, list<Operation>> $webhooks */
+        $webhooks = [];
+        /** @var mixed $rawWebhook */
+        foreach ($rawWebhooks as $name => $rawWebhook) {
+            if (!is_string($name) || $name === '') {
+                throw new InvalidContract('OpenAPI webhook names must be non-empty strings');
+            }
+            if (!is_array($rawWebhook)) {
+                throw new InvalidContract(sprintf('OpenAPI webhook "%s" must be an object', $name));
+            }
+            /** @var array<array-key, mixed> $rawWebhook */
+            $webhook = $resolver->resolve($rawWebhook);
+            $webhookParameters = $this->parameterList($webhook['parameters'] ?? null, sprintf('webhook "%s"', $name));
+            $webhooks[$name] = [];
+            foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
+                if (!array_key_exists($method, $webhook)) {
+                    continue;
+                }
+                $raw = $webhook[$method];
+                if (!is_array($raw)) {
+                    throw new InvalidContract(sprintf('Webhook operation at %s %s must be an object', strtoupper($method), $name));
+                }
+                /** @var array<array-key, mixed> $raw */
+                /** @var mixed $operationIdValue */
+                $operationIdValue = $raw['operationId'] ?? null;
+                if ($operationIdValue === null) {
+                    $operationId = null;
+                } elseif (is_string($operationIdValue) && $operationIdValue !== '') {
+                    $operationId = $operationIdValue;
+                } else {
+                    throw new InvalidContract(sprintf('Webhook operation at %s %s has an invalid operationId', strtoupper($method), $name));
+                }
+                $key = $operationId ?? 'WEBHOOK ' . strtoupper($method) . ' ' . $name;
+                if (isset($operations[$key])) {
+                    throw new InvalidContract(sprintf('Duplicate operation identity "%s"', $key));
+                }
+                foreach ($webhooks as $otherName => $otherOperations) {
+                    foreach ($otherOperations as $otherOperation) {
+                        if ($otherOperation->key === $key) {
+                            throw new InvalidContract(sprintf('Duplicate operation identity "%s"', $key));
+                        }
+                    }
+                }
+                $where = sprintf('webhook %s %s', strtoupper($method), $name);
+                $rawParameters = $this->parameterList($raw['parameters'] ?? null, $where);
+                $parameters = $this->parameters($webhookParameters, $rawParameters, $resolver, $name, $method, container: 'webhooks');
+                $this->assertPathParameters($name, $parameters);
+                $webhooks[$name][] = new Operation(
+                    key: $key,
+                    operationId: $operationId,
+                    method: strtoupper($method),
+                    path: '',
+                    parameters: $parameters,
+                    requestBody: $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
+                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
+                    security: array_key_exists('security', $raw)
+                        ? $this->securityRequirements($raw['security'], $schemeNames)
+                        : $rootSecurity,
+                    servers: [],
+                    dialect: $dialect,
+                    webhook: $name,
+                );
+            }
+            if ($webhooks[$name] === []) {
+                throw new InvalidContract(sprintf('OpenAPI webhook "%s" declares no operations', $name));
+            }
+        }
+
+        if ($operations === [] && $webhooks === []) {
             // `paths` was non-empty, so the document meant to declare
             // something. A contract with no operation answers `UnknownOperation`
             // to every request, which reads as "this request is wrong" when what
@@ -169,7 +247,12 @@ final readonly class DocumentCompiler
             throw new InvalidContract('OpenAPI document declares no operations');
         }
 
-        return new CompiledDocument(dialect: $dialect, operations: array_values($operations), securitySchemes: $securitySchemes);
+        return new CompiledDocument(
+            dialect: $dialect,
+            operations: array_values($operations),
+            webhooks: $webhooks,
+            securitySchemes: $securitySchemes,
+        );
     }
 
     /** @param array<string, mixed> $document */
@@ -306,19 +389,25 @@ final readonly class DocumentCompiler
      * @param array<array-key, mixed> $operation
      * @return list<CompiledParameter>
      */
-    private function parameters(array $path, array $operation, JsonPointerResolver $resolver, string $pathString, string $method): array
-    {
+    private function parameters(
+        array $path,
+        array $operation,
+        JsonPointerResolver $resolver,
+        string $pathString,
+        string $method,
+        string $container = 'paths',
+    ): array {
         // A Path Item's parameters and an Operation's are merged for lookup,
         // but they live at different pointers; the merged position is not one
         // a reader can find in their document.
         $sources = [
             [
-                sprintf('/paths/%s/parameters', $this->escapePointer($pathString)),
+                sprintf('/%s/%s/parameters', $container, $this->escapePointer($pathString)),
                 sprintf('path item "%s"', $pathString),
                 array_values($path),
             ],
             [
-                sprintf('/paths/%s/%s/parameters', $this->escapePointer($pathString), $method),
+                sprintf('/%s/%s/%s/parameters', $container, $this->escapePointer($pathString), $method),
                 sprintf('operation %s %s', strtoupper($method), $pathString),
                 array_values($operation),
             ],

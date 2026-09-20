@@ -306,7 +306,7 @@ $diagnostics = (new ValidationResultFormatter())->format($result);
 
 foreach ($result->violations as $violation) {
     // Violation: code, operation, location, instancePath, specPointer,
-    // expected, actual, message
+    // expected, actual, message, keyword
 }
 ```
 

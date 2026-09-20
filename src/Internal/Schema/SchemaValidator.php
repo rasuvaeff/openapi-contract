@@ -110,16 +110,145 @@ final class SchemaValidator
      */
     public function isValid(mixed $value, array $schema, SchemaDialect $dialect, SchemaDirection $direction = SchemaDirection::Request): bool
     {
+        return $this->validationError($value, $schema, $dialect, $direction) === null;
+    }
+
+    /**
+     * Returns bounded leaf failures without exposing the validation backend.
+     *
+     * @param array<string, mixed> $schema
+     * @return list<SchemaFailure>
+     */
+    public function failures(
+        mixed $value,
+        array $schema,
+        SchemaDialect $dialect,
+        SchemaDirection $direction = SchemaDirection::Request,
+    ): array {
+        $error = $this->validationError($value, $schema, $dialect, $direction);
+        if (!$error instanceof ValidationError) {
+            return [];
+        }
+
+        return $this->leaves($error);
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     */
+    private function validationError(
+        mixed $value,
+        array $schema,
+        SchemaDialect $dialect,
+        SchemaDirection $direction,
+    ): ?ValidationError {
         $compiled = $this->compiledSchema($schema, $dialect, $direction);
 
         try {
-            return !$this->validator->schemaValidation($value, $compiled) instanceof ValidationError;
+            $error = $this->validator->schemaValidation($value, $compiled);
         } catch (\Throwable $exception) {
             // Backends are implementation details: a document the compiler
             // accepted but the backend chokes on leaves as a package type, on
             // the exit `compile()` above already uses.
             throw UnsupportedSchema::fromBackend($exception);
         }
+
+        return $error instanceof ValidationError ? $error : null;
+    }
+
+    /** @return list<SchemaFailure> */
+    private function leaves(ValidationError $error): array
+    {
+        $children = $this->discriminatorChildren($error) ?? $error->subErrors();
+        if ($children === []) {
+            /** @var list<string|int> $path */
+            $path = array_values($error->data()->fullPath());
+
+            return [new SchemaFailure(
+                path: $path,
+                keyword: $error->keyword(),
+                actual: $error->data()->value(),
+                message: $error->message(),
+            )];
+        }
+
+        $leaves = [];
+        foreach ($children as $child) {
+            $leaves = [...$leaves, ...$this->leaves($child)];
+        }
+
+        return $leaves;
+    }
+
+    /**
+     * A discriminator is an OpenAPI annotation, so the JSON Schema backend
+     * evaluates every branch and reports every branch error. When the
+     * discriminator identifies one branch, diagnostics should follow that
+     * branch instead of making the reader sift through unrelated failures.
+     *
+     * @return null|list<ValidationError>
+     */
+    private function discriminatorChildren(ValidationError $error): ?array
+    {
+        if (!in_array($error->keyword(), ['oneOf', 'anyOf'], strict: true)) {
+            return null;
+        }
+        $data = $error->schema()->info()->data();
+        if (!$data instanceof \stdClass || !isset($data->discriminator) || !is_object($data->discriminator)) {
+            return null;
+        }
+        $propertyName = $data->discriminator->propertyName ?? null;
+        if (!is_string($propertyName) || $propertyName === '') {
+            return null;
+        }
+        $value = $error->data()->value();
+        if ($value instanceof \stdClass) {
+            $value = get_object_vars($value);
+        }
+        if (!is_array($value) || !array_key_exists($propertyName, $value) || !is_string($value[$propertyName])) {
+            return null;
+        }
+        $discriminatorValue = $value[$propertyName];
+        $mapping = $data->discriminator->mapping ?? null;
+        $mappingTarget = is_object($mapping) && isset($mapping->{$discriminatorValue}) && is_string($mapping->{$discriminatorValue})
+            ? $mapping->{$discriminatorValue}
+            : null;
+        $branches = $data->{$error->keyword()} ?? null;
+        if (!is_array($branches)) {
+            return null;
+        }
+        $branchIndex = null;
+        foreach ($branches as $index => $branch) {
+            if (!is_object($branch)) {
+                continue;
+            }
+            $reference = $branch->{'$ref'} ?? null;
+            $name = is_string($reference) ? substr($reference, strrpos($reference, '/') + 1) : null;
+            $branchValue = null;
+            if (isset($branch->properties) && is_object($branch->properties) && isset($branch->properties->{$propertyName}) && is_object($branch->properties->{$propertyName})) {
+                $branchValue = $branch->properties->{$propertyName}->const ?? null;
+            }
+            if (($mappingTarget !== null && $reference === $mappingTarget)
+                || ($mappingTarget === null && $name === $discriminatorValue)
+                || $branchValue === $discriminatorValue
+            ) {
+                $branchIndex = (int) $index;
+
+                break;
+            }
+        }
+        if ($branchIndex === null) {
+            return null;
+        }
+        foreach ($error->subErrors() as $child) {
+            foreach ($child->schema()->info()->path() as $part) {
+                if ($part === $branchIndex) {
+                    return [$child];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

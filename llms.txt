@@ -300,7 +300,7 @@ API reference:
 - `Violation` (readonly): `code` (stable, e.g. `request.parameter.missing`,
   `response.body.schema`), `operation`, `location`, `instancePath`,
   `specPointer` (JSON Pointer into the document), `expected`, `actual`
-  (bounded), `message`.
+  (bounded), `message`, optional `keyword`.
 - Violation codes (complete set; the code is the stable contract, the
   formatter's message text is a diagnostic that may be reworded):
   `request.operation.unknown`, `request.server.mismatch`,

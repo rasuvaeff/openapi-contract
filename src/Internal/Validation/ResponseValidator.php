@@ -7,6 +7,7 @@ namespace Rasuvaeff\OpenApiContract\Internal\Validation;
 use Psr\Http\Message\ResponseInterface;
 use Rasuvaeff\OpenApiContract\Internal\Response\ResponseSelector;
 use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
+use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaFailure;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterCodec;
 use Rasuvaeff\OpenApiContract\Internal\Serialization\ParameterKind;
@@ -57,7 +58,7 @@ final readonly class ResponseValidator
                 operation: $matched->operation->key,
                 location: 'status',
                 instancePath: '$',
-                specPointer: sprintf('/paths/%s/%s/responses', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+                specPointer: $this->responsesPointer($matched),
                 expected: 'HTTP status between 100 and 599',
                 actual: $status,
                 message: sprintf('Response status %d is not a valid HTTP status code', $status),
@@ -70,7 +71,7 @@ final readonly class ResponseValidator
                 operation: $matched->operation->key,
                 location: 'status',
                 instancePath: '$',
-                specPointer: sprintf('/paths/%s/%s/responses', $this->escape($matched->operation->path), strtolower($matched->operation->method)),
+                specPointer: $this->responsesPointer($matched),
                 expected: array_keys($matched->operation->responses),
                 actual: $response->getStatusCode(),
                 message: sprintf('Response status %d is not declared', $response->getStatusCode()),
@@ -80,8 +81,9 @@ final readonly class ResponseValidator
         $definition = $selected->definition;
         $violations = [];
         $basePointer = sprintf(
-            '/paths/%s/%s/responses/%s',
-            $this->escape($matched->operation->path),
+            '%s/%s/%s/responses/%s',
+            $matched->operation->webhook === null ? '/paths' : '/webhooks',
+            $this->escape($matched->operation->webhook ?? $matched->operation->path),
             strtolower($matched->operation->method),
             $this->escape($selected->key),
         );
@@ -207,20 +209,24 @@ final readonly class ResponseValidator
         // side can make sense of is a contract error in both, where it used to
         // raise here and pass silently there.
         $schema = $this->values->schema($schemaValue);
-        $schemaValid = $schema === null
-            ? !$this->declaresNothingValid($mediaDefinition)
-            : $this->schemas->isValid($value, $schema, $dialect, direction: SchemaDirection::Response);
-        if (!$schemaValid) {
-            $violations[] = new Violation(
-                code: 'response.body.schema',
-                operation: $matched->operation->key,
-                location: 'body',
-                instancePath: '$',
-                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
-                expected: $schema,
-                actual: $value,
-                message: 'Response body does not match its schema',
-            );
+        if ($schema === null) {
+            if ($this->declaresNothingValid($mediaDefinition)) {
+                $violations[] = new Violation(
+                    code: 'response.body.schema',
+                    operation: $matched->operation->key,
+                    location: 'body',
+                    instancePath: '$',
+                    specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                    expected: $schema,
+                    actual: $value,
+                    message: 'Response body does not match its schema',
+                );
+            }
+        } else {
+            $failures = $this->schemas->failures($value, $schema, $dialect, direction: SchemaDirection::Response);
+            if ($failures !== []) {
+                $violations = [...$violations, ...$this->bodySchemaViolations($matched, $mediaType, $schema, $failures, $basePointer)];
+            }
         }
 
         return new ValidationResult($violations);
@@ -326,6 +332,72 @@ final readonly class ResponseValidator
                 message: 'Response body does not match its schema',
             )],
         };
+    }
+
+    /**
+     * @param array<string, mixed> $schema
+     * @param list<SchemaFailure> $failures
+     * @return list<Violation>
+     */
+    private function bodySchemaViolations(
+        MatchedOperation $matched,
+        string $mediaType,
+        array $schema,
+        array $failures,
+        string $basePointer,
+    ): array {
+        $violations = [];
+        foreach ($failures as $failure) {
+            $instancePath = $this->jsonPath($failure->path);
+            $member = $instancePath === '$' ? '' : sprintf(' member "%s"', $instancePath);
+            $message = $member === ''
+                ? 'Response body does not match its schema'
+                : sprintf('Response body%s does not satisfy "%s"', $member, $failure->keyword);
+            $violations[] = new Violation(
+                code: 'response.body.schema',
+                operation: $matched->operation->key,
+                location: 'body',
+                instancePath: $instancePath,
+                specPointer: $basePointer . '/content/' . $this->escape($mediaType) . '/schema',
+                expected: $schema,
+                actual: $failure->actual,
+                message: $message,
+                keyword: $failure->keyword,
+            );
+        }
+
+        return $violations;
+    }
+
+    /** @param list<string|int> $path */
+    private function jsonPath(array $path): string
+    {
+        $result = '$';
+        foreach ($path as $part) {
+            if (is_int($part)) {
+                $result .= '[' . $part . ']';
+
+                continue;
+            }
+            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $part) === 1) {
+                $result .= '.' . $part;
+
+                continue;
+            }
+            $result .= "['" . str_replace(['\\', "'"], ['\\\\', "\\'"], $part) . "']";
+        }
+
+        return $result;
+    }
+
+    private function responsesPointer(MatchedOperation $matched): string
+    {
+        return sprintf(
+            '%s/%s/%s/responses',
+            $matched->operation->webhook === null ? '/paths' : '/webhooks',
+            $this->escape($matched->operation->webhook ?? $matched->operation->path),
+            strtolower($matched->operation->method),
+        );
     }
 
     /**

@@ -222,6 +222,43 @@ final class ValidationResultFormatterTest
         Assert::string($formatted)->contains('actual: "[redacted]"');
     }
 
+    public function rendersBodyMemberValuesAndKeywordsButRedactsSensitiveMembers(): void
+    {
+        $formatted = (new ValidationResultFormatter())->format(new ValidationResult([
+            new Violation(
+                code: 'request.body.schema',
+                operation: 'users.post',
+                location: 'body',
+                instancePath: '$.age',
+                specPointer: '/paths/~1users/post/requestBody/content/application~1json/schema',
+                expected: ['type' => 'integer'],
+                actual: -1,
+                message: 'Request body member "$.age" does not satisfy "minimum"',
+                keyword: 'minimum',
+            ),
+            new Violation(
+                code: 'request.body.schema',
+                operation: 'users.post',
+                location: 'body',
+                instancePath: '$.password',
+                specPointer: '/paths/~1users/post/requestBody/content/application~1json/schema',
+                expected: ['type' => 'string'],
+                actual: 'secret',
+                message: 'Request body member "$.password" does not satisfy "minLength"',
+                keyword: 'minLength',
+            ),
+        ]));
+
+        Assert::string($formatted)
+            ->contains('instancePath: "$.age"')
+            ->contains('keyword: "minimum"')
+            ->contains('actual: -1')
+            ->contains('instancePath: "$.password"')
+            ->contains('keyword: "minLength"')
+            ->contains('actual: "[redacted]"');
+        Assert::false(str_contains($formatted, 'secret'));
+    }
+
     /**
      * A parameter violation is the one a reader is most likely to be
      * debugging, and it used to print `expected` in full — schema and all —
