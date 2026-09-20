@@ -107,9 +107,13 @@ trait MessageReading
     /**
      * One violation per leaf failure of a body against its schema, in the
      * backend's order. Each names the failing member by its path and the
-     * keyword it failed; a failure of the value itself — a wrong `type` at
-     * the root, a `oneOf` no branch or two branches of accept — keeps the
-     * path `$`, and the formatter's wholesale redaction with it.
+     * keyword it failed, and carries as `expected` that one assertion —
+     * `{"minimum": 0}` — rather than the media type's whole schema, which
+     * is where the reader used to be pointed and left; the whole schema
+     * stands in only when the backend reports a keyword the subschema does
+     * not carry. A failure of the value itself — a wrong `type` at the
+     * root, a `oneOf` no branch or two branches of accept — keeps the path
+     * `$`, and the formatter's wholesale redaction with it.
      *
      * @param 'Request'|'Response' $side
      * @param array<string, mixed> $schema
@@ -132,7 +136,7 @@ trait MessageReading
                 location: 'body',
                 instancePath: $instancePath,
                 specPointer: $schemaPointer,
-                expected: $schema,
+                expected: $failure->expected === [] ? $schema : $failure->expected,
                 actual: $failure->actual,
                 message: match (true) {
                     $failure->keyword === 'discriminator' => sprintf('%s body member "%s" is the discriminator, and its value names no branch', $side, $instancePath),

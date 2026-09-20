@@ -223,6 +223,7 @@ final class SchemaValidator
     private function leaf(ValidationError $error): array
     {
         $path = $this->dataPath($error);
+        $expected = $this->assertion($error);
         if ($error->keyword() === 'required') {
             /** @var mixed $missing */
             $missing = $error->args()['missing'] ?? null;
@@ -231,7 +232,7 @@ final class SchemaValidator
                 /** @var mixed $name */
                 foreach ($missing as $name) {
                     if (is_string($name)) {
-                        $leaves[] = new SchemaFailure(path: [...$path, $name], keyword: 'required', actual: null);
+                        $leaves[] = new SchemaFailure(path: [...$path, $name], keyword: 'required', actual: null, expected: $expected);
                     }
                 }
 
@@ -239,7 +240,27 @@ final class SchemaValidator
             }
         }
 
-        return [new SchemaFailure(path: $path, keyword: $error->keyword(), actual: $error->data()->value())];
+        return [new SchemaFailure(path: $path, keyword: $error->keyword(), actual: $error->data()->value(), expected: $expected)];
+    }
+
+    /**
+     * The assertion an error is about: the keyword and its value in the
+     * subschema that carries it, as the compiler spelled it.
+     *
+     * @return array<string, mixed>
+     */
+    private function assertion(ValidationError $error, ?string $keyword = null): array
+    {
+        $keyword ??= $error->keyword();
+        $schema = $error->schema()->info()->data();
+        if (!$schema instanceof \stdClass || !property_exists($schema, $keyword)) {
+            return [];
+        }
+
+        /** @var mixed $value */
+        $value = json_decode(json_encode($schema->{$keyword}, JSON_THROW_ON_ERROR), associative: true, flags: JSON_THROW_ON_ERROR);
+
+        return [$keyword => $value];
     }
 
     /** @return list<ValidationError> */
@@ -331,6 +352,7 @@ final class SchemaValidator
                 path: [...$this->dataPath($error), $propertyName],
                 keyword: 'discriminator',
                 actual: $discriminatorValue,
+                expected: $this->assertion($error, 'discriminator'),
             );
         }
         foreach ($children as $child) {

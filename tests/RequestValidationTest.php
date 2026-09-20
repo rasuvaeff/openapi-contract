@@ -410,14 +410,19 @@ final class RequestValidationTest
         );
         foreach ($result->violations as $violation) {
             Assert::same($violation->specPointer, '/paths/~1b/post/requestBody/content/application~1json/schema');
-            Assert::same($violation->expected, $contract->operations()[0]->requestBody['content']['application/json']['schema']);
         }
+        // `expected` is the one assertion that failed, not the media type's schema.
+        Assert::same(
+            array_map(static fn(Violation $v): mixed => $v->expected, $result->violations),
+            [['minimum' => 0], ['type' => 'string'], ['type' => 'string'], ['type' => 'string']],
+        );
 
         $missing = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"age":1}'))->violations;
         Assert::same(
             array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->message], $missing),
             [['$.name', 'required', null, 'Request body member "$.name" is required and absent']],
         );
+        Assert::same($missing[0]->expected, ['required' => ['name']]);
         // A failure of the value itself keeps the root path and no member.
         $root = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '[]'))->violations;
         Assert::same(

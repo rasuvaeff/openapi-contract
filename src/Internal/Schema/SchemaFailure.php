@@ -21,10 +21,14 @@ final readonly class SchemaFailure
      *        discriminated union
      * @param mixed $actual the member's value; null for a `required` member
      *        the value lacks
+     * @param array<string, mixed> $expected the assertion that failed, as the
+     *        one keyword and its value in the subschema that carries it —
+     *        `{"minimum": 0}` rather than the whole schema
      */
     public function __construct(
         public array $path,
         public string $keyword,
         public mixed $actual,
+        public array $expected,
     ) {}
 }

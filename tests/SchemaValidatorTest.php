@@ -639,6 +639,11 @@ final class SchemaValidatorTest
             ],
         );
         Assert::same($this->render($validator->failures('text', $schema, SchemaDialect::OpenApi31)), [['', 'type', 'text']]);
+        // Each leaf carries the one assertion it failed, as the subschema spells it.
+        Assert::same(
+            array_map(static fn(SchemaFailure $failure): array => $failure->expected, $validator->failures(json_decode('{"a":-1,"list":[{}]}'), $schema, SchemaDialect::OpenApi31)),
+            [['required' => ['a', 'b']], ['minimum' => 0], ['required' => ['n']]],
+        );
         // Both branches lack the same member: once.
         Assert::same(
             $this->render($validator->failures(json_decode('{}'), ['oneOf' => [
@@ -711,6 +716,20 @@ final class SchemaValidatorTest
         yield 'discriminator member not a string: every branch' => [$implicit, '{"kind":1,"meow":3}', [['kind', 'type', 1], ['meow', 'type', 3], ['bark', 'required', null], ['fin', 'required', null], ['wing', 'required', null], ['legs', 'required', null], ['kind', 'const', 1]]];
         yield 'no property name: every branch' => [['mapping' => ['cat' => 'Cat']], '{"kind":"cat","meow":3}', $every];
         yield 'not an object: the value itself' => [$implicit, '"cat"', [['', 'type', 'cat']]];
+    }
+
+    public function reportsTheDiscriminatorAsTheFailedAssertion(): void
+    {
+        $discriminator = ['propertyName' => 'kind', 'mapping' => ['cat' => 'Cat']];
+        $schema = [
+            'oneOf' => [['$ref' => '#/$defs/components.schemas.Cat', 'type' => 'object']],
+            'discriminator' => $discriminator,
+            '$defs' => ['components.schemas.Cat' => ['type' => 'object', 'required' => ['meow']]],
+        ];
+
+        $failures = (new SchemaValidator())->failures(json_decode('{"kind":"fox"}'), $schema, SchemaDialect::OpenApi31);
+        Assert::same(count($failures), 1);
+        Assert::same($failures[0]->expected, ['discriminator' => $discriminator]);
     }
 
     public function followsANestedDiscriminatorAtItsOwnPath(): void
