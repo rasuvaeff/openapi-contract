@@ -58,11 +58,17 @@ Rules:
   specification extension — those hold the author's data and are kept as
   written (an Example Object reached through `$ref` still resolves);
 - a schema that refers to itself (tree, thread, nested error) compiles to
-  `$defs` + a local `{$ref: '#/$defs/<name>', type: …}` for the back-reference,
+  `$defs` + a local `{$ref: '#/$defs/<name>', type: …, format: …}` for the back-reference,
   the def named after the target's JSON Pointer (`components.schemas.Node`;
   `a.json:Node` from another file); the schema the cycle starts from is
   inlined AND kept as a def; a schema without a cycle has no `$defs`; a cycle
   outside a schema, or one with no schema in it, is `InvalidContract`;
+- a component reached again anywhere in the document is never resolved twice:
+  the first resolution is kept for the whole document; every further use
+  below the decoder horizon (deeper than `properties` values / `items` /
+  `additionalProperties` of the schema and its direct properties) is the same
+  local `{$ref: '#/$defs/<name>'}` + the defs the first resolution collected,
+  and uses the decoders read maps off stay inlined;
 - `$ref` siblings follow the declared dialect: 3.0 ignores them everywhere;
   3.1 keeps `summary`/`description` on a Reference Object (overriding the
   referenced ones) and applies a Schema Object's siblings in addition to the

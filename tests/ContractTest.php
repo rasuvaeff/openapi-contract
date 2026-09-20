@@ -608,6 +608,107 @@ final class ContractTest
         Assert::false($contract->validateRequest($request('{"anything":"not a list"}'))->isValid());
     }
 
+    /**
+     * A component reached twice below the decoder horizon compiles to one
+     * `$defs` member the further uses reference — the shared-component DAG
+     * Stripe's spec3.json is made of, which inlining expanded past twenty
+     * million nodes for one schema (#161). The verdict does not move: the
+     * backend follows the reference into the def, in the direction the
+     * message is read in — the `readOnly` `code` is never demanded on a
+     * request and always demanded on a response, inside the def as outside
+     * it.
+     */
+    public function validatesASharedComponentDeferredToDefs(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'info' => ['title' => 't', 'version' => '1'],
+            'paths' => ['/parcels' => ['post' => [
+                'operationId' => 'parcels.create',
+                'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/Parcel']]]],
+                'responses' => ['200' => ['description' => 'ok', 'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/Parcel']]]]],
+            ]]],
+            'components' => ['schemas' => [
+                'Address' => [
+                    'type' => 'object',
+                    'required' => ['city', 'zip', 'code'],
+                    'additionalProperties' => false,
+                    'properties' => [
+                        'city' => ['type' => 'string'],
+                        'zip' => ['type' => 'string'],
+                        'code' => ['type' => 'integer', 'readOnly' => true],
+                    ],
+                ],
+                'Parcel' => ['type' => 'object', 'required' => ['sendTo'], 'properties' => [
+                    'sendTo' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Address']],
+                    'billTo' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Address']],
+                ]],
+            ]],
+        ]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/parcels', ['Content-Type' => 'application/json'], $body);
+        $response = static fn(string $body): Response => new Response(200, ['Content-Type' => 'application/json'], $body);
+        $address = static fn(array $overrides): string => json_encode(['city' => 'x', 'zip' => '1', 'code' => 7, ...$overrides], JSON_THROW_ON_ERROR);
+        $noCode = json_encode(['city' => 'x', 'zip' => '1'], JSON_THROW_ON_ERROR);
+
+        $schema = $contract->operation('parcels.create')->requestBody['content']['application/json']['schema'];
+        Assert::same(array_keys($schema['$defs']), ['components.schemas.Address']);
+        Assert::same(
+            $schema['properties']['billTo']['items'],
+            ['$ref' => '#/$defs/components.schemas.Address', 'type' => 'object'],
+        );
+        Assert::false(array_key_exists('$ref', $schema['properties']['sendTo']['items']));
+
+        Assert::true($contract->validateRequest($request(sprintf('{"sendTo":[%s],"billTo":[%s]}', $address([]), $address([]))))->isValid());
+        Assert::true($contract->validateRequest($request(sprintf('{"sendTo":[%s],"billTo":[%s]}', $noCode, $address([]))))->isValid());
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request(sprintf('{"sendTo":[%s],"billTo":[%s]}', $address([]), $address(['city' => 5]))))->violations),
+            ['request.body.schema'],
+        );
+        Assert::true($contract->validateResponse('parcels.create', $response(sprintf('{"sendTo":[%s],"billTo":[%s],"code":1}', $address([]), $address([]))))->isValid());
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateResponse('parcels.create', $response(sprintf('{"sendTo":[%s],"code":1}', $noCode)))->violations),
+            ['response.body.schema'],
+        );
+    }
+
+    /**
+     * A form body reads its parts off the property schemas, two levels below
+     * the root — the level the shared-component rule keeps inlined — and the
+     * `items` of a list property one level below that is deferred and read
+     * for nothing but its carried `type`. The parts decode and are judged
+     * exactly as they were before the rule existed.
+     */
+    public function decodesAFormBodyAroundADeferredItemsComponent(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'info' => ['title' => 't', 'version' => '1'],
+            'paths' => ['/f' => ['post' => [
+                'operationId' => 'f.create',
+                'requestBody' => ['required' => true, 'content' => ['application/x-www-form-urlencoded' => ['schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'good' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Count']],
+                        'also' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Count']],
+                    ],
+                ]]]],
+                'responses' => ['204' => ['description' => 'ok']],
+            ]]],
+            'components' => ['schemas' => ['Count' => ['type' => 'integer', 'minimum' => 1]]],
+        ]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/f', ['Content-Type' => 'application/x-www-form-urlencoded'], $body);
+
+        Assert::true($contract->validateRequest($request('good=1&good=2&also=3'))->isValid());
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request('good=1&also=0'))->violations),
+            ['request.body.schema'],
+        );
+        Assert::same(
+            array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request('good=x&also=2'))->violations),
+            ['request.body.schema'],
+        );
+    }
+
     /** @return array<string, mixed> */
     private function treeDocument(string $version): array
     {

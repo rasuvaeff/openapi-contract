@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Fixed.** A document whose `components` form a shared-component DAG —
+  Stripe's published `spec3.json` is the case that refused — loads. Every
+  `$ref` was inlined at every use, so a component copied once per path that
+  reached it multiplied along the depth: resolving
+  `#/components/schemas/charge` alone visited more than 20 000 000 nodes.
+  The first resolution of a component is now kept for the whole document
+  and every further use at least one level below the members the wire
+  decoders read becomes the same local `{$ref: '#/$defs/…'}` a cycle's
+  back-reference already takes, with the defs the first resolution
+  collected registered alongside; uses the decoders read `properties`/
+  `items` maps off stay inlined, so no wire decoding changes. A deferred
+  node now carries the target's `format` beside its `type`. Measured:
+  resolving `charge` 20 000 000+ nodes → 64 415; GitHub's REST description
+  1.09 s / 199 MiB → 0.82 s / 161 MiB; Stripe's `spec3.json` loads — 594
+  operations, 70 s, 7.5 GiB peak — with raised limits (`documentBytes` past
+  8 MB, `resolvedNodes` in the tens of millions); the compile-phase cost of
+  a document with thousands of schema positions is tracked separately.
+- **Changed.** `rasuvaeff/property-testing-testo` is required at `^1.0`
+  (the strict engine); no test in this package needed a change for it.
+
 ## 0.13.0 — 2026-09-20
 
 - **Fixed.** A schema that refers to itself — a tree whose `children` are

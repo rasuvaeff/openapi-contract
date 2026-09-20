@@ -123,8 +123,12 @@ final class JsonPointerResolverTest
 
     /**
      * The cycle is found by the resolution path, not by a seen-set: a
-     * component reached twice along different branches is not a cycle, and
-     * keeps being inlined — no `$defs` appears.
+     * component reached twice along different branches is not a cycle. At
+     * the level the wire decoders read — a property schema, two levels
+     * below the root — the second use keeps being inlined as the first was:
+     * the decoder reads `properties` and `items` maps there, and a
+     * deferred node carries only `type` and `format`. Deeper uses of the
+     * same component do defer; that is the test below this one.
      */
     public function inlinesADiamondWithoutDefs(): void
     {
@@ -137,6 +141,84 @@ final class JsonPointerResolverTest
             $resolver->resolve(['$ref' => '#/components/schemas/User'], inSchema: true),
             ['type' => 'object', 'properties' => ['home' => ['type' => 'string'], 'work' => ['type' => 'string']]],
         );
+    }
+
+    /**
+     * A component reached twice below the decoder horizon — three levels
+     * down, where only `type` and `format` are ever read off a node — is
+     * kept as one `$defs` member and referenced from the second use, while
+     * the first stays inlined. This is the shape a shared-component DAG
+     * compiles to: Stripe's spec3.json inlines each large component once
+     * per path that reaches it and multiplies along the depth (#161).
+     */
+    public function defersAComponentReachedTwiceBelowTheDecoderHorizon(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => [
+            'Address' => ['type' => 'object', 'properties' => ['city' => ['type' => 'string']]],
+            'Parcel' => ['type' => 'object', 'properties' => [
+                'sendTo' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Address']],
+                'billTo' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Address']],
+            ]],
+        ]]]);
+
+        $resolved = $resolver->resolve(['$ref' => '#/components/schemas/Parcel'], inSchema: true);
+
+        $address = ['type' => 'object', 'properties' => ['city' => ['type' => 'string']]];
+        Assert::same($resolved['properties']['sendTo']['items'], $address);
+        Assert::same(
+            $resolved['properties']['billTo']['items'],
+            ['$ref' => '#/$defs/components.schemas.Address', 'type' => 'object'],
+        );
+        Assert::same($resolved['$defs'], ['components.schemas.Address' => $address]);
+    }
+
+    /**
+     * `format` rides a deferred node beside `type`: a multipart part's
+     * default content type is chosen by it, and it is the target's own —
+     * carrying it asserts nothing the def it names does not assert.
+     */
+    public function carriesFormatOnADeferredSharedComponent(): void
+    {
+        $resolver = new JsonPointerResolver(document: ['components' => ['schemas' => [
+            'Blob' => ['type' => 'string', 'format' => 'binary'],
+            'Upload' => ['type' => 'object', 'properties' => [
+                'first' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Blob']],
+                'second' => ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Blob']],
+            ]],
+        ]]]);
+
+        $resolved = $resolver->resolve(['$ref' => '#/components/schemas/Upload'], inSchema: true);
+
+        Assert::same(
+            $resolved['properties']['second']['items'],
+            ['$ref' => '#/$defs/components.schemas.Blob', 'type' => 'string', 'format' => 'binary'],
+        );
+    }
+
+    /**
+     * A second use above the decoder horizon is not resolved again: the
+     * first resolution is reused as the inline it produced. The budget here
+     * admits the walk with the reuse and refuses the same walk with a full
+     * second resolution of `a` — pinning that the memo, not the depth
+     * guard, is what keeps the protected level from doubling the work.
+     */
+    public function reusesTheFirstResolutionForAProtectedSecondUse(): void
+    {
+        $document = [
+            'a' => ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+            'r' => ['type' => 'object', 'properties' => [
+                'p1' => ['$ref' => '#/a'],
+                'p2' => ['$ref' => '#/a'],
+            ]],
+        ];
+        $resolved = (new JsonPointerResolver(document: $document, maximumResolvedNodes: 8))
+            ->resolve(['$ref' => '#/r'], inSchema: true);
+
+        Assert::same(
+            $resolved['properties']['p2'],
+            ['type' => 'object', 'properties' => ['x' => ['type' => 'string']]],
+        );
+        Assert::false(array_key_exists('$defs', $resolved));
     }
 
     /**
