@@ -123,7 +123,7 @@ final class SchemaValidator
      */
     public function isValid(mixed $value, array $schema, SchemaDialect $dialect, SchemaDirection $direction = SchemaDirection::Request): bool
     {
-        return $this->validationError($value, $schema, $dialect, $direction) === null;
+        return !$this->validationError($value, $schema, $dialect, $direction) instanceof ValidationError;
     }
 
     /**
