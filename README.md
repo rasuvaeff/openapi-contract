@@ -185,10 +185,25 @@ members of every reference cycle are kept as the schema's `$defs`, named
 after their JSON Pointer (`#/components/schemas/Node` becomes
 `components.schemas.Node`, a member of another file `a.json:Node`), and the
 reference back to one is a local `{$ref: '#/$defs/…'}` carrying the
-target's `type`; the schema the cycle starts from is inlined where it is
-first met and kept as a def as well. A schema without a cycle has no
-`$defs`. A reference cycle outside a schema — a Path Item or a Response
-that reaches itself — is refused, as is a cycle with no schema in it.
+target's `type` and `format`; the schema the cycle starts from is inlined
+where it is first met and kept as a def as well. A schema without a cycle
+has no `$defs`. A reference cycle outside a schema — a Path Item or a
+Response that reaches itself — is refused, as is a cycle with no schema in
+it.
+
+A component reached again anywhere in the document — the shared-component
+DAG a large `components` section is — is likewise never resolved twice: the
+first resolution is kept for the whole document, and every further use at
+least one level below the members the wire decoders read (`properties`
+values, `items`, `additionalProperties` of the schema and of its direct
+properties) becomes the same local `{$ref: '#/$defs/…'}`, with the defs the
+first resolution collected riding along so the references resolve. Uses the
+decoders read maps off stay inlined, because a deferred node carries only
+`type` and `format`. Stripe's published `spec3.json` (8 MB, OAS 3.0, a
+handful of large schemas reached from hundreds of others) loads this way;
+its schema positions number in the thousands, so it needs raised limits —
+`documentBytes` past 8 MB and `resolvedNodes` into the tens of millions —
+and costs seconds and gigabytes to compile, which is tracked separately.
  `CompiledResponses` is keyed by status code as PHP reads
 it (`"200"` is `int 200`), by the `NXX` range, or by `default`. Compiled parameters carry `allowReserved` for those consumers:
 validation never reads it, because a value that leaves a reserved character
