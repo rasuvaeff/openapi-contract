@@ -182,7 +182,15 @@ normalises back. The media-type selection helpers
 in the same trait escape for the reasons above: the rank sentinel is below
 every specificity, the key/definition type guard is reachable only through a
 hand-built `Operation`, and the strict `>` is untestable because no two
-declarations of equal specificity can match one media type.
+declarations of equal specificity can match one media type. In the
+resolver, the shared-component branch escapes in three shapes: the
+`!array_key_exists` guards around a def registration flip to `||` without
+changing anything (a def name belongs to one target, whose resolution is
+deterministic, so overwriting rewrites the same value), the plain
+`return $this->merge(...)` of a protected reuse removes into the identical
+Reference-Object reuse branch below it, and unwrapping the
+`array_map($this->materialize(...))` over the carried defs only moves the
+materialization into the receiving root's final pass.
 
 ## When you finish
 
