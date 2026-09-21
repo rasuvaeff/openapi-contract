@@ -20,6 +20,11 @@ OpenAPI 3.0 and 3.1 contracts.
 - PHP 8.3 – 8.5
 - `psr/http-message` implementations for the exchanges you validate
 - `symfony/yaml` only when loading YAML documents (suggested, not required)
+- no extension beyond `json`: `multipleOf` is judged on the decimals the
+  document and the message spell (`64.1` is a multiple of `0.1`;
+  `64.10000000000001` is not), exactly, whether or not `ext-bcmath` is
+  loaded — the backend's own arithmetic, which read the parsed doubles and
+  answered differently with and without the extension, is not used (#151)
 
 ## Installation
 
@@ -43,16 +48,25 @@ $contract = Contract::fromFile('openapi.yaml'); // needs symfony/yaml
 
 Loading fails closed: unsupported OpenAPI versions throw
 `UnsupportedVersion`, unknown JSON Schema dialects, remote references,
-ambiguous path templates, duplicate operation identities, and malformed
+ambiguous path templates, duplicate operation identities, a document that
+declares neither `paths` nor `webhooks` operations, and malformed
 document shapes throw `InvalidContract`, and parameter `content`
 serialization or unsupported styles throw `UnsupportedSerialization`.
+Every Schema Object the validators will read — each parameter's, each
+request and response media type's, each response header's and multipart
+part header's — is compiled while the contract is built, in the direction
+it will be read in, so a schema this package cannot evaluate (an assertion
+keyword outside the support matrix such as `patternProperties`, a `$schema`
+naming another dialect, an OAS 3.0 `exclusiveMinimum` written as a number,
+a `pattern` the backend cannot parse, wherever it is nested) is
+`InvalidContract` out of the factory and never out of a `validate*()` call.
 
 Every exception this package raises implements `ContractException`, so a
 caller can catch the package as one type: `InvalidContract` (with
 `UnsupportedVersion` and `UnsupportedSerialization` under it),
-`UnknownOperation` and `ContractViolation`. The concrete base classes stay
-what they were — `\InvalidArgumentException` and `\RuntimeException` — so
-existing catches keep working.
+`InvalidLimits`, `UnknownOperation` and `ContractViolation`. The concrete
+base classes stay what they were — `\InvalidArgumentException` and
+`\RuntimeException` — so existing catches keep working.
 
 A header parameter named `Accept`, `Content-Type` or `Authorization` is
 ignored, as both specifications require: HTTP gives those three a meaning of
@@ -99,7 +113,11 @@ nodes a document expands into, a reference-resolution budget, and — for
 multi-file documents — file-count, byte and node budgets shared across the
 whole reference graph. The node budget is the one that bounds YAML: anchors
 and aliases produce nodes out of no bytes at all, so a file well inside the
-byte budget can still expand into hundreds of millions of nodes.
+byte budget can still expand into hundreds of millions of nodes. The
+resolution budget (`resolvedNodes`) bounds the work of inlining: a component
+shared by many operations is visited once per use, so a large description
+costs more resolution than it has nodes — GitHub's REST API, at 1 239
+operations, needs about 360 000 of the default million.
 
 #### Budgets
 
@@ -114,6 +132,7 @@ $contract = Contract::fromFile('openapi.yaml', new Limits(
     messageBodyBytes: 8 * 1024 * 1024, // default 1 MiB
     documentFiles: 256,                // default 64
     documentNodes: 20_000_000,         // default 5 000 000
+    resolvedNodes: 4_000_000,          // default 1 000 000
 ));
 ```
 
@@ -124,14 +143,15 @@ found wrong. A gate that rejects on `isValid()` would therefore reject traffic
 it never judged, so an application whose bodies are legitimately larger raises
 the budget instead of reading the violation as a failure. The defaults are
 small on purpose: an unbounded read inside a middleware is a denial of
-service. A budget below 1 is refused with `\InvalidArgumentException`.
+service. A budget below 1 is refused with `InvalidLimits`, an
+`\InvalidArgumentException` that implements `ContractException`.
 
 ### Operations and matching
 
 ```php
 foreach ($contract->operations() as $operation) {
     // Operation: key, operationId, method, path, parameters, requestBody,
-    // responses, serverBases, security, servers
+    // responses, security, servers, dialect, webhook
 }
 
 $matched = $contract->match($request);        // MatchedOperation|null
@@ -146,11 +166,51 @@ $declared = $operation->responseFor(404); // ['key' => '4XX', 'definition' => [.
 
 `Operation` identity is the `operationId` when present, otherwise the stable
 `METHOD /path` fallback. `Operation` is a read model: a contract is built by
-compiling a document, and the constructor is `@internal` — nothing public
-validates a hand-built operation, and the shapes that constructor takes are
-the compiler's output rather than a checked input. The `CompiledParameter`
-shape a consumer imports is read-only for it, and a minor release may add keys
-to it. Compiled parameters carry `allowReserved` for those consumers:
+compiling a document, and the shapes the constructor takes are the compiler's
+output rather than a checked input — nothing public validates a hand-built
+operation. The constructor is public API all the same, because consumers
+build operations by hand in their tests: it is append-only (a minor release
+may add a defaulted parameter at the end, never reorder or remove one), so
+construct it with named arguments. The shapes a consumer imports —
+`CompiledParameter`, and `CompiledRequestBody`/`CompiledResponses` for
+`$requestBody`/`$responses` — are read-only for it, and a minor release may
+add keys to them. `CompiledRequestBody` and `CompiledResponses` are the
+Request Body Object and the Responses Object as the compiler leaves them:
+every `$ref` on the way to a schema resolved, `required` a boolean,
+`content` keyed by media type, `encoding` and `headers` keyed by property and
+header name, and every `schema` a boolean or a keyword map (the empty map
+being the unconstrained schema); what the document wrote beside those keys
+is kept as written. A schema that refers to itself — a tree whose
+`children` are trees, a thread, a nested error — cannot be inlined, so the
+members of every reference cycle are kept as the schema's `$defs`, named
+after their JSON Pointer (`#/components/schemas/Node` becomes
+`components.schemas.Node`, a member of another file `a.json:Node`), and the
+reference back to one is a local `{$ref: '#/$defs/…'}` carrying the
+target's `type` and `format`; the schema the cycle starts from is inlined
+where it is first met and kept as a def as well. A `$ref` branch of a
+`oneOf`/`anyOf` that declares a `discriminator` is kept as the same local
+`$ref`, whatever its depth, so the branch keeps the component's name for
+the diagnostics to match the discriminator value against; a branch written
+inline stays inline. A schema without a cycle, a shared component or a
+discriminated union has no `$defs`. A reference cycle outside a schema — a Path Item or a
+Response that reaches itself — is refused, as is a cycle with no schema in
+it.
+
+A component reached again anywhere in the document — the shared-component
+DAG a large `components` section is — is likewise never resolved twice: the
+first resolution is kept for the whole document, and every further use at
+least one level below the members the wire decoders read (`properties`
+values, `items`, `additionalProperties` of the schema and of its direct
+properties) becomes the same local `{$ref: '#/$defs/…'}`, with the defs the
+first resolution collected riding along so the references resolve. Uses the
+decoders read maps off stay inlined, because a deferred node carries only
+`type` and `format`. Stripe's published `spec3.json` (8 MB, OAS 3.0, a
+handful of large schemas reached from hundreds of others) loads this way;
+its schema positions number in the thousands, so it needs raised limits —
+`documentBytes` past 8 MB and `resolvedNodes` into the tens of millions —
+and costs seconds and gigabytes to compile, which is tracked separately.
+ `CompiledResponses` is keyed by status code as PHP reads
+it (`"200"` is `int 200`), by the `NXX` range, or by `default`. Compiled parameters carry `allowReserved` for those consumers:
 validation never reads it, because a value that leaves a reserved character
 unencoded cannot be told from the delimiter it looks like — the package reads
 such a query exactly as the SAPI does — while a consumer that renders a query
@@ -168,11 +228,47 @@ reached through `$ref` is resolved; what an example *contains* is data and is
 kept exactly as written, `$ref`-looking members included — as are a Schema
 Object's `default`/`const`/`enum` and every specification extension. `MatchedOperation` carries the operation and the raw path parameters
 extracted from the URI. Matching honours server base paths,
-prefers concrete paths over templated ones, decodes each segment exactly
-once, and rejects decoded separators that would escape a template slot. A trailing slash is part of the path: `/pets` and `/pets/` are different
+prefers concrete paths over templated ones, and splits the path on the raw
+`/` before decoding each segment exactly once — so a percent-encoded
+separator is part of its segment, never a boundary: `/pets/a%2Fb` matches
+`/pets/{name}` with `name` decoded to `a/b`, the value the application
+receives, and `/a%2Fb/x` does not match `/a/b/x`. A trailing slash is part of the path: `/pets` and `/pets/` are different
 resources, as RFC 3986 has them. A
 placeholder may share its segment with literals (`/report.{format}`,
 `/v{version}/items`, `/{a}-{b}`); the literal runs are matched as written.
+
+#### Webhooks
+
+An OpenAPI 3.1 `webhooks` map is compiled too, one `Operation` per method
+each entry declares, and a delivery is validated by the name the receiver
+knows it under:
+
+```php
+$result = $contract->validateWebhook('payment.completed', $request);
+$result = $contract->validateWebhook('payment.completed', $request, $response); // the exchange
+
+foreach ($contract->webhooks() as $name => $operations) {
+    // 'payment.completed' => [Operation, ...], in document order
+}
+```
+
+A webhook is a Path Item without a path: no template, no path parameters
+(`in: path` is refused as `InvalidContract`), no server matching — the
+delivery's URL is the receiver's own, and nothing in it names the webhook,
+so `match()` never returns one and `operations()` lists path operations
+only. Everything else is the ordinary request pipeline: `parameters` in
+the query, header and cookie, `requestBody` by media type, and `responses`
+for what the receiver answered, judged when a response is passed alongside
+the request. A webhook operation's identity is its `operationId` when
+present, otherwise `WEBHOOK <METHOD> <name>`; it is reachable through
+`operation()` and `validateResponse()` by that key, carries the map key in
+`Operation::$webhook` (`null` for a path operation), and its violations
+point under `/webhooks/<name>` in the document. A delivery for a name the
+document does not declare, or a method the entry does not, is a single
+`request.operation.unknown` violation, as an unmatched request is. A 3.1
+document may declare only `webhooks`; one that declares neither `paths`
+nor `webhooks` operations is refused, and so is a 3.0 document carrying a
+`webhooks` member, which that version does not have.
 
 Servers are compiled as a full model (`Operation::$servers`): scheme, host,
 port, and base path, with operation > path > root precedence and server
@@ -185,8 +281,7 @@ no authority is matched by path alone, and is deliberately not rejected for
 failing to name a host it never claimed. Undeclared variables,
 missing or non-enum defaults, unsupported schemes, and userinfo/query/
 fragment parts of a server URL fail closed at compile time.
-`Operation::$serverBases` remains the v0.1 base-path projection of the same
-list. When the request path is declared but no server authority agrees,
+When the request path is declared but no server authority agrees,
 validation reports `request.server.mismatch` instead of
 `request.operation.unknown`.
 
@@ -194,7 +289,15 @@ Parameters are deserialized where an encoding exists and read as sent where
 one does not. A path segment and a query string are built out of RFC 3986
 delimiters, so a value carrying one has to be escaped and RFC 6570 says how:
 both are percent-decoded, and a query is form-encoded content, so `+` is a
-space. A cookie is decoded too, because every SAPI decodes `$_COOKIE`. A
+space. A cookie is decoded too, because every SAPI decodes `$_COOKIE`; its
+pairs are split on `;` (with the optional whitespace RFC 6265 allows after
+it) and never on `&`, which is an ordinary cookie-octet — `sid=abc&def` is
+one cookie with a seven-character value. A wire string is read as an
+`integer` or `number` only when it spells one by the JSON number grammar
+(`-?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?`, nothing before or after):
+`.5`, `5.`, ` 5`, `5\n` and `0x1A` stay strings and fail the schema, and an
+integer past PHP's range keeps its magnitude as a float rather than
+saturating. A
 **header field value is read verbatim** — HTTP treats it as opaque octets,
 nothing in the wild escapes one, and decoding it would rewrite a value the
 application receives intact (`X-Path: /a%20b` is a literal path; `X-Discount:
@@ -241,13 +344,38 @@ $diagnostics = (new ValidationResultFormatter())->format($result);
 
 foreach ($result->violations as $violation) {
     // Violation: code, operation, location, instancePath, specPointer,
-    // expected, actual, message
+    // expected, actual, message, keyword
 }
 ```
 
 `ValidationResult` is an immutable list of `Violation` values with stable
 codes (`request.parameter.missing`, `response.body.schema`, ...) and JSON
-Pointers into the OpenAPI document. Response selection follows exact status,
+Pointers into the OpenAPI document. A body that fails its schema is
+reported per leaf failure, not once for the whole body: each
+`request.body.schema` / `response.body.schema` violation names the failing
+member in `instancePath` (`$.age`, `$.children[2].name`, `$['a b']` for a
+name that is not an identifier), the assertion it failed in `keyword`
+(`minimum`, `type`, `required`, ...; `null` on every other violation), and
+carries that one assertion as `expected` — `{"minimum": 0}` rather than
+the media type's schema. A `required` member the value lacks is reported
+at the path it would have had, with `null` as `actual`. The list is
+bounded at twenty leaves in the backend's order, a leaf two branches of a
+union report alike is reported once, and a failure of the value itself —
+a wrong `type` at the root, a `oneOf` that no branch or two branches of
+accept — keeps `instancePath` `$`. The codes are the contract; the number
+of violations a body yields and their paths are diagnostics, and a
+consumer that asserted exactly one body violation at `$` will now see
+more. For a `oneOf`/`anyOf` that declares a `discriminator`, the
+diagnostics follow the branch the `propertyName` value names — through
+`mapping`, as a `$ref` or a component name, else by the component name the
+value spells — instead of reporting every branch's errors; a value that
+names no branch is one violation at the discriminator member with the
+keyword `discriminator`. The verdict is untouched: every branch is still
+evaluated, as [Violation codes](#violation-codes) pins. So that the branch
+can be named, a `$ref` branch of a discriminated union is compiled as a
+local `{$ref: '#/$defs/…'}` — the form a shared component takes — rather
+than inlined; a branch written inline has no name and is never chosen.
+Response selection follows exact status,
 then the `NXX` range, then `default`; an unknown status never cascades into
 invented body or header violations. A declared response header is checked
 for presence when `required`, and a present header with a `schema` is decoded
@@ -258,7 +386,8 @@ the response direction (`response.header.schema`,
 `content`-form Header Object or a non-`simple` style fails closed as
 `response.header.unsupported`, a `Content-Type` header declaration is ignored
 as the specification requires, and a schema-less declaration asserts presence
-only. `readOnly`/`writeOnly` properties are applied directionally. Root-level `security` is inherited by operations, an
+only. `readOnly`/`writeOnly` properties are applied directionally — see
+[Checking one schema](#checking-one-schema) for what that means. Root-level `security` is inherited by operations, an
 explicit empty `security` list marks an operation anonymous, and credential
 acquisition stays in the generator package.
 
@@ -296,7 +425,7 @@ says the same thing as declaring it below one.
 A declared non-JSON media type on either side (`text/plain`, `text/csv`,
 `application/octet-stream`, ...) is validated as far as its schema allows:
 without a schema the body is opaque and passes; with a string-typed schema
-(`type: string`, any `format`, `minLength`/`maxLength`/`pattern`) the raw
+(`type: string`, with `minLength`/`maxLength`/`pattern` and any asserted `format`) the raw
 payload is validated as that string value (`request.body.schema` /
 `response.body.schema`); any other schema (an XML object, for example) cannot
 be evaluated against an undecoded payload and fails closed as
@@ -321,13 +450,18 @@ is reported as `request.body.json` / `response.body.json` — the decoder cannot
 tell a budget overrun from malformed JSON, so the code says "not valid JSON"
 where "not read" would be more precise. The budget is not configurable.
 `ValidationResultFormatter` renders every violation in stable order with
-bounded fields, depth, item counts, and expected/actual values. A value is
-rendered only where its name can be checked: a body is redacted wholesale —
-its member names are the application's and a whole-body violation has the
-instance path `$` — while a parameter is rendered with any member whose name
-matches the credential pattern (`authorization`, `api_key`, `token`, `secret`,
-`password`, `cookie`) replaced, and a parameter whose own name matches is
-redacted outright. `ContractViolation` uses the same rendering.
+bounded fields, depth, item counts, and expected/actual values, and the
+`keyword` line where one is set. A value is rendered only where its name
+can be checked: a violation of the body as a whole — the instance path
+`$` — is redacted wholesale, because its member names are the
+application's and there is no name to check, and so is a cookie, which is
+a credential carrier by definition whatever the document named it. A body
+violation that names its member is rendered like a parameter: any member
+whose name matches the credential pattern (`authorization`, `api_key`,
+`token`, `secret`, `password`, `cookie`) is replaced, and a member or
+parameter whose own path matches is redacted outright — `$.age` renders
+`-1`, `$.password` and `$.user.token` render `[redacted]`.
+`ContractViolation` uses the same rendering.
 
 ### Checking one schema
 
@@ -346,10 +480,30 @@ $contract->accepts(42, $schema);                             // request directio
 $contract->accepts($value, $schema, SchemaDirection::Response);
 ```
 
-The direction is not decoration. A `readOnly` property is not part of a
-request and a `writeOnly` one is not part of a response; each is dropped, with
-its `required` entry, before the value is judged, so the same value and the
-same schema answer differently in the two directions.
+The direction is not decoration. A `readOnly` property is not required on a
+request and a `writeOnly` one is not required on a response: before the value
+is judged, the property loses its `required` entry for the foreign direction
+and keeps its subschema — it stays declared and typed, so a request that
+carries a `readOnly` `id` is judged by `id`'s schema and a closed object
+(`additionalProperties: false`) still admits it, exactly as both
+specifications have it ("the required will take effect on the response
+only"). The rewrite recurses through `properties`, `items`,
+`additionalProperties`, the composition keywords and `$defs`, leaves `not` alone, and
+is what makes the same value and the same schema answer differently in the two
+directions.
+
+The rewrite itself is exported, so a consumer that builds values for one
+direction builds them against the schema they will be checked by rather
+than against a copy of the rule:
+
+```php
+$check = new SchemaCheck();
+$requestSchema = $check->effective($schema, SchemaDirection::Request);
+```
+
+`effective()` returns exactly what the validators compile — a fixed point of
+itself, dialect-independent, with every member it does not read passed through
+as written.
 
 The value is judged as the backend reads JSON: an object is a `stdClass`, the
 way `json_decode()` produces one without `associative: true`. An associative
@@ -387,6 +541,14 @@ and never evicts: a `Contract` holds finitely many schemas, but a
 `SchemaCheck` fed an unbounded stream of distinct schemas grows with it —
 keep one per document, not one per generator.
 
+`SchemaCheck::isMultipleOf($value, $divisor)` is the `multipleOf` verdict
+itself, static and exported for a consumer that has to predict it — a
+generator deciding whether the `number` branch of a `oneOf` admits an integer
+it is about to keep on the `integer` branch asks this instead of keeping a
+second copy of the rule. It judges on the decimals the two numbers spell
+(`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly, on
+every machine.
+
 ### Violation codes
 
 The complete set. A code is a stable identifier callers may switch on; the
@@ -395,7 +557,7 @@ may be reworded in any release, so pin codes rather than text.
 
 | Code | Raised when |
 |---|---|
-| `request.operation.unknown` | no operation matches the request |
+| `request.operation.unknown` | no operation matches the request, or `validateWebhook()` was given a name or method the document does not declare |
 | `request.server.mismatch` | the path matches, but no declared server does |
 | `request.parameter.missing` | a `required` parameter is absent |
 | `request.parameter.duplicate` | a name carries more than one value where its style admits one |
@@ -405,7 +567,7 @@ may be reworded in any release, so pin codes rather than text.
 | `request.body.media_type` | the body's media type is not declared (or the body declares no content) |
 | `request.body.json` | a JSON body does not parse |
 | `request.body.decode` | a form or multipart body cannot be decoded as declared |
-| `request.body.schema` | the body does not satisfy its schema |
+| `request.body.schema` | the body does not satisfy its schema — one violation per failing member, with `keyword` |
 | `request.body.unsupported` | a non-JSON, non-form media type carries a schema no undecoded payload can be judged against |
 | `request.body.too_large` | the body is over the configured `messageBodyBytes`, so it was not read |
 | `request.body.non_seekable` | the body stream cannot be rewound, so it is not consumed |
@@ -420,7 +582,7 @@ may be reworded in any release, so pin codes rather than text.
 | `response.body.missing` | a response that declares a schema answered with nothing |
 | `response.body.media_type` | the response media type is not declared |
 | `response.body.json` | a JSON response body does not parse |
-| `response.body.schema` | the response body does not satisfy its schema |
+| `response.body.schema` | the response body does not satisfy its schema — one violation per failing member, with `keyword` |
 | `response.body.unsupported` | as `request.body.unsupported`, on the response side |
 | `response.body.too_large` | the response body is over the configured `messageBodyBytes`, so it was not read |
 | `response.body.non_seekable` | the response body stream cannot be rewound |
@@ -446,6 +608,27 @@ Three divergences from the specification are deliberate and pinned:
 `deepObject` is not among them: `f%5Ba%5D=1` and `f[a]=1` are the same
 parameter here and in PHP's own query parsing.
 
+Five keywords are accepted and never read for a verdict, because none of
+them changes one this package can give: `allowEmptyValue` (its meaning is
+undefined by the specification, and a parameter with an empty value is
+judged by its schema), `discriminator` (a hint for consumers choosing
+among `oneOf` branches; the branches themselves are still evaluated, and
+the hint decides only which branch's failures are reported — see
+[Validating exchanges](#validating-exchanges)), `xml`, `externalDocs` and
+`deprecated`. They are kept as written on the compiled operation.
+
+#### Formats
+
+`format` is asserted where the backend has a checker and is an annotation
+everywhere else — a value with an unknown or unchecked format is never
+rejected for it:
+
+| Type | Asserted | Annotation only |
+|---|---|---|
+| `string` | `date`, `time`, `date-time`, `duration`, `uri`, `uri-reference`, `uri-template`, `regex`, `ipv4`, `ipv6`, `uuid`, `email`, `hostname`, `idn-hostname`, `idn-email`, `iri`, `iri-reference`, `json-pointer`, `relative-json-pointer` | `byte`, `binary`, `password`, and any other value |
+| `integer` | `int32` (−2³¹ … 2³¹−1), `int64` (−2⁶³ … 2⁶³−1; a value that overflows PHP's integer arrives as a float and is judged by magnitude) | any other value |
+| `number` | — | `float`, `double`, and any other value |
+
 ## Security
 
 **Declared `security` is not enforced.** Requirements are compiled, and a
@@ -463,7 +646,8 @@ form it does not recognise is handed to the backend instead of being dropped,
 because silently unchecking part of a contract is the one failure a validator
 must never produce. User-supplied documents and message bodies are read with
 byte and JSON-depth budgets, and diagnostics render expected/actual values
-in bounded form without exposing credential parameters.
+in bounded form without exposing credential parameters or body members
+whose name matches the credential pattern.
 
 A `pattern` keyword is a regular expression from the document, and the
 validation backend runs it with `preg_match`. A contract is a trusted input —

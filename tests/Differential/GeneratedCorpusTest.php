@@ -185,7 +185,7 @@ final class GeneratedCorpusTest
         if (self::$corpus !== null) {
             return self::$corpus;
         }
-        $raw = file_get_contents(dirname(__DIR__) . '/fixtures/generated-corpus/requests.json');
+        $raw = file_get_contents(__DIR__ . '/../fixtures/generated-corpus/requests.json');
         \assert(is_string($raw));
         /** @var array{contractVersionAtRecording?: string, documents: array<string, array<string, mixed>>, cases: list<array<string, mixed>>} $decoded */
         $decoded = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);

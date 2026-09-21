@@ -80,6 +80,42 @@ final class SchemaCheckTest
      * not part of a response, so the same value and the same schema answer
      * differently depending on which half of the exchange is asked about.
      */
+    /**
+     * The exported predicate is the validator's own verdict: whatever
+     * `accepts()` says of `{type: number, multipleOf: d}` for a value,
+     * `isMultipleOf()` says of the pair — including the pair the two old
+     * backend paths disagreed on (#154).
+     */
+    #[DataProvider('multipleOfPairProvider')]
+    public function isMultipleOfIsTheVerdictAcceptsApplies(int|float $value, int|float $divisor): void
+    {
+        $check = new SchemaCheck();
+
+        Assert::same(
+            SchemaCheck::isMultipleOf($value, $divisor),
+            $check->accepts($value, ['type' => 'number', 'multipleOf' => $divisor], SchemaDialect::OpenApi31),
+        );
+    }
+
+    public static function multipleOfPairProvider(): iterable
+    {
+        yield 'the decimal the float path rejected' => [64.1, 0.1];
+        yield 'the product the decimal path accepted' => [64.10000000000001, 0.1];
+        yield 'an integer the float rule refused for 0.7' => [58254, 0.7];
+        yield 'an integer that is no multiple of 0.7' => [58255, 0.7];
+        yield 'integers' => [9, 4];
+        yield 'a whole float' => [7.0, 0.5];
+    }
+
+    public function isMultipleOfKeepsTheLowDigitsOfTheSmallestInteger(): void
+    {
+        Assert::true(SchemaCheck::isMultipleOf(PHP_INT_MIN, 0.5));
+        Assert::false(SchemaCheck::isMultipleOf(PHP_INT_MIN, 0.3));
+        Assert::true(SchemaCheck::isMultipleOf(PHP_INT_MIN, 2));
+        Assert::false(SchemaCheck::isMultipleOf(1.0, 0.0));
+        Assert::false(SchemaCheck::isMultipleOf(INF, 2.5));
+    }
+
     public function theDirectionDecidesWhichPropertiesApply(): void
     {
         $schema = [
@@ -96,6 +132,99 @@ final class SchemaCheckTest
         Assert::false($check->accepts((object) ['id' => 1], $schema, SchemaDialect::OpenApi31));
         Assert::true($check->accepts((object) ['id' => 1], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
         Assert::false($check->accepts((object) ['secret' => 's'], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+    }
+
+    /**
+     * The exported rewrite is the one the validator judges by: a value is
+     * accepted against the schema exactly when it is accepted against its
+     * effective form, in both directions, and the effective form is a fixed
+     * point of the rewrite.
+     *
+     * @param array<string, mixed> $schema
+     */
+    #[DataProvider('directionalSchemaProvider')]
+    public function effectiveIsTheSchemaTheValidatorJudgesBy(array $schema, mixed $value): void
+    {
+        $check = new SchemaCheck();
+        foreach (SchemaDirection::cases() as $direction) {
+            $effective = $check->effective($schema, $direction);
+
+            Assert::same($check->accepts($value, $effective, SchemaDialect::OpenApi31, $direction), $check->accepts($value, $schema, SchemaDialect::OpenApi31, $direction));
+            Assert::same($check->effective($effective, $direction), $effective);
+        }
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, mixed}> */
+    public static function directionalSchemaProvider(): iterable
+    {
+        $item = ['type' => 'object', 'required' => ['id', 'name'], 'properties' => [
+            'id' => ['type' => 'integer', 'readOnly' => true],
+            'name' => ['type' => 'string', 'writeOnly' => true],
+        ]];
+        yield 'flat object, request-shaped value' => [$item, (object) ['name' => 'a']];
+        yield 'flat object, response-shaped value' => [$item, (object) ['id' => 1]];
+        yield 'flat object, mistyped foreign property' => [$item, (object) ['id' => 'x', 'name' => 'a']];
+        yield 'closed object' => [[...$item, 'additionalProperties' => false], (object) ['id' => 1, 'name' => 'a']];
+        yield 'list of items' => [['type' => 'array', 'items' => $item], [(object) ['name' => 'a']]];
+        yield 'map of items' => [['type' => 'object', 'additionalProperties' => $item], (object) ['k' => (object) ['name' => 'a']]];
+        yield 'composition' => [['allOf' => [$item, ['type' => 'object']]], (object) ['name' => 'a']];
+        yield 'negation is left alone' => [['not' => $item], (object) ['name' => 'a']];
+        yield 'boolean member passes through' => [['type' => 'object', 'properties' => ['open' => true], 'required' => ['open']], (object) []];
+    }
+
+    /**
+     * The shape of the rewrite, pinned member by member: the foreign
+     * property keeps its subschema and loses only its `required` entry, the
+     * native one keeps both, and `not` is not entered.
+     */
+    public function effectiveUnrequiresTheForeignPropertyAndKeepsItsSubschema(): void
+    {
+        $schema = [
+            'type' => 'object',
+            'required' => ['id', 'secret'],
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'secret' => ['type' => 'string', 'writeOnly' => true],
+            ],
+            'not' => ['required' => ['id']],
+        ];
+        $check = new SchemaCheck();
+
+        Assert::same($check->effective($schema, SchemaDirection::Request), [...$schema, 'required' => ['secret']]);
+        Assert::same($check->effective($schema, SchemaDirection::Response), [...$schema, 'required' => ['id']]);
+    }
+
+    /**
+     * A `$defs` member is a schema a local `$ref` reaches — the compiled form
+     * of a recursive schema — and is read in the same direction: a
+     * `readOnly` member of a tree node is not required at any depth of a
+     * request. The rewrite stays a fixed point of itself on that form too.
+     */
+    public function effectiveReachesIntoDefs(): void
+    {
+        $node = [
+            'type' => 'object',
+            'required' => ['id', 'name'],
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'name' => ['type' => 'string'],
+                'children' => ['type' => 'array', 'items' => ['$ref' => '#/$defs/Node']],
+            ],
+        ];
+        $schema = [...$node, '$defs' => ['Node' => $node]];
+        $check = new SchemaCheck();
+
+        $request = $check->effective($schema, SchemaDirection::Request);
+        Assert::same($request['required'], ['name']);
+        Assert::same($request['$defs']['Node']['required'], ['name']);
+        Assert::same($request['$defs']['Node']['properties']['id'], ['type' => 'integer', 'readOnly' => true]);
+        Assert::same($check->effective($request, SchemaDirection::Request), $request);
+        Assert::same($check->effective($schema, SchemaDirection::Response)['$defs']['Node']['required'], ['id', 'name']);
+
+        // Judged through the same form: the id is admitted, never demanded, three levels down.
+        $tree = json_decode('{"name":"a","children":[{"name":"b","children":[{"name":"c","children":[{"name":"d"}]}]}]}');
+        Assert::true($check->accepts($tree, $schema, SchemaDialect::OpenApi31));
+        Assert::false($check->accepts($tree, $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
     /**
@@ -122,6 +251,26 @@ final class SchemaCheckTest
         Expect::exception(InvalidContract::class);
 
         (new SchemaCheck())->accepts(1, $schema, SchemaDialect::OpenApi31);
+    }
+
+    /**
+     * The backend parses a node the first time a value reaches it; a `$defs`
+     * member reached through a `$ref`, or a property the value happens not
+     * to carry, used to be judged fine until it was not. Every node is
+     * parsed at compilation, so the refusal comes from the first call.
+     */
+    public function refusesASubschemaTheBackendCannotParseBeforeAnyValueReachesIt(): void
+    {
+        $check = new SchemaCheck();
+        $schema = ['type' => 'object', 'properties' => ['a' => ['$ref' => '#/$defs/A']], '$defs' => ['A' => ['type' => 'string', 'pattern' => '[']]];
+
+        try {
+            // An object without `a` never reaches the member the backend cannot read.
+            $check->accepts((object) [], $schema, SchemaDialect::OpenApi31);
+            Assert::true(actual: false, message: 'Expected the schema to be refused');
+        } catch (InvalidContract $exception) {
+            Assert::string($exception->getMessage())->contains('pattern value must be a valid regex');
+        }
     }
 
     /** @return iterable<string, array{array<string, mixed>}> */

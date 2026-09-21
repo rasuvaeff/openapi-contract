@@ -68,7 +68,72 @@ final class JsonPointerResolver
      */
     private const array DATA_KEYWORDS = ['example', 'value'];
 
+    /**
+     * The keywords a deferred reference carries beside its `$ref`, read off
+     * the top of the node by the wire decoders: `ParameterKind` comes from
+     * `type`, and a multipart part's default content type from `format`.
+     * Both are scalars, both are the target's own, and a deferring reference
+     * conjoins with the def it names — so carrying them asserts nothing the
+     * def does not already assert. Maps (`properties`, `items`) stay out:
+     * they are what the deferral exists not to copy.
+     *
+     * @var array<string, null>
+     */
+    private const array DEFERRED_SHAPE_KEYWORDS = ['type' => null, 'format' => null];
+
+    /**
+     * How deep inside a Schema Object a `$ref` must sit before a component
+     * this schema has already resolved may be deferred to `$defs`. The wire
+     * decoders read `properties`, `items` and `additionalProperties` off the
+     * root and its direct members — a property schema and the root's own
+     * `items` sit at depths 1 and 2 of the walk below — and a deferred node
+     * carries only {@see DEFERRED_SHAPE_KEYWORDS}. Depth 3 is one level
+     * below everything they read: `type` and `format` are all that is asked
+     * of a node there.
+     */
+    private const int SHARED_DEFER_DEPTH = 3;
+
     private int $resolvedNodes = 0;
+
+    /**
+     * The reference targets on the current resolution path, innermost last,
+     * each mapped to whether a reference back to it was met below it — the
+     * mark that turns an inlined schema into a `$defs` member as well.
+     *
+     * @var array<string, bool>
+     */
+    private array $path = [];
+
+    /**
+     * The `$defs` collected for the Schema Object being resolved, keyed by
+     * def name; `null` outside a Schema Object. See {@see defer()}.
+     *
+     * @var array<string, array<array-key, mixed>>|null
+     */
+    private ?array $defs = null;
+
+    /**
+     * The targets this resolver has already resolved, keyed by target, in
+     * their materialized form — the memory of the shared-component rule.
+     * One resolver compiles one document, so the memory is the document's:
+     * the first resolution of a component is kept whole and reused for
+     * every further use in every Schema Object, and a large component is
+     * resolved — and stored — once per document, not once per path that
+     * reaches it. PHP shares the reused arrays until they are written, so
+     * the reuse costs a reference where it is not deferred.
+     *
+     * @var array<string, array<array-key, mixed>>
+     */
+    private array $shared = [];
+
+    /**
+     * The defs each remembered resolution collected along the way, keyed by
+     * the same target — the baggage a reuse of it has to register, because
+     * the resolution's local `$ref`s point into them.
+     *
+     * @var array<string, array<string, array<array-key, mixed>>>
+     */
+    private array $sharedDefs = [];
 
     /**
      * @param array<string, mixed> $document
@@ -97,15 +162,96 @@ final class JsonPointerResolver
      */
     public function resolve(array $node, int $referenceDepth = 0, bool $inSchema = false): array
     {
-        return $this->resolveIn($node, $this->graph?->entryPath() ?? '', $referenceDepth, $inSchema);
+        $file = $this->graph?->entryPath() ?? '';
+        $resolved = $inSchema
+            ? $this->resolveSchema($node, $file, $referenceDepth)
+            : $this->resolveIn($node, $file, $referenceDepth, inSchema: false);
+        if ($resolved instanceof DeferredReference) {
+            // Outside a schema nothing is deferred, and a schema root that
+            // is one has been refused by resolveSchema() already.
+            throw new \LogicException('A deferred reference escaped its schema');
+        }
+
+        return $resolved;
     }
 
     /**
+     * Resolves one Schema Object root: the node a `schema` key introduces, or
+     * the node {@see resolve()} was told is one. A schema is where a
+     * reference may legally reach back to a schema still being resolved — a
+     * tree's `children` are trees — and inlining cannot express that, so the
+     * members of every cycle met below the root are collected as its `$defs`
+     * and the back-references become local `$ref`s into them, the form the
+     * validation backend evaluates natively.
+     *
+     * A schema is also where the same component is reached along more than
+     * one branch — a diamond, the shape a large `components` section is —
+     * and inlining copies it once per branch, so the copies multiply along
+     * the depth. The first resolution of a component — in this Schema
+     * Object or an earlier one — is kept for the whole document, and every
+     * further use below the decoder horizon ({@see SHARED_DEFER_DEPTH})
+     * becomes a local `$ref` to a `$defs` member holding it. A Schema
+     * Object without a cycle and without a shared component compiles
+     * exactly as before: no `$defs` appears.
+     *
      * @param array<array-key, mixed> $node
      *
      * @return array<array-key, mixed>
      */
-    private function resolveIn(array $node, string $file, int $referenceDepth, bool $inSchema): array
+    private function resolveSchema(array $node, string $file, int $referenceDepth): array
+    {
+        $outer = $this->defs;
+        $this->defs = [];
+
+        try {
+            $resolved = $this->resolveIn($node, $file, $referenceDepth, inSchema: true, schemaDepth: 0);
+            $defs = $this->collectedDefs();
+        } finally {
+            $this->defs = $outer;
+        }
+        if ($resolved instanceof DeferredReference) {
+            // `A: {$ref: B}`, `B: {$ref: A}` — a cycle with no schema in it
+            // anywhere. Nothing to defer to, and nothing to evaluate.
+            throw new InvalidContract(sprintf('OpenAPI $ref "%s" in %s resolves to nothing but a reference to itself', $resolved->reference, $this->label($file)));
+        }
+        if ($defs === []) {
+            return $resolved;
+        }
+        /** @var array<array-key, mixed> $existing */
+        $existing = is_array($resolved['$defs'] ?? null) ? $resolved['$defs'] : [];
+        $resolved['$defs'] = [...$existing, ...$defs];
+
+        return $this->materialize($resolved);
+    }
+
+    /**
+     * The defs the schema being resolved has collected so far — read through
+     * a method because the recursion below {@see resolveSchema()} fills the
+     * property it just emptied.
+     *
+     * @return array<string, array<array-key, mixed>>
+     */
+    private function collectedDefs(): array
+    {
+        return $this->defs ?? [];
+    }
+
+    /** Whether a reference back to the target was met while it was on the path. */
+    private function wasReferencedBelow(string $target): bool
+    {
+        return ($this->path[$target] ?? false) === true;
+    }
+
+    /**
+     * @param array<array-key, mixed> $node
+     * @param int $schemaDepth how many array levels below the Schema Object
+     *        root this node sits at — the root itself is 0. A reference is
+     *        resolved in place, so a target body inherits the depth of the
+     *        `$ref` that named it.
+     *
+     * @return array<array-key, mixed>|DeferredReference
+     */
+    private function resolveIn(array $node, string $file, int $referenceDepth, bool $inSchema, int $schemaDepth = 0): array|DeferredReference
     {
         if (++$this->resolvedNodes > $this->maximumResolvedNodes) {
             throw new InvalidContract(sprintf(
@@ -114,29 +260,286 @@ final class JsonPointerResolver
             ));
         }
 
-        while (array_key_exists('$ref', $node)) {
-            [$targetFile, $fragment, $reference] = $this->target($node['$ref'], $file);
-            if (++$referenceDepth > $this->maximumReferenceDepth) {
-                throw new InvalidContract('OpenAPI $ref chain is too deep (possible circular reference)');
-            }
-
-            $resolved = $this->lookup($targetFile, $fragment, $reference, $file);
-            if ($targetFile !== $file) {
-                $resolved = $this->resolveIn($resolved, $targetFile, $referenceDepth, $inSchema);
-            }
-            $node = $this->merge($node, $resolved, $inSchema);
+        if (!array_key_exists('$ref', $node)) {
+            return $this->resolveMembers($node, $file, $referenceDepth, $inSchema, $schemaDepth);
+        }
+        if ($inSchema && is_string($node['$ref']) && str_starts_with($node['$ref'], '#/$defs/')) {
+            // A local reference into the schema's own `$defs` is what this
+            // resolver emits for a cycle, and what the backend resolves; a
+            // compiled schema handed back for a second pass keeps it. No
+            // OpenAPI document has a `$defs` at its root for one to reach.
+            return $this->resolveMembers($node, $file, $referenceDepth, $inSchema, $schemaDepth);
         }
 
+        [$targetFile, $fragment, $reference] = $this->target($node['$ref'], $file);
+        $target = $targetFile . $fragment;
+        $siblings = $node;
+        unset($siblings['$ref']);
+        if ($siblings !== [] && $this->dialect !== SchemaDialect::OpenApi30) {
+            // Under 3.0 the siblings are ignored whole, references inside
+            // them included; under 3.1 they are kept, so they are resolved.
+            $siblings = $this->resolveMembers($siblings, $file, $referenceDepth, $inSchema, $schemaDepth);
+        }
+
+        if (array_key_exists($target, $this->path)) {
+            // Seen before the depth is charged: a cycle is a shape, not a
+            // runaway, and the depth budget is for the chain that never
+            // comes back.
+            if (!$inSchema) {
+                // A Path Item, Response or Parameter that refers back to
+                // itself has no meaning the object model can carry, and
+                // nothing downstream could evaluate it lazily.
+                throw new InvalidContract(sprintf('Circular $ref "%s" outside a schema in %s', $reference, $this->label($file)));
+            }
+            $this->path[$target] = true;
+
+            return $this->merge($siblings, $this->defer($reference, $targetFile, $fragment, $file), $inSchema);
+        }
+        if (array_key_exists($target, $this->shared) && $inSchema) {
+            // A component this document has resolved already: reached again,
+            // and the second reach is where inlining starts to multiply. The
+            // first resolution is reused — never resolved a second time —
+            // and below the decoder horizon it is a `$defs` member
+            // referenced from this use, the same form a cycle's
+            // back-reference takes. Above that horizon the reuse stays the
+            // inline the first resolution produced, because the wire
+            // decoders read maps there that a deferred node does not carry.
+            // The defs the first resolution collected ride along either
+            // way: the reused body's local refs point into them, and the
+            // Schema Object being resolved has to carry what they name.
+            $resolved = $this->shared[$target];
+            foreach ($this->sharedDefs[$target] as $name => $def) {
+                if ($this->defs !== null && !array_key_exists($name, $this->defs)) {
+                    $this->defs[$name] = $def;
+                }
+            }
+            if ($schemaDepth >= self::SHARED_DEFER_DEPTH) {
+                $name = $this->defName($targetFile, $fragment);
+                if ($this->defs !== null && !array_key_exists($name, $this->defs)) {
+                    $this->defs[$name] = $resolved;
+                }
+
+                return $this->merge($siblings, new DeferredReference(
+                    $reference,
+                    $name,
+                    array_intersect_key($resolved, self::DEFERRED_SHAPE_KEYWORDS),
+                ), $inSchema);
+            }
+
+            return $this->merge($siblings, $resolved, $inSchema);
+        }
+        if (array_key_exists($target, $this->shared)) {
+            // A Reference Object this document has resolved already — the
+            // compiler resolves a Path Item and then the Request Body inside
+            // it again. Nothing is deferred outside a schema, so the reuse is
+            // the resolved object itself.
+            return $this->merge($siblings, $this->shared[$target], $inSchema);
+        }
+        if (++$referenceDepth > $this->maximumReferenceDepth) {
+            throw new InvalidContract('OpenAPI $ref chain is too deep');
+        }
+
+        $this->path[$target] = false;
+
+        try {
+            $resolved = $this->resolveIn($this->lookup($targetFile, $fragment, $reference, $file), $targetFile, $referenceDepth, $inSchema, $schemaDepth);
+            $referencedBelow = $this->wasReferencedBelow($target);
+        } finally {
+            unset($this->path[$target]);
+        }
+        if ($referencedBelow && $this->defs !== null && is_array($resolved)) {
+            // Inlined where it was first met, as every schema is, and kept as
+            // a def as well for the references that reached back to it.
+            $this->defs[$this->defName($targetFile, $fragment)] = $resolved;
+        }
+        if (is_array($resolved)) {
+            // What a later reuse of this resolution has to bring with it:
+            // the defs registered below it, because the local refs the
+            // resolution emitted point into them. A Schema Object starts
+            // with none, so the map at the end of the resolution is the
+            // resolution's own; outside a schema nothing is tracked — the
+            // defs a nested schema collected are embedded in its own
+            // resolved subtree, which carries them itself. Materialized
+            // like the body, for the same reason.
+            $this->sharedDefs[$target] = array_map($this->materialize(...), $this->defs ?? []);
+            // Stored materialized — no deferred reference left inside — so
+            // that every later Schema Object reusing it walks a tree whose
+            // materialize() pass is a comparison and not a copy.
+            $this->shared[$target] = $this->materialize($resolved);
+        }
+
+        return $this->merge($siblings, $resolved, $inSchema);
+    }
+
+    /**
+     * @param array<array-key, mixed> $node
+     *
+     * @return array<array-key, mixed>
+     */
+    private function resolveMembers(array $node, string $file, int $referenceDepth, bool $inSchema, int $schemaDepth): array
+    {
+        $discriminated = $inSchema && $this->isDiscriminated($node);
         /** @var mixed $value */
         foreach ($node as $key => $value) {
-            if (is_array($value) && !$this->isData($key, $inSchema)) {
-                // A Schema Object is entered through a `schema` key and never
-                // left: everything below one is a schema too.
-                $node[$key] = $this->resolveIn($value, $file, $referenceDepth, $inSchema || $key === 'schema');
+            if (!is_array($value) || $this->isData($key, $inSchema)) {
+                continue;
+            }
+            if ($discriminated && ($key === 'oneOf' || $key === 'anyOf') && array_is_list($value)) {
+                $node[$key] = $this->resolveBranches($value, $file, $referenceDepth, $schemaDepth + 2);
+
+                continue;
+            }
+            // A Schema Object is entered through a `schema` key and never
+            // left: everything below one is a schema too.
+            $node[$key] = !$inSchema && $key === 'schema'
+                ? $this->resolveSchema($value, $file, $referenceDepth)
+                : $this->resolveIn($value, $file, $referenceDepth, $inSchema, $schemaDepth + 1);
+        }
+
+        return $node;
+    }
+
+    /**
+     * Whether a Schema Object declares a `discriminator` its `oneOf`/`anyOf`
+     * branches are chosen among.
+     *
+     * @param array<array-key, mixed> $node
+     */
+    private function isDiscriminated(array $node): bool
+    {
+        /** @var mixed $discriminator */
+        $discriminator = $node['discriminator'] ?? null;
+
+        return is_array($discriminator) && is_string($discriminator['propertyName'] ?? null);
+    }
+
+    /**
+     * The branches of a discriminated union, each `$ref` among them kept as
+     * the reference it is. A `discriminator` names its branches — through
+     * its `mapping`, or implicitly by component name — and a branch inlined
+     * where it was first met has no name left for the value to be matched
+     * against: the diagnostics that follow the discriminator to one branch
+     * could never find it. So a referenced branch is deferred to `$defs`
+     * whatever its depth, the form a cycle's back-reference and a shared
+     * component already take, and the local `$ref` it becomes carries the
+     * component's name. A branch written inline stays inline. The backend
+     * evaluates both forms alike, and nothing the wire decoders read sits
+     * inside a branch.
+     *
+     * @param list<mixed> $branches
+     *
+     * @return list<mixed>
+     */
+    private function resolveBranches(array $branches, string $file, int $referenceDepth, int $schemaDepth): array
+    {
+        /** @var mixed $branch */
+        foreach ($branches as $index => $branch) {
+            if (!is_array($branch)) {
+                continue;
+            }
+            /** @var mixed $reference */
+            $reference = $branch['$ref'] ?? null;
+            if (!is_string($reference) || str_starts_with($reference, '#/$defs/') || $this->defs === null) {
+                $branches[$index] = $this->resolveIn($branch, $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+
+                continue;
+            }
+            [$targetFile, $fragment] = $this->target($reference, $file);
+            $siblings = $branch;
+            unset($siblings['$ref']);
+            if ($siblings !== [] && $this->dialect !== SchemaDialect::OpenApi30) {
+                $siblings = $this->resolveMembers($siblings, $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+            }
+            $target = $this->resolveIn(['$ref' => $reference], $file, $referenceDepth, inSchema: true, schemaDepth: $schemaDepth);
+            if (is_array($target)) {
+                // Resolved and remembered under its target — the def is that
+                // memory, so the branch costs a reference and not a copy.
+                $name = $this->defName($targetFile, $fragment);
+                if (!array_key_exists($name, $this->defs)) {
+                    $this->defs[$name] = $this->shared[$targetFile . $fragment] ?? $target;
+                }
+                $target = new DeferredReference($reference, $name, array_intersect_key($target, self::DEFERRED_SHAPE_KEYWORDS));
+            }
+            $branches[$index] = $this->merge($siblings, $target, inSchema: true);
+        }
+
+        return $branches;
+    }
+
+    /**
+     * A reference back to a schema on the resolution path: what stands in
+     * its place until the Schema Object root is done, when
+     * {@see materialize()} turns it into `{$ref: '#/$defs/<name>'}`. The
+     * target's `type` and `format` are read now, unresolved, and carried on
+     * the node, so the wire decoders can still tell a list from a scalar and
+     * a binary part from a text one off the top of it; `items` and
+     * `properties` are not, because unresolved they would bring the
+     * document's own `$ref`s into a compiled schema. Nothing is lost by
+     * that: a deferred node only ever sits below the members the decoders
+     * read maps off — a `deepObject` has one level of members, a form or
+     * multipart body one level of parts — while the backend, which follows
+     * the reference, judges the whole value.
+     */
+    private function defer(string $reference, string $targetFile, string $fragment, string $file): DeferredReference
+    {
+        $body = $this->lookup($targetFile, $fragment, $reference, $file);
+
+        return new DeferredReference(
+            $reference,
+            $this->defName($targetFile, $fragment),
+            array_intersect_key($body, self::DEFERRED_SHAPE_KEYWORDS),
+        );
+    }
+
+    /**
+     * Replaces every {@see DeferredReference} below the node — the `$defs`
+     * members included, since a cycle's back-reference lives inside one —
+     * with the local `$ref` it stands for.
+     *
+     * @param array<array-key, mixed> $node
+     *
+     * @return array<array-key, mixed>
+     */
+    private function materialize(array $node): array
+    {
+        /** @var mixed $value */
+        foreach ($node as $key => $value) {
+            if ($value instanceof DeferredReference) {
+                $node[$key] = $value->toSchema();
+            } elseif (is_array($value)) {
+                $materialized = $this->materialize($value);
+                // A subtree no deferred reference lives in comes back as the
+                // same array, and assigning it would only force the copy the
+                // sharing exists to avoid: a document-wide component is
+                // walked once per Schema Object that references it, and the
+                // walk has to stay a comparison.
+                if ($materialized !== $value) {
+                    $node[$key] = $materialized;
+                }
             }
         }
 
         return $node;
+    }
+
+    /**
+     * The `$defs` name of a target: its JSON Pointer with the `/` separators
+     * spelled as `.` (`#/components/schemas/Node` → `components.schemas.Node`),
+     * prefixed by the file it lives in and a `:` when that is not the entry
+     * document (`a.json:Node`). Deterministic, and the same name wherever
+     * the target is reached from, so two cycles through one schema share a
+     * single def. The name is what a consumer sees on the compiled
+     * operation; `#` is kept out of it because the local `$ref` that names
+     * it is a URI fragment.
+     */
+    private function defName(string $targetFile, string $fragment): string
+    {
+        $name = str_replace('/', '.', substr($fragment, 2));
+        if ($this->graph instanceof DocumentGraph && $targetFile !== $this->graph->entryPath()) {
+            $name = $this->graph->displayPath($targetFile) . ':' . $name;
+        }
+
+        return $name === '' ? 'document' : $name;
     }
 
     /**
@@ -157,15 +560,13 @@ final class JsonPointerResolver
      * decoder reads are lifted to the top so the node still looks like one
      * schema to everything that inspects it without evaluating it.
      *
-     * @param array<array-key, mixed> $node
-     * @param array<array-key, mixed> $resolved
+     * @param array<array-key, mixed> $siblings the node without its `$ref`, members resolved
+     * @param array<array-key, mixed>|DeferredReference $resolved
      *
-     * @return array<array-key, mixed>
+     * @return array<array-key, mixed>|DeferredReference
      */
-    private function merge(array $node, array $resolved, bool $inSchema): array
+    private function merge(array $siblings, array|DeferredReference $resolved, bool $inSchema): array|DeferredReference
     {
-        $siblings = $node;
-        unset($siblings['$ref']);
         if ($this->dialect === SchemaDialect::OpenApi30 || $siblings === []) {
             // OAS 3.0.4: "This object cannot be extended with additional
             // properties, and any properties added SHALL be ignored" — and a
@@ -173,6 +574,10 @@ final class JsonPointerResolver
             return $resolved;
         }
         if (!$inSchema) {
+            if ($resolved instanceof DeferredReference) {
+                throw new \LogicException('Only a schema reference is deferred');
+            }
+
             // Both are carried wherever a Reference Object appears, including
             // the types that have no `summary` field of their own — the
             // specification says the override "has no effect" there, and it
@@ -183,6 +588,15 @@ final class JsonPointerResolver
         }
         $annotations = array_intersect_key($siblings, array_flip(self::SCHEMA_ANNOTATIONS));
         $assertions = array_diff_key($siblings, $annotations);
+        if ($resolved instanceof DeferredReference) {
+            // Only a schema defers. The body is still being resolved, so
+            // nothing can be lifted off it but the `type` the deferred node
+            // already carries; the siblings are a conjunction with it as
+            // with any other 3.1 schema reference.
+            return $assertions === []
+                ? new DeferredReference($resolved->reference, $resolved->name, [...$resolved->shape, ...$annotations])
+                : ['allOf' => [$resolved, $assertions], ...$resolved->shape, ...$annotations];
+        }
         if ($assertions === []) {
             return [...$resolved, ...$annotations];
         }

@@ -139,7 +139,7 @@ final class ServerMatchingTest
     {
         $contract = $this->singleServerContract('/proxy/https://inner');
 
-        Assert::same($contract->operations()[0]->serverBases, ['/proxy/https://inner']);
+        Assert::same($contract->operations()[0]->servers[0]['base'], '/proxy/https://inner');
     }
 
     public function compilesUppercaseServerUrlComponentsToLowercase(): void
@@ -174,7 +174,6 @@ final class ServerMatchingTest
 
         Assert::true($contract->match(new Request('GET', 'https://prod.api.test/v2/x')) instanceof MatchedOperation);
         Assert::null($contract->match(new Request('GET', 'https://staging.api.test/v2/x')));
-        Assert::same($contract->operation('x.get')->serverBases, ['/v2']);
         Assert::same($contract->operation('x.get')->servers, [
             ['scheme' => 'https', 'host' => 'prod.api.test', 'port' => null, 'base' => '/v2'],
         ]);
@@ -298,7 +297,7 @@ final class ServerMatchingTest
         ];
     }
 
-    public function keepsTheServerBasesProjectionShape(): void
+    public function canonicalizesEveryServerBase(): void
     {
         $contract = Contract::fromArray(['openapi' => '3.1.0', 'servers' => [
             ['url' => 'https://api.example.com/v1/'],
@@ -306,7 +305,7 @@ final class ServerMatchingTest
             ['url' => 'https://api.example.com'],
         ], 'paths' => ['/x' => ['get' => ['operationId' => 'x.get', 'responses' => ['200' => ['description' => 'ok']]]]]]);
 
-        Assert::same($contract->operation('x.get')->serverBases, ['/v1', '/', '/']);
+        Assert::same(array_column($contract->operation('x.get')->servers, 'base'), ['/v1', '/', '/']);
     }
 
     private function singleServerContract(string $url): Contract

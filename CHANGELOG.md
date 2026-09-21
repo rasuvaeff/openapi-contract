@@ -5,7 +5,221 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.15.0 — 2026-09-20
+
+- **Added.** `Contract::validateWebhook(string $name, RequestInterface
+  $request, ?ResponseInterface $response = null)` validates an incoming
+  webhook delivery against the OpenAPI 3.1 `webhooks` map (#158). Each
+  entry compiles to one `Operation` per method, a Path Item without a
+  path: no template, no path parameters (`in: path` is refused), no server
+  matching — the delivery's URL is the receiver's own. Parameters in the
+  query, header and cookie, the request body and, when a response is
+  passed, the receiver's answer go through the ordinary pipeline; an
+  undeclared name or method is one `request.operation.unknown` violation.
+  `Contract::webhooks()` lists them by name; `operations()` and `match()`
+  keep to path operations; `operation()` and `validateResponse()` answer a
+  webhook's key — its `operationId`, else `WEBHOOK <METHOD> <name>`.
+  `Operation` gains a defaulted `webhook` parameter (append-only: named
+  arguments) carrying the map key, and violations point under
+  `/webhooks/<name>`. A 3.1 document declaring only `webhooks` loads; the
+  refusal now applies to a document with neither `paths` nor `webhooks`
+  operations, and a 3.0 document carrying `webhooks` is refused as such.
+- **Changed.** A body that fails its schema is reported per leaf failure
+  (#160): each `request.body.schema` / `response.body.schema` violation
+  names the failing member in `instancePath` (`$.age`,
+  `$.children[2].name`), the assertion in the new `Violation::$keyword`
+  (`minimum`, `type`, `required`, ...; `null` on every other violation),
+  and carries that one assertion as `expected` — `{"minimum": 0}` rather
+  than the media type's schema. A `required` member the value lacks is
+  reported at the path it would have had with `null` as `actual`; the
+  list is bounded at twenty leaves; a leaf two union branches report
+  alike is reported once; a failure of the value itself keeps `$`. The
+  codes are unchanged — this is a diagnostic change — but a consumer that
+  asserted exactly one body violation, or `instancePath === '$'`, now
+  sees more. `ValidationResultFormatter` prints a `keyword` line where
+  one is set and renders a body member's `actual` as it renders a
+  parameter's — the credential name pattern applies to the member path
+  and to the names inside it, so `$.age` prints `-1` and `$.password`
+  prints `[redacted]`; a whole-body violation at `$` stays redacted
+  wholesale.
+- **Changed.** For a `oneOf`/`anyOf` that declares a `discriminator`, the
+  body diagnostics follow the branch the `propertyName` value names —
+  through `mapping`, as a `$ref` or a component name, else by the
+  component name the value spells — instead of reporting every branch's
+  errors; a value naming no branch is one violation at the discriminator
+  member with the keyword `discriminator`. The verdict is untouched: every
+  branch is still evaluated. So that a branch keeps its name, a `$ref`
+  branch of a discriminated union is now compiled as the local
+  `{$ref: '#/$defs/…'}` a shared component takes rather than inlined; a
+  consumer that read such a branch's members off `Operation` follows the
+  reference into the schema's `$defs`, as it already does for a cycle.
+
+## 0.14.0 — 2026-09-20
+
+- **Fixed.** A document whose `components` form a shared-component DAG —
+  Stripe's published `spec3.json` is the case that refused — loads. Every
+  `$ref` was inlined at every use, so a component copied once per path that
+  reached it multiplied along the depth: resolving
+  `#/components/schemas/charge` alone visited more than 20 000 000 nodes.
+  The first resolution of a component is now kept for the whole document
+  and every further use at least one level below the members the wire
+  decoders read becomes the same local `{$ref: '#/$defs/…'}` a cycle's
+  back-reference already takes, with the defs the first resolution
+  collected registered alongside; uses the decoders read `properties`/
+  `items` maps off stay inlined, so no wire decoding changes. A deferred
+  node now carries the target's `format` beside its `type`. Measured:
+  resolving `charge` 20 000 000+ nodes → 64 415; GitHub's REST description
+  1.09 s / 199 MiB → 0.82 s / 161 MiB; Stripe's `spec3.json` loads — 594
+  operations, 70 s, 7.5 GiB peak — with raised limits (`documentBytes` past
+  8 MB, `resolvedNodes` in the tens of millions); the compile-phase cost of
+  a document with thousands of schema positions is tracked separately.
+- **Changed.** `rasuvaeff/property-testing-testo` is required at `^1.0`
+  (the strict engine); no test in this package needed a change for it.
+
+## 0.13.0 — 2026-09-20
+
+- **Fixed.** A schema that refers to itself — a tree whose `children` are
+  trees, a comment thread, a nested error — can be loaded. Every `$ref` was
+  inlined, so a self-reference expanded until the depth guard tripped and the
+  document was refused as `$ref chain is too deep (possible circular
+  reference)`. The members of a reference cycle are now kept as the Schema
+  Object's `$defs`, named after their JSON Pointer
+  (`#/components/schemas/Node` → `components.schemas.Node`, `a.json:Node` from
+  another file), and the reference back to one becomes a local
+  `{$ref: '#/$defs/…'}` carrying the target's `type` — the form the validation
+  backend evaluates natively; the schema the cycle starts from is inlined
+  where it is first met and kept as a def as well. The directional
+  `readOnly`/`writeOnly` rewrite (`SchemaCheck::effective()`) reaches into
+  `$defs`, so a `readOnly` member of a tree node is not required at any depth
+  of a request. A schema without a cycle compiles exactly as before, with no
+  `$defs`; a cycle outside a schema (a Path Item or Response reaching itself)
+  and a cycle with no schema in it (`A: {$ref: B}`, `B: {$ref: A}`) stay
+  refused, now by name. The cycle is found before the depth is charged, so a
+  cycle at the end of a long chain is a cycle, not a deep chain, and the
+  depth message drops its "(possible circular reference)". (#159)
+- **Fixed.** `{}` in a subschema position — `items: {}`, `properties: {x:
+  {}}`, `additionalProperties: {}` — was refused as a list where a schema was
+  expected: the empty object decodes to the empty array, which
+  `array_is_list()` calls a list. It is the schema with no keywords, admits
+  everything, and now goes back on the wire as `{}`; so does a schema that
+  normalizes down to nothing, such as OAS 3.0's `{nullable: true}`, which the
+  backend used to reject as `[]`. GitHub's published REST description
+  declares both shapes.
+- **Added.** `Limits::$resolvedNodes` (default 1 000 000): the
+  reference-resolution budget was a constant of 100 000 inside the resolver,
+  absent from `Limits` while the README listed it among the budgets, and a
+  large flat document tripped it with no way to raise it. A shared component
+  is visited once per use, so a description costs more resolution than it
+  has nodes — GitHub's REST API (1 239 operations, 13 MB) needs about 360 000,
+  and loads with `documentBytes` raised. Stripe's `spec3.json` still does
+  not: its components form a DAG that inlining expands past twenty million
+  nodes for a single schema, which is a different limitation, tracked
+  separately.
+- **Changed.** A 3.1 schema reference that is an alias of another
+  (`a: {$ref: b}`) lifts `type`, `items` and `properties` to the top of the
+  conjunction it forms with its siblings, as a direct reference always did;
+  the chain is resolved to its end before the merge.
+
+## 0.12.2 — 2026-09-19
+
+- **Added.** `SchemaCheck::isMultipleOf(int|float $value, int|float $divisor): bool`
+  — the `multipleOf` verdict of 0.12.1, static and exported, so a consumer
+  that has to predict it asks this rather than keeps a second copy of the
+  rule. `rasuvaeff/property-testing-openapi` decided whether the `number`
+  branch of a `oneOf` admits an integer by the float rule the contract left
+  in 0.12.1, and disagreed on 4670 of the integers in ±100000 for
+  `multipleOf: 0.7` (#154, property-testing-openapi#132).
+- **Fixed.** The decimal predicate took `abs()` of an integer, which turns
+  `PHP_INT_MIN` into a float and loses its low digits; the sign is trimmed
+  from the spelling instead (#154).
+
+## 0.12.1 — 2026-09-19
+
+- **Fixed.** The `multipleOf` verdict depended on whether `ext-bcmath` was
+  loaded, and neither verdict was the specification's. The backend judged
+  the keyword on the parsed doubles: in floating point with a `1e-14`
+  tolerance, which from about `64` upward is less than one ulp, so `64.1`
+  was rejected for `multipleOf: 0.1` (the `composer:2` image, for one); or,
+  with the extension, on the double's expansion to fourteen decimals, which
+  is `123.40000000000001` for `123.4` and was rejected the same way (the
+  GitHub runners, for one). Same document, same bytes, two verdicts. The
+  keyword is now judged on the decimals the document and the message spell
+  — both numbers are taken back to their shortest round-trip spelling,
+  scaled to integers over a common power of ten and divided exactly, with no
+  optional extension involved — so `64.1` and `521642427059.686` are the
+  multiples they read as, and `64.10000000000001` is not (#151). A generator
+  that emitted the float product where the old float path demanded it
+  (`rasuvaeff/property-testing-openapi` 0.15.0) needs its 0.15.1.
+
+## 0.12.0 — 2026-09-18
+
+- **Changed (breaking).** `Operation::$serverBases` is gone. It was documented
+  as the v0.1 base-path projection of `Operation::$servers` and duplicated it
+  entry for entry; read `$servers[$i]['base']`. (#146)
+- **Changed.** A `readOnly` property on a request — and a `writeOnly` one on a
+  response — loses only its `required` entry: it stays declared and typed, as
+  both specifications have it ("the required will take effect on the response
+  only"). Dropping the subschema made the verdict depend on
+  `additionalProperties`: an open object accepted `{"id": "x"}` against an
+  integer `id`, and a closed one rejected the `{"id": 1}` the document
+  declared. `SchemaCheck`, `SchemaDirection` and the README say so. (#141)
+- **Added.** `SchemaCheck::effective(array $schema, SchemaDirection $direction)`
+  exports the directional rewrite the validators apply before a value is
+  judged — a fixed point of itself, dialect-independent — so a consumer that
+  builds values for one direction builds them against the schema they will be
+  checked by instead of a copy of the rule. (#147)
+- **Added.** `format: int32` and `format: int64` are asserted as ranges of the
+  integer type; every other non-string format stays an annotation, and README
+  now tables which formats are asserted and which are not. (#148)
+- **Added.** `InvalidLimits`: a budget below 1 is refused with an
+  `\InvalidArgumentException` that implements `ContractException`, which
+  README had promised of every exception and `Limits` alone did not keep.
+  (#145)
+- **Changed.** `Operation::__construct` is `@api` and append-only, constructed
+  with named arguments — consumers build operations by hand in their tests,
+  so it was frozen in practice. `Operation::$requestBody` and
+  `Operation::$responses` carry declared shapes, `CompiledRequestBody` and
+  `CompiledResponses`, that a consumer may import. (#146)
+- **Fixed.** Every Schema Object the validators read — each parameter's, each
+  request and response media type's, each response header's and multipart
+  part header's — is compiled while the contract is built, in its own
+  direction, so a schema this package cannot evaluate (`patternProperties`,
+  `propertyNames`, `if`/`then`, a `$schema` naming another dialect, an OAS
+  3.0 `exclusiveMinimum` written as a number, a `pattern` or `minimum` the
+  backend cannot parse, at any depth) is `InvalidContract` from
+  `fromArray()`/`fromJson()`/`fromFile()`. It used to load and raise from the
+  first `validate*()` call that reached it — for a middleware, a 500 on live
+  traffic instead of an error at boot. `SchemaCheck::accepts()` refuses such
+  a schema on the first call too, where the backend used to parse a nested
+  member only when a value reached it. (#139)
+- **Fixed.** The empty Schema Object `{}` on a media type, a header or a
+  parameter is read as the unconstrained schema it is; it loaded and then
+  raised `InvalidContract("Schema must be an object")` from the first message
+  that reached it. (#149)
+- **Fixed.** A cookie string is split into pairs on `;` by the validator
+  itself; it was rewritten to `&` and read with the query grammar, so
+  `sid=abc&def` — one cookie with a legal `&` in its value — validated as
+  `abc`. (#140)
+- **Fixed.** A wire string is coerced to `integer`/`number` only when it
+  spells one by the JSON number grammar, anchored: `5\n` was an integer,
+  `.5`, `5.` and ` 5` were numbers, and an integer past PHP's range saturated
+  to `PHP_INT_MAX` instead of keeping its magnitude. (#142)
+- **Fixed.** A percent-encoded `/` or `\` inside a path parameter no longer
+  makes the whole request `request.operation.unknown`: the path is matched on
+  raw segments, each decoded on its own, so `/pets/a%2Fb` matches
+  `/pets/{name}` with `name = "a/b"`, the value the application receives.
+  (#143)
+- **Fixed.** `ValidationResultFormatter` redacts the `actual` value of a
+  violation at `location: cookie` the way it redacts a body: a cookie is a
+  credential carrier whatever the document named it. (#144)
+- **Changed.** `Contract::operation()` looks the key up in an index built at
+  construction instead of scanning the operation list.
+- **Documentation.** README and `llms.txt` list the keywords that are
+  accepted and never read (`allowEmptyValue`, `discriminator`, `xml`,
+  `externalDocs`, `deprecated`), and note that `multipleOf` is evaluated in
+  decimal arithmetic with `ext-bcmath` and in floating point without it.
+
+## 0.11.1 — 2026-09-18
 
 - **Fixed.** A `readOnly` property is now dropped from a request schema — and a
   `writeOnly` one from a response schema — under `additionalProperties` as it

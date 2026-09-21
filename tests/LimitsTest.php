@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\OpenApiContract\Tests;
 
+use Rasuvaeff\OpenApiContract\ContractException;
+use Rasuvaeff\OpenApiContract\InvalidLimits;
 use Rasuvaeff\OpenApiContract\Limits;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -12,6 +14,7 @@ use Testo\Test;
 
 #[Test]
 #[Covers(Limits::class)]
+#[Covers(InvalidLimits::class)]
 final class LimitsTest
 {
     public function defaultsToTheDocumentedBudgets(): void
@@ -22,26 +25,39 @@ final class LimitsTest
         Assert::same($limits->messageBodyBytes, 1024 * 1024);
         Assert::same($limits->documentFiles, 64);
         Assert::same($limits->documentNodes, 5_000_000);
+        Assert::same($limits->resolvedNodes, 1_000_000);
     }
 
     public function carriesTheBudgetsItWasGiven(): void
     {
-        $limits = new Limits(documentBytes: 11, messageBodyBytes: 12, documentFiles: 13, documentNodes: 14);
+        $limits = new Limits(documentBytes: 11, messageBodyBytes: 12, documentFiles: 13, documentNodes: 14, resolvedNodes: 15);
 
         Assert::same($limits->documentBytes, 11);
         Assert::same($limits->messageBodyBytes, 12);
         Assert::same($limits->documentFiles, 13);
         Assert::same($limits->documentNodes, 14);
+        Assert::same($limits->resolvedNodes, 15);
+    }
+
+    public function acceptsTheSmallestBudgetThatAdmitsSomething(): void
+    {
+        $limits = new Limits(documentBytes: 1, messageBodyBytes: 1, documentFiles: 1, documentNodes: 1, resolvedNodes: 1);
+
+        Assert::same([$limits->documentBytes, $limits->messageBodyBytes, $limits->documentFiles, $limits->documentNodes, $limits->resolvedNodes], [1, 1, 1, 1, 1]);
     }
 
     #[DataProvider('emptyBudgetProvider')]
-    public function refusesABudgetThatAdmitsNothing(int $documentBytes, int $messageBodyBytes, int $documentFiles, int $documentNodes, string $message): void
+    public function refusesABudgetThatAdmitsNothing(int $documentBytes, int $messageBodyBytes, int $documentFiles, int $documentNodes, string $message, int $resolvedNodes = 1): void
     {
         try {
-            new Limits(documentBytes: $documentBytes, messageBodyBytes: $messageBodyBytes, documentFiles: $documentFiles, documentNodes: $documentNodes);
+            new Limits(documentBytes: $documentBytes, messageBodyBytes: $messageBodyBytes, documentFiles: $documentFiles, documentNodes: $documentNodes, resolvedNodes: $resolvedNodes);
             Assert::true(actual: false, message: 'Expected an empty budget to be refused');
-        } catch (\InvalidArgumentException $exception) {
+        } catch (InvalidLimits $exception) {
             Assert::same($exception->getMessage(), $message);
+            // The package promises one type for everything it raises, and
+            // the concrete parent that existing catches were written against.
+            Assert::instanceOf($exception, ContractException::class);
+            Assert::instanceOf($exception, \InvalidArgumentException::class);
         }
     }
 
@@ -55,5 +71,7 @@ final class LimitsTest
         yield 'negative document files' => [1, 1, -1, 1, 'Document file budget must be positive'];
         yield 'zero document nodes' => [1, 1, 1, 0, 'Document node budget must be positive'];
         yield 'negative document nodes' => [1, 1, 1, -1, 'Document node budget must be positive'];
+        yield 'zero resolved nodes' => [1, 1, 1, 1, 'Reference-resolution budget must be positive', 0];
+        yield 'negative resolved nodes' => [1, 1, 1, 1, 'Reference-resolution budget must be positive', -1];
     }
 }
