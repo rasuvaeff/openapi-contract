@@ -20,5 +20,6 @@ final readonly class Violation
         public mixed $expected,
         public mixed $actual,
         public string $message,
+        public ?string $keyword = null,
     ) {}
 }

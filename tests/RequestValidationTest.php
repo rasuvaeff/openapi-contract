@@ -327,7 +327,7 @@ final class RequestValidationTest
      * to keep the `readOnly` property required, so the map form rejected the
      * request the other two accepted.
      */
-    public function dropsReadOnlyPropertiesUnderEveryApplicatorKeyword(): void
+    public function unrequiresReadOnlyPropertiesUnderEveryApplicatorKeyword(): void
     {
         $item = ['type' => 'object', 'required' => ['id', 'name'], 'properties' => [
             'id' => ['type' => 'integer', 'readOnly' => true],
@@ -349,6 +349,9 @@ final class RequestValidationTest
         Assert::true($contract->validateRequest($post('/list', '[{"name":"a"}]'))->isValid());
         Assert::true($contract->validateRequest($post('/map', '{"k":{"name":"a"}}'))->isValid());
         Assert::false($contract->validateRequest($post('/map', '{"k":{}}'))->isValid());
+        // Not required on a request, but still typed when it is sent.
+        Assert::true($contract->validateRequest($post('/map', '{"k":{"id":1,"name":"a"}}'))->isValid());
+        Assert::false($contract->validateRequest($post('/map', '{"k":{"id":"x","name":"a"}}'))->isValid());
         // A boolean `additionalProperties` is not a subschema and passes through untouched.
         Assert::false($contract->validateRequest($post('/closed', '{"k":1}'))->isValid());
     }
@@ -376,12 +379,162 @@ final class RequestValidationTest
         Assert::same($result->violations[0]->specPointer, '/paths/~1b/post/requestBody');
     }
 
+    /**
+     * A body that fails its schema used to be one violation at `$` (#160):
+     * the reader had the whole schema and no pointer into it. Now each leaf
+     * failure names its member and the keyword it failed.
+     */
+    public function namesTheFailingBodyMemberAndKeyword(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => [
+            'type' => 'object',
+            'required' => ['name'],
+            'properties' => [
+                'name' => ['type' => 'string'],
+                'age' => ['type' => 'integer', 'minimum' => 0],
+                'a b' => ['type' => 'string'],
+                "it's" => ['type' => 'string'],
+                'tags' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['n' => ['type' => 'string']]]],
+            ],
+        ]]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"name":"x","age":-1,"a b":1,"it\'s":2,"tags":[{"n":"a"},{"n":3}]}'));
+
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->code, $v->location, $v->instancePath, $v->keyword, $v->actual, $v->message], $result->violations),
+            [
+                ['request.body.schema', 'body', '$.age', 'minimum', -1, 'Request body member "$.age" does not satisfy "minimum"'],
+                ['request.body.schema', 'body', "$['a b']", 'type', 1, 'Request body member "$[\'a b\']" does not satisfy "type"'],
+                ['request.body.schema', 'body', "$['it\\'s']", 'type', 2, 'Request body member "$[\'it\\\'s\']" does not satisfy "type"'],
+                ['request.body.schema', 'body', '$.tags[1].n', 'type', 3, 'Request body member "$.tags[1].n" does not satisfy "type"'],
+            ],
+        );
+        foreach ($result->violations as $violation) {
+            Assert::same($violation->specPointer, '/paths/~1b/post/requestBody/content/application~1json/schema');
+        }
+        // `expected` is the one assertion that failed, not the media type's schema.
+        Assert::same(
+            array_map(static fn(Violation $v): mixed => $v->expected, $result->violations),
+            [['minimum' => 0], ['type' => 'string'], ['type' => 'string'], ['type' => 'string']],
+        );
+
+        $missing = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '{"age":1}'))->violations;
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->message], $missing),
+            [['$.name', 'required', null, 'Request body member "$.name" is required and absent']],
+        );
+        Assert::same($missing[0]->expected, ['required' => ['name']]);
+        // A failure of the value itself keeps the root path and no member.
+        $root = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], '[]'))->violations;
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->message], $root),
+            [['$', 'type', [], 'Request body does not satisfy "type"']],
+        );
+    }
+
+    public function namesTheDiscriminatorMemberThatNamesNoBranch(): void
+    {
+        $contract = Contract::fromArray(['openapi' => '3.1.0', 'webhooks' => ['pet' => ['post' => [
+            'requestBody' => ['required' => true, 'content' => ['application/json' => ['schema' => [
+                'oneOf' => [['$ref' => '#/components/schemas/Cat']],
+                'discriminator' => ['propertyName' => 'kind'],
+            ]]]],
+            'responses' => ['204' => []],
+        ]]], 'components' => ['schemas' => ['Cat' => ['type' => 'object', 'required' => ['meow']]]]]);
+
+        $result = $contract->validateWebhook('pet', new ServerRequest('POST', '/', ['Content-Type' => 'application/json'], '{"kind":"Fox"}'));
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual, $v->expected, $v->specPointer, $v->message], $result->violations),
+            [[
+                '$.kind',
+                'discriminator',
+                'Fox',
+                ['discriminator' => ['propertyName' => 'kind']],
+                '/webhooks/pet/post/requestBody/content/application~1json/schema',
+                'Request body member "$.kind" is the discriminator, and its value names no branch',
+            ]],
+        );
+        Assert::same($contract->validateWebhook('pet', new ServerRequest('POST', '/'))->violations[0]->specPointer, '/webhooks/pet/post/requestBody');
+    }
+
+    /**
+     * The decoded forms reach the same reporting: a form field is a member
+     * with a path like any other.
+     */
+    public function namesTheFailingFormFieldOfADecodedBody(): void
+    {
+        $contract = $this->bodyContract(['application/x-www-form-urlencoded' => ['schema' => [
+            'type' => 'object',
+            'properties' => ['age' => ['type' => 'integer', 'minimum' => 0]],
+        ]]]);
+        $result = $contract->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/x-www-form-urlencoded'], 'age=-1'));
+
+        Assert::same(
+            array_map(static fn(Violation $v): array => [$v->instancePath, $v->keyword, $v->actual], $result->violations),
+            [['$.age', 'minimum', -1]],
+        );
+        Assert::same($result->violations[0]->specPointer, '/paths/~1b/post/requestBody/content/application~1x-www-form-urlencoded/schema');
+    }
+
+    /**
+     * One violation per leaf is a diagnostic, not an inventory: a body that
+     * is wrong everywhere reports its first twenty leaves, however they nest.
+     */
+    public function boundsTheLeafFailuresOfABody(): void
+    {
+        $flat = $this->bodyContract(['application/json' => ['schema' => ['type' => 'array', 'items' => ['type' => 'integer']]]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], json_encode(array_fill(0, 50, 'x'), JSON_THROW_ON_ERROR)));
+        Assert::same(count($flat->violations), 20);
+        Assert::same($flat->violations[19]->instancePath, '$[19]');
+
+        $properties = [];
+        $body = [];
+        foreach (range(0, 29) as $i) {
+            $properties['p' . $i] = ['type' => 'object', 'properties' => ['q' => ['type' => 'integer'], 'r' => ['type' => 'integer']]];
+            $body['p' . $i] = ['q' => 'x', 'r' => 'y'];
+        }
+        $nested = $this->bodyContract(['application/json' => ['schema' => ['type' => 'object', 'properties' => $properties]]])
+            ->validateRequest(new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], json_encode($body, JSON_THROW_ON_ERROR)));
+        Assert::same(count($nested->violations), 20);
+        Assert::same($nested->violations[0]->instancePath, '$.p0.q');
+        Assert::same($nested->violations[19]->instancePath, '$.p9.r');
+    }
+
     public function validatesCookieParameters(): void
     {
         $contract = $this->paramContract(['name' => 'sid', 'in' => 'cookie', 'required' => true, 'schema' => ['type' => 'integer']]);
 
         Assert::true($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => 'sid=7']))->isValid());
         Assert::same($contract->validateRequest(new ServerRequest('GET', '/q'))->violations[0]->code, 'request.parameter.missing');
+    }
+
+    /**
+     * RFC 6265 joins cookie pairs with `;`, and `&` is an ordinary
+     * cookie-octet. Rewriting `;` to `&` and reading the result as a query
+     * string cut `sid=abc&def` to `abc`: a seven-character value failed
+     * `minLength: 7`, and a value the application receives as `abc&def`
+     * satisfied `^[a-z]+$`.
+     */
+    #[DataProvider('cookieStringProvider')]
+    public function readsACookieValueUpToTheNextSemicolon(array $schema, string $cookie, bool $valid): void
+    {
+        $contract = $this->paramContract(['name' => 'sid', 'in' => 'cookie', 'required' => true, 'schema' => $schema]);
+
+        Assert::same($contract->validateRequest(new ServerRequest('GET', '/q', ['Cookie' => $cookie]))->isValid(), $valid);
+    }
+
+    /** @return iterable<string, array{array<string, mixed>, string, bool}> */
+    public static function cookieStringProvider(): iterable
+    {
+        $seven = ['type' => 'string', 'minLength' => 7, 'maxLength' => 7];
+        $letters = ['type' => 'string', 'pattern' => '^[a-z]+$'];
+        yield 'an ampersand is part of the value' => [$seven, 'sid=abc&def', true];
+        yield 'an ampersand is not a letter' => [$letters, 'sid=abc&def', false];
+        yield 'a second cookie after the semicolon' => [$seven, 'sid=abc&def; other=x', true];
+        yield 'a second cookie before the semicolon' => [$seven, 'other=x; sid=abc&def', true];
+        yield 'whitespace after the semicolon is not part of the next value' => [$seven, 'other=x;   sid=abc&def', true];
+        yield 'the value ends at the semicolon' => [$seven, 'sid=abc; def=x', false];
+        yield 'a percent-encoded value is decoded' => [$letters, 'sid=ab%63', true];
+        yield 'a percent-encoded semicolon stays in the value' => [$letters, 'sid=ab%3Bc', false];
     }
 
     public function missingQueryStringYieldsAMissingParameter(): void
@@ -923,33 +1076,42 @@ final class RequestValidationTest
      * catches to turn a deserialization failure into a violation. Without the
      * narrower catch, an unsupported document is reported as something the
      * request did wrong.
+     *
+     * A document carrying the keyword no longer reaches the validator — the
+     * contract refuses it at load time — so the operation is built by hand,
+     * which is the seam the package's own tests keep for exactly this branch.
      */
     public function anUnsupportedSchemaRaisesInsteadOfBecomingAViolation(): void
     {
-        $contract = $this->paramContract([
-            'name' => 'q', 'in' => 'query', 'required' => true,
-            'schema' => ['type' => 'string', '$anchor' => 'x'],
-        ]);
+        $operation = new Operation(
+            key: 'GET /q',
+            operationId: null,
+            method: 'GET',
+            path: '/q',
+            parameters: [[
+                'name' => 'q',
+                'in' => 'query',
+                'required' => true,
+                'style' => 'form',
+                'explode' => true,
+                'allowReserved' => false,
+                'schema' => ['type' => 'string', '$anchor' => 'x'],
+                'specPointer' => '/paths/~1q/get/parameters/0',
+            ]],
+            responses: ['200' => []],
+        );
 
-        // Called directly as well as through the facade: the mutation mapping
-        // follows pcov's line coverage, and the validator is reached from
-        // Contract through a call graph that attributes the mutant elsewhere.
-        foreach ([
-            fn(): mixed => $contract->validateRequest(new ServerRequest('GET', '/q?q=x')),
-            fn(): mixed => (new RequestValidator(new Limits()))->validate(
-                $contract->match(new ServerRequest('GET', '/q?q=x')) ?? throw new \LogicException('No operation matched'),
+        try {
+            (new RequestValidator(new Limits()))->validate(
+                new MatchedOperation($operation, []),
                 new ServerRequest('GET', '/q?q=x'),
                 SchemaDialect::OpenApi31,
-            ),
-        ] as $call) {
-            try {
-                $call();
-                Assert::true(actual: false, message: 'Expected an unsupported schema');
-            } catch (ContractViolation $exception) {
-                Assert::true(actual: false, message: 'Contract errors must not be reported as violations: ' . $exception->getMessage());
-            } catch (InvalidContract $exception) {
-                Assert::same($exception->getMessage(), 'Unsupported schema keyword "$anchor": reference identity is outside the support matrix');
-            }
+            );
+            Assert::true(actual: false, message: 'Expected an unsupported schema');
+        } catch (ContractViolation $exception) {
+            Assert::true(actual: false, message: 'Contract errors must not be reported as violations: ' . $exception->getMessage());
+        } catch (InvalidContract $exception) {
+            Assert::same($exception->getMessage(), 'Unsupported schema keyword "$anchor": reference identity is outside the support matrix');
         }
     }
 
@@ -1062,6 +1224,26 @@ final class RequestValidationTest
         yield 'string keeps boolean text' => [['type' => 'string'], 'true', true];
         yield 'boolean accepts true' => [['type' => 'boolean'], 'true', true];
         yield 'boolean rejects junk' => [['type' => 'boolean'], 'x', false];
+        // The JSON number grammar, anchored: what `$` and `is_numeric()` forgave.
+        yield 'integer rejects a trailing newline' => [['type' => 'integer'], "5\n", false];
+        yield 'number rejects a trailing newline' => [['type' => 'number'], "5\n", false];
+        yield 'number rejects a leading space' => [['type' => 'number'], ' 5', false];
+        yield 'number rejects a bare fraction' => [['type' => 'number'], '.5', false];
+        yield 'number rejects a trailing dot' => [['type' => 'number'], '5.', false];
+        yield 'number rejects a leading plus' => [['type' => 'number'], '+5', false];
+        yield 'number rejects hexadecimal' => [['type' => 'number'], '0x1A', false];
+        yield 'number rejects a leading zero' => [['type' => 'number'], '05', false];
+        yield 'number accepts an exponent' => [['type' => 'number'], '1e3', true];
+        yield 'number accepts a signed exponent with a fraction' => [['type' => 'number'], '-1.5E-3', true];
+        yield 'number accepts an integer' => [['type' => 'number'], '5', true];
+        yield 'integer rejects an exponent' => [['type' => 'integer'], '1e3', false];
+        yield 'integer rejects a fraction' => [['type' => 'integer'], '5.0', false];
+        yield 'integer bound sees the magnitude past PHP range' => [['type' => 'integer', 'maximum' => 10], '99999999999999999999', false];
+        yield 'integer past PHP range is still an integer' => [['type' => 'integer'], '99999999999999999999', true];
+        yield 'integer past PHP range is not the saturated maximum' => [['type' => 'integer', 'const' => PHP_INT_MAX], '99999999999999999999', false];
+        yield 'integer at PHP range does not become a float' => [['type' => 'integer', 'const' => PHP_INT_MAX], (string) PHP_INT_MAX, true];
+        yield 'negative integer at PHP range does not become a float' => [['type' => 'integer', 'const' => PHP_INT_MIN], (string) PHP_INT_MIN, true];
+        yield 'negative zero is the integer zero' => [['type' => 'integer', 'const' => 0], '-0', true];
     }
 
     public function coercesArrayItemsByTheItemSchema(): void
@@ -1728,16 +1910,35 @@ final class RequestValidationTest
             ]],
             responses: ['204' => []],
         );
+        $withIntegerKey = new Operation(
+            key: 'GET /n',
+            operationId: null,
+            method: 'GET',
+            path: '/n',
+            parameters: [[
+                'name' => 'ids',
+                'in' => 'query',
+                'required' => true,
+                'style' => 'form',
+                'explode' => false,
+                'allowReserved' => false,
+                'schema' => ['type' => 'array', 'items' => [0 => 'x', 'type' => 'string']],
+                'specPointer' => '/paths/~1n/get/parameters/0',
+            ]],
+            responses: ['204' => []],
+        );
 
-        try {
-            (new RequestValidator(new Limits()))->validate(
-                new MatchedOperation($operation, []),
-                new ServerRequest('GET', '/n?ids=1'),
-                SchemaDialect::OpenApi31,
-            );
-            Assert::true(actual: false);
-        } catch (InvalidContract $exception) {
-            Assert::same($exception->getMessage(), 'Schema must be an object');
+        foreach ([[$operation, 'Schema must be an object'], [$withIntegerKey, 'Schema keys must be strings']] as [$handBuilt, $message]) {
+            try {
+                (new RequestValidator(new Limits()))->validate(
+                    new MatchedOperation($handBuilt, []),
+                    new ServerRequest('GET', '/n?ids=1'),
+                    SchemaDialect::OpenApi31,
+                );
+                Assert::true(actual: false);
+            } catch (InvalidContract $exception) {
+                Assert::same($exception->getMessage(), $message);
+            }
         }
     }
 

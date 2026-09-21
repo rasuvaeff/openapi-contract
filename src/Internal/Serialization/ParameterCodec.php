@@ -32,8 +32,20 @@ final readonly class ParameterCodec
      * decoding is where an encoding provably exists, and nowhere else. The
      * price is real and worth naming: a header value cannot carry its own
      * style delimiter, because there is no longer an escape for it.
+     *
+     * A cookie string is `form` style with a different pair separator: RFC
+     * 6265 joins `cookie-pair`s with `;`, and `&` is an ordinary
+     * `cookie-octet` there. Rewriting `;` to `&` and reading the result as a
+     * query, as this did, cut every value at the first `&` the application
+     * receives intact.
+     *
+     * @param non-empty-string $pairSeparator what separates the pairs of a
+     *        `form`-style wire: `&` in a query string, `;` in a cookie string
      */
-    public function __construct(private bool $percentEncoded = true) {}
+    public function __construct(
+        private bool $percentEncoded = true,
+        private string $pairSeparator = '&',
+    ) {}
 
     /**
      * Wire forms a spaceDelimited separator can take. A URI cannot carry a raw
@@ -168,7 +180,7 @@ final readonly class ParameterCodec
                 return $this->pair($name, implode(',', array_map($this->encode(...), $items)), encoded: true);
             }
 
-            return implode('&', array_map(fn(string $item): string => $this->pair($name, $item), $items));
+            return implode($this->pairSeparator, array_map(fn(string $item): string => $this->pair($name, $item), $items));
         }
         if ($explode) {
             $parts = [];
@@ -176,7 +188,7 @@ final readonly class ParameterCodec
                 $parts[] = $this->pair($key, $item);
             }
 
-            return implode('&', $parts);
+            return implode($this->pairSeparator, $parts);
         }
 
         return $this->pair($name, $this->simple($this->asObject($value), explode: false, pairSeparator: ','), encoded: true);
@@ -368,7 +380,7 @@ final readonly class ParameterCodec
     /** @return string|list<string>|array<string, string> */
     private function parseForm(string $name, string $wire, bool $explode, ParameterKind $kind): string|array
     {
-        return $this->parsePairs($name, $wire, $explode, $kind, '&');
+        return $this->parsePairs($name, $wire, $explode, $kind, $this->pairSeparator);
     }
 
     /**

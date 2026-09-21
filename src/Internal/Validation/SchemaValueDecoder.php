@@ -13,6 +13,18 @@ use Rasuvaeff\OpenApiContract\InvalidContract;
 final readonly class SchemaValueDecoder
 {
     /**
+     * The JSON number grammar (RFC 8259 §6), anchored with `\z` so a trailing
+     * newline is not forgiven the way `$` forgives it. It is the one grammar
+     * both sides agree on: a document writes its bounds as JSON numbers, and
+     * a wire string that spells anything else — `.5`, `5.`, ` 5`, `5\n`,
+     * `0x1A` — is read by `(int)`/`(float)` as a number the application
+     * never receives as one. `is_numeric()` accepted all of those.
+     */
+    private const string INTEGER = '/^-?(?:0|[1-9][0-9]*)\z/';
+
+    private const string NUMBER = '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\z/';
+
+    /**
      * The wire shape a value of this schema takes. OAS 3.1 spells a type as a
      * union, so membership decides, not identity. A union naming both `array`
      * and `object` cannot be told apart on the wire — see the class docblock on
@@ -74,7 +86,11 @@ final readonly class SchemaValueDecoder
      * The Schema Object a value carries, or `null` when it carries none of
      * the shape this decoder reads. A boolean schema is a schema — it just
      * has no keywords to decode with, and the backend enforces it — so it
-     * answers `null` here instead of raising out of a validation call.
+     * answers `null` here instead of raising out of a validation call. The
+     * empty schema `{}` decodes to the empty PHP array, which is a list to
+     * `array_is_list()` and an object to everything else: it is the Schema
+     * Object with no keywords, and it used to be refused here after the
+     * compiler had accepted it.
      *
      * A shape that is neither raises `InvalidContract`: the document said
      * something this package cannot read, which is a contract error and not a
@@ -89,7 +105,10 @@ final readonly class SchemaValueDecoder
         if ($value === null || is_bool($value)) {
             return null;
         }
-        if (!is_array($value) || array_is_list($value)) {
+        if (!is_array($value)) {
+            throw new InvalidContract('Schema must be an object');
+        }
+        if ($value !== [] && array_is_list($value)) {
             throw new InvalidContract('Schema must be an object');
         }
         foreach (array_keys($value) as $key) {
@@ -141,10 +160,17 @@ final readonly class SchemaValueDecoder
         if (in_array('null', $types, strict: true) && $value === 'null') {
             return null;
         }
-        if (in_array('integer', $types, strict: true) && preg_match('/^-?(?:0|[1-9][0-9]*)$/', $value) === 1) {
-            return (int) $value;
+        if (in_array('integer', $types, strict: true) && preg_match(self::INTEGER, $value) === 1) {
+            // Past PHP's range `(int)` saturates silently, so a bound the
+            // schema declares would be compared against a different number;
+            // the float keeps the magnitude and the backend still reads a
+            // whole-valued float as an integer. A cast that round-trips did
+            // not saturate (`-0` is the one spelling that round-trips to `0`).
+            $integer = (int) $value;
+
+            return (string) $integer === $value || $value === '-0' ? $integer : (float) $value;
         }
-        if (in_array('number', $types, strict: true) && is_numeric($value)) {
+        if (in_array('number', $types, strict: true) && preg_match(self::NUMBER, $value) === 1) {
             return (float) $value;
         }
         if (in_array('boolean', $types, strict: true) && ($value === 'true' || $value === 'false')) {

@@ -17,11 +17,13 @@ final readonly class CompiledDocument
 {
     /**
      * @param list<Operation> $operations
+     * @param array<string, list<Operation>> $webhooks
      * @param array<string, CompiledSecurityScheme> $securitySchemes
      */
     public function __construct(
         public SchemaDialect $dialect,
         public array $operations,
+        public array $webhooks,
         public array $securitySchemes,
     ) {}
 }

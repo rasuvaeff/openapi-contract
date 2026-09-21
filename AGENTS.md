@@ -51,6 +51,13 @@ make release-check
   `default`; do not emit body/header errors if no Response Object matched.
 - Validation backends are implementation details. Public diagnostics and
   operation models must not expose backend-specific classes.
+- `multipleOf` is not the backend's: `Internal\Schema\Backend\Parser` compiles
+  every schema to a Draft 2020-12 whose `multipleOf` parser is
+  `DecimalMultipleOfKeywordParser`, judging on the shortest round-trip
+  decimals (`DecimalMultiple::holds()`) rather than on the parsed doubles.
+  The backend's own keyword answered differently with and without
+  `ext-bcmath` (#151); a keyword parsed twice is judged twice, so the parser
+  is replaced in the draft, never appended beside it.
 - Diagnostics are bounded and redacted. Credentials never belong in rendered
   expected/actual values.
 - Use `property-testing-testo` for algebraic laws, round-trips, generation
@@ -78,13 +85,58 @@ make release-check
   they are the only thing that catches this package agreeing with itself while
   disagreeing with every other reader of the same document. Moving them out of
   the default suite would take them out of CI.
-- **`Operation` is an output type.** Its constructor is `@internal`: nothing
-  public validates a hand-built operation, and the shapes it takes are the
-  compiler's output rather than a checked input. The package's own tests still
-  build one by hand to reach the validators' defensive branches — that is an
-  internal seam, not a supported path, and it is why those branches stay.
-  `CompiledParameter` is a read shape whose variance is declared: consumers
-  read it, minors may add keys to it.
+- **`Operation` is an output type with a public constructor.** Nothing
+  public validates a hand-built operation: the shapes the constructor takes
+  are the compiler's output rather than a checked input, and the validators'
+  defensive branches exist because a hand-built one can still reach them. The
+  constructor is `@api` all the same — consumers build operations by hand in
+  their tests, so it was frozen in practice — and it is append-only: a minor
+  may add a defaulted parameter at the end, never reorder or remove one, and
+  callers use named arguments. `CompiledParameter`, `CompiledRequestBody`
+  and `CompiledResponses` are read shapes whose variance is declared:
+  consumers read them, minors may add keys to them. The two body shapes
+  promise exactly what `DocumentCompiler::assertContent()`/`assertHeaders()`
+  check — widen the shape when you widen the check, not before.
+- **Every document schema is compiled at load time.** `Contract::__construct`
+  walks `OperationSchemas::of()` and compiles each schema in the direction
+  the validators will read it in, and `SchemaValidator::compiledSchema()`
+  parses every backend node eagerly (`assertParsed()`), because the backend
+  otherwise parses a nested member on the first value that reaches it and
+  wraps a parse error into a schema that throws when validated. Add a new
+  position the validators read a schema at → add it to `OperationSchemas`,
+  or the load-time guarantee in README silently stops covering it.
+- **A deferred reference may not sit where the wire decoders read maps.**
+  The resolver defers a shared component to `$defs` only at
+  `SHARED_DEFER_DEPTH` (three array levels below the Schema Object root) or
+  deeper, and a deferred node carries only `type` and `format`. The form and
+  multipart decoders and the parameter codec read `properties`/`items` maps
+  off the root and its direct members — depths 1 and 2 — so widening what
+  they read, or moving the deferral horizon up, has to happen in the same
+  change as teaching `DeferredReference` to carry what they need.
+- **A `$ref` branch of a discriminated union is always deferred.** The
+  resolver keeps the referenced branches of a `oneOf`/`anyOf` that sits
+  beside a `discriminator` as local `{$ref: '#/$defs/…'}` nodes whatever
+  their depth, because `SchemaValidator::discriminate()` matches the
+  discriminator value against the def's name (the component's JSON
+  Pointer) to report one branch's leaves — an inlined branch has no name
+  left to match. No wire decoder reads a `oneOf`/`anyOf` member, so the
+  decoder-horizon rule above is not crossed; if one ever does, it has to
+  follow the reference.
+- **Body schema violations are one per leaf, bounded.**
+  `SchemaValidator::failures()` flattens the backend's error tree to
+  `SchemaFailure` leaves (path, keyword, the one assertion as `expected`),
+  expands `required` to one leaf per missing member, dedupes by path and
+  keyword, and cuts at `MAX_FAILURES` (= the backend's `max_errors`).
+  `MessageReading::bodySchemaViolations()` turns them into violations for
+  both sides. The codes are the contract; counts, paths and wording are
+  diagnostics — but README EN/RU and llms.txt state them, so change all
+  three together.
+- **The directional rewrite drops `required` entries, not properties.**
+  `SchemaValidator::effectiveSchema()` — exported as
+  `SchemaCheck::effective()` — keeps a `readOnly`/`writeOnly` property
+  declared and typed and removes only its `required` entry for the foreign
+  direction. `property-testing-openapi` builds values against this rewrite;
+  changing what it does is a verdict change for the generator too.
 - **A budget is a policy, not a verdict.** `Limits` carries them and every
   factory takes one. `*.body.too_large` says the validator declined to read a
   body; it must never be reworded into a claim that the message is wrong, and
@@ -139,11 +191,24 @@ single-subschema branch of `SchemaValidator::effectiveSchema()` (`items` or
 `additionalProperties`) escapes under negation because `properties` is
 consumed by the branch above it and every other keyword the loop visits is a
 list, so the widened condition never reaches a node it would rewrite
-differently. The media-type selection helpers
+differently. The two `return [];`
+guards in `OperationSchemas` that answer a non-array `content` or `headers`
+escape under removal because the `foreach` they protect then iterates a
+non-array — a PHP warning and the same empty result — and the walk's
+`(string) $name` casts, like the decoder's, only spell a numeric key PHP
+normalises back. The media-type selection helpers
 in the same trait escape for the reasons above: the rank sentinel is below
 every specificity, the key/definition type guard is reachable only through a
 hand-built `Operation`, and the strict `>` is untestable because no two
-declarations of equal specificity can match one media type.
+declarations of equal specificity can match one media type. In the
+resolver, the shared-component branch escapes in three shapes: the
+`!array_key_exists` guards around a def registration flip to `||` without
+changing anything (a def name belongs to one target, whose resolution is
+deterministic, so overwriting rewrites the same value), the plain
+`return $this->merge(...)` of a protected reuse removes into the identical
+Reference-Object reuse branch below it, and unwrapping the
+`array_map($this->materialize(...))` over the carried defs only moves the
+materialization into the receiving root's final pass.
 
 ## When you finish
 
