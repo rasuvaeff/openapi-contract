@@ -147,7 +147,7 @@ final readonly class DocumentCompiler
                     ));
                 }
                 $templates[$templateKey] = $pathString;
-                $parameters = $this->parameters($pathParameters, $rawParameters, $resolver, $pathString, $method);
+                $parameters = $this->parameters($pathParameters, $rawParameters, $pathString, $method);
                 $this->assertPathParameters($pathString, $parameters);
                 $servers = $this->servers($raw['servers'] ?? null, $pathServers);
                 $operations[$key] = new Operation(
@@ -158,8 +158,8 @@ final readonly class DocumentCompiler
                     parameters: $parameters,
                     requestBody: $dialect === SchemaDialect::OpenApi30 && in_array($method, self::BODYLESS_METHODS_IN_30, strict: true)
                         ? []
-                        : $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
-                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
+                        : $this->requestBody($raw['requestBody'] ?? null, $where),
+                    responses: $this->resolvedResponses($raw['responses'] ?? null, $where),
                     security: array_key_exists('security', $raw)
                         ? $this->securityRequirements($raw['security'], $schemeNames)
                         : $rootSecurity,
@@ -207,7 +207,7 @@ final readonly class DocumentCompiler
                 $identities[$key] = true;
                 $where = sprintf('webhook operation %s "%s"', strtoupper($method), $name);
                 $rawParameters = $this->parameterList($raw['parameters'] ?? null, $where);
-                $parameters = $this->parameters($webhookParameters, $rawParameters, $resolver, $name, $method, container: 'webhooks');
+                $parameters = $this->parameters($webhookParameters, $rawParameters, $name, $method, container: 'webhooks');
                 foreach ($parameters as $parameter) {
                     if ($parameter['in'] === 'path') {
                         // Nothing in a delivery names a webhook but the
@@ -222,8 +222,8 @@ final readonly class DocumentCompiler
                     method: strtoupper($method),
                     path: '',
                     parameters: $parameters,
-                    requestBody: $this->requestBody($raw['requestBody'] ?? null, $resolver, $where),
-                    responses: $this->resolvedResponses($raw['responses'] ?? null, $resolver, $where),
+                    requestBody: $this->requestBody($raw['requestBody'] ?? null, $where),
+                    responses: $this->resolvedResponses($raw['responses'] ?? null, $where),
                     security: array_key_exists('security', $raw)
                         ? $this->securityRequirements($raw['security'], $schemeNames)
                         : $rootSecurity,
@@ -409,7 +409,6 @@ final readonly class DocumentCompiler
     private function parameters(
         array $path,
         array $operation,
-        JsonPointerResolver $resolver,
         string $pathString,
         string $method,
         string $container = 'paths',
@@ -438,7 +437,7 @@ final readonly class DocumentCompiler
             // dropped whichever declaration was stricter.
             $declared = [];
             foreach (array_keys($declarations) as $index) {
-                foreach ($this->parameter($declarations[$index], $resolver, sprintf('%s/%d', $pointer, $index)) as $key => $parameter) {
+                foreach ($this->parameter($declarations[$index], sprintf('%s/%d', $pointer, $index)) as $key => $parameter) {
                     if (in_array($key, $declared, strict: true)) {
                         throw new InvalidContract(sprintf(
                             'Duplicate OpenAPI parameter "%s" in %s of %s',
@@ -460,12 +459,11 @@ final readonly class DocumentCompiler
      * @param non-empty-string $specPointer
      * @return array<string, CompiledParameter>
      */
-    private function parameter(mixed $raw, JsonPointerResolver $resolver, string $specPointer): array
+    private function parameter(mixed $raw, string $specPointer): array
     {
         if (!is_array($raw)) {
             throw new InvalidContract('OpenAPI parameter must be an object');
         }
-        $raw = $resolver->resolve($raw);
         $name = $raw['name'] ?? null;
         $in = $raw['in'] ?? null;
         if (!is_string($name) || $name === '' || !is_string($in) || !in_array($in, ['path', 'query', 'header', 'cookie'], strict: true)) {
@@ -481,7 +479,7 @@ final readonly class DocumentCompiler
         }
         /** @var mixed $schemaValue */
         $schemaValue = $raw['schema'] ?? null;
-        $schema = $this->resolvedSchema($schemaValue, $resolver);
+        $schema = $this->resolvedSchema($schemaValue);
         $key = $in . ':' . ($in === 'header' ? strtolower($name) : $name);
         /** @var mixed $styleValue */
         $styleValue = $raw['style'] ?? null;
@@ -603,12 +601,12 @@ final readonly class DocumentCompiler
      *
      * @return CompiledRequestBody
      */
-    private function requestBody(mixed $value, JsonPointerResolver $resolver, string $where): array
+    private function requestBody(mixed $value, string $where): array
     {
         if ($value === null) {
             return [];
         }
-        $body = $resolver->resolve($this->object($value, sprintf('requestBody of %s', $where)));
+        $body = $this->object($value, sprintf('requestBody of %s', $where));
         $this->assertBoolean($body['required'] ?? null, sprintf('requestBody of %s', $where), 'required');
         $this->assertContent($body['content'] ?? null, sprintf('requestBody of %s', $where));
 
@@ -618,7 +616,7 @@ final readonly class DocumentCompiler
     }
 
     /** @return array<string, mixed> */
-    private function resolvedSchema(mixed $value, JsonPointerResolver $resolver): array
+    private function resolvedSchema(mixed $value): array
     {
         if ($value === null) {
             return [];
@@ -631,7 +629,7 @@ final readonly class DocumentCompiler
         if ($value !== [] && array_is_list($value)) {
             throw new InvalidContract('OpenAPI parameter schema must be an object');
         }
-        $schema = $resolver->resolve($value, inSchema: true);
+        $schema = $value;
         foreach (array_keys($schema) as $key) {
             if (!is_string($key)) {
                 throw new InvalidContract('OpenAPI schema keys must be strings');
@@ -645,7 +643,7 @@ final readonly class DocumentCompiler
     }
 
     /** @return CompiledResponses */
-    private function resolvedResponses(mixed $value, JsonPointerResolver $resolver, string $where): array
+    private function resolvedResponses(mixed $value, string $where): array
     {
         if (!is_array($value) || $value === []) {
             throw new InvalidContract('Operation responses must be an object');
@@ -656,7 +654,7 @@ final readonly class DocumentCompiler
             if (!is_array($response)) {
                 throw new InvalidContract(sprintf('Response "%s" must be an object', (string) $key));
             }
-            $resolved = $resolver->resolve($response);
+            $resolved = $response;
             $position = sprintf('response "%s" of %s', (string) $key, $where);
             $this->assertContent($resolved['content'] ?? null, $position);
             $this->assertHeaders($resolved['headers'] ?? null, $position);

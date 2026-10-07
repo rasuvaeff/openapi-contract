@@ -781,6 +781,33 @@ final class ContractTest
         Assert::same(Contract::fromArray($document, new Limits(resolvedNodes: 100))->operations()[0]->path, '/h');
     }
 
+    /**
+     * Resolving the Path Item already walks its parameters, request body and
+     * responses. Re-resolving each of those below used to charge the same
+     * schema tree several times against the reference-resolution budget.
+     */
+    public function resolvedPathItemChildrenAreNotChargedAgain(): void
+    {
+        $properties = [];
+        for ($index = 0; $index < 80; $index++) {
+            $properties['field' . $index] = ['type' => 'string'];
+        }
+        $reference = ['$ref' => '#/components/schemas/Large'];
+        $document = [
+            'openapi' => '3.1.0',
+            'paths' => ['/h' => ['get' => [
+                'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => $reference]],
+                'requestBody' => ['content' => ['application/json' => ['schema' => $reference]]],
+                'responses' => ['200' => ['content' => ['application/json' => ['schema' => $reference]]]],
+            ]]],
+            'components' => ['schemas' => ['Large' => ['type' => 'object', 'properties' => $properties]]],
+        ];
+
+        $contract = Contract::fromArray($document, new Limits(resolvedNodes: 128));
+
+        Assert::same(count($contract->operations()), 1);
+    }
+
     public function countsEveryNodeOfADocumentOnce(): void
     {
         Assert::same(DocumentNodes::within(['a' => 1, 'b' => ['c' => 2]], 100), 3);

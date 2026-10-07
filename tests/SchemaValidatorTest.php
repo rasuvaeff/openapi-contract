@@ -41,6 +41,59 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid($invalid, $schema, $dialect));
     }
 
+    public function compiledRootsShareRepeatedReferenceFreeSubschemas(): void
+    {
+        $compiler = new SchemaCompiler();
+        $first = $compiler->compile([
+            'title' => 'first root',
+            'properties' => ['status' => ['type' => 'string', 'enum' => ['ready', 'done']]],
+        ], SchemaDialect::OpenApi31);
+        $second = $compiler->compile([
+            'title' => 'second root',
+            'properties' => ['status' => ['type' => 'string', 'enum' => ['ready', 'done']]],
+        ], SchemaDialect::OpenApi31);
+
+        Assert::true($first->properties->status === $second->properties->status);
+    }
+
+    public function compiledRootsKeepLocalReferencesBoundToTheirOwnDefinitions(): void
+    {
+        $compiler = new SchemaCompiler();
+        $first = $compiler->compile([
+            'properties' => ['id' => ['$ref' => '#/$defs/Value']],
+            '$defs' => ['Value' => ['type' => 'string']],
+        ], SchemaDialect::OpenApi31);
+        $second = $compiler->compile([
+            'properties' => ['id' => ['$ref' => '#/$defs/Value']],
+            '$defs' => ['Value' => ['type' => 'integer']],
+        ], SchemaDialect::OpenApi31);
+
+        Assert::false($first->{'$defs'} === $second->{'$defs'});
+    }
+
+    public function mixedReferenceGraphsShareOnlyTheSafeSubschemas(): void
+    {
+        $compiler = new SchemaCompiler();
+        $schema = [
+            'oneOf' => [
+                ['type' => 'string'],
+                ['$ref' => '#/$defs/Value'],
+            ],
+            '$defs' => [
+                'Value' => ['type' => 'integer'],
+                'Alias' => ['$ref' => '#/$defs/Value'],
+            ],
+        ];
+
+        $first = $compiler->compile($schema, SchemaDialect::OpenApi31);
+        $second = $compiler->compile($schema, SchemaDialect::OpenApi31);
+
+        Assert::false($first === $second);
+        Assert::true($first->oneOf[0] === $second->oneOf[0]);
+        Assert::true($first->{'$defs'}->Value === $second->{'$defs'}->Value);
+    }
+
+
     /** @return iterable<string, array{SchemaDialect, array<string, mixed>, mixed, mixed}> */
     public static function dialectProvider(): iterable
     {

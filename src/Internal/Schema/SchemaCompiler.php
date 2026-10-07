@@ -14,10 +14,13 @@ use Rasuvaeff\OpenApiContract\SchemaDialect;
 
  * @internal
  */
-final readonly class SchemaCompiler
+final class SchemaCompiler
 {
     private const string JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
     private const string OPENAPI_31_BASE_DIALECT = 'https://spec.openapis.org/oas/3.1/dialect/base';
+
+    /** @var array<string, \stdClass> */
+    private array $sharedSchemas = [];
 
     /**
      * Keywords whose value is a single subschema, mapped to whether a boolean
@@ -95,7 +98,98 @@ final readonly class SchemaCompiler
             throw new \LogicException('Compiled schema must be a JSON object');
         }
 
-        return $object;
+        [$shared] = $this->shareSchemaGraph($object);
+
+        return $shared;
+    }
+
+    /**
+     * Opis caches parsed nodes by object identity. Reusing identical,
+     * reference-free schema nodes lets separately compiled operation roots
+     * share parsed subschemas. Nodes containing `$ref` are not shared across
+     * roots: a local reference is interpreted against the root's definitions.
+     */
+    /** @return array{0: \stdClass, 1: bool} */
+    private function shareSchemaGraph(\stdClass $schema): array
+    {
+        $referenceFree = !property_exists($schema, '$ref');
+        foreach (['additionalProperties', 'items', 'not'] as $keyword) {
+            /** @var bool|\stdClass|null $member */
+            $member = $schema->{$keyword} ?? null;
+            if ($member instanceof \stdClass) {
+                [$schema->{$keyword}, $childIsReferenceFree] = $this->shareSchemaNode($member);
+                $referenceFree = $referenceFree && $childIsReferenceFree;
+            }
+        }
+        foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
+            /** @var mixed $members */
+            $members = $schema->{$keyword} ?? null;
+            if (!is_array($members)) {
+                continue;
+            }
+            /** @var list<bool|\stdClass> $schemaMembers */
+            $schemaMembers = array_values($members);
+            foreach ($schemaMembers as $index => $member) {
+                if (!$member instanceof \stdClass) {
+                    continue;
+                }
+                [$members[$index], $childIsReferenceFree] = $this->shareSchemaNode($member);
+                $referenceFree = $referenceFree && $childIsReferenceFree;
+            }
+            $schema->{$keyword} = $members;
+        }
+        foreach (['properties', '$defs'] as $keyword) {
+            /** @var mixed $members */
+            $members = $schema->{$keyword} ?? null;
+            if (!$members instanceof \stdClass) {
+                continue;
+            }
+            [$members, $childrenAreReferenceFree] = $this->shareSchemaMap($members);
+            $schema->{$keyword} = $members;
+            $referenceFree = $referenceFree && $childrenAreReferenceFree;
+        }
+
+        return [$this->internSchema($schema, $referenceFree), $referenceFree];
+    }
+
+    /** @return array{0: \stdClass, 1: bool} */
+    private function shareSchemaNode(\stdClass $schema): array
+    {
+        return $this->shareSchemaGraph($schema);
+    }
+
+    /** @return array{0: \stdClass, 1: bool} */
+    private function shareSchemaMap(\stdClass $schemas): array
+    {
+        $referenceFree = true;
+        foreach (get_object_vars($schemas) as $name => $schema) {
+            if (!$schema instanceof \stdClass) {
+                continue;
+            }
+            [$schemas->{$name}, $childIsReferenceFree] = $this->shareSchemaNode($schema);
+            $referenceFree = $referenceFree && $childIsReferenceFree;
+        }
+
+        return [$schemas, $referenceFree];
+    }
+
+    private function internSchema(\stdClass $schema, bool $referenceFree): \stdClass
+    {
+        if (!$referenceFree) {
+            return $schema;
+        }
+
+        try {
+            $encoded = json_encode($schema, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $schema;
+        }
+        $key = hash('xxh128', $encoded);
+        if (isset($this->sharedSchemas[$key])) {
+            return $this->sharedSchemas[$key];
+        }
+
+        return $this->sharedSchemas[$key] = $schema;
     }
 
     /**
