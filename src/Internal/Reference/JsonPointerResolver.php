@@ -329,10 +329,8 @@ final class JsonPointerResolver
             return $this->merge($siblings, $resolved, $inSchema);
         }
         if (array_key_exists($target, $this->shared)) {
-            // A Reference Object this document has resolved already — the
-            // compiler resolves a Path Item and then the Request Body inside
-            // it again. Nothing is deferred outside a schema, so the reuse is
-            // the resolved object itself.
+            // A Reference Object this document has resolved already. Nothing
+            // is deferred outside a schema, so reuse the resolved object.
             return $this->merge($siblings, $this->shared[$target], $inSchema);
         }
         if (++$referenceDepth > $this->maximumReferenceDepth) {
