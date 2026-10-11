@@ -1055,6 +1055,36 @@
                         }
                     }
                 },
+                "/pattern-labels": {
+                    "post": {
+                        "operationId": "patternLabels.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "minProperties": 1,
+                                        "maxProperties": 4,
+                                        "patternProperties": {
+                                            "^x-[a-z]+$": {
+                                                "type": "integer",
+                                                "minimum": 1
+                                            }
+                                        },
+                                        "propertyNames": {
+                                            "pattern": "^x-"
+                                        },
+                                        "additionalProperties": false
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
                 "/sparse": {
                     "post": {
                         "operationId": "sparse.create",
@@ -7919,6 +7949,450 @@
                 "target": "/pages?v=v1&code=nzw",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-kdglq\":678,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-aigkk\":525,\"x-pia\":515,\"x-jrczac\":1,\"x-vgaqff\":1,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-hccknzqg\":1000,\"x-ydozdgu\":319,\"x-q\":853,\"x-ay\":859,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/media-type/1",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-kdglq\":678}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/media-type/2",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-aigkk\":525,\"x-pia\":515,\"x-jrczac\":1,\"x-vgaqff\":1}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/media-type/3",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-hccknzqg\":1000,\"x-ydozdgu\":319,\"x-q\":853,\"x-ay\":859}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/1",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-kdglq\":678}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/10",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-jtrpxof\":1,\"x-dmhammhy\":168,\"x-rrui\":323,\"x-vypw\":360}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/2",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-aigkk\":525,\"x-pia\":515,\"x-jrczac\":1,\"x-vgaqff\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/3",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-hccknzqg\":1000,\"x-ydozdgu\":319,\"x-q\":853,\"x-ay\":859}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/4",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-pajk\":1,\"x-gewlhcba\":10,\"x-arlmjhr\":415,\"x-upd\":538}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/5",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-ct\":915}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/6",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-cu\":1,\"x-xc\":1000,\"x-owvzagxb\":921}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/7",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-l\":1,\"x-bodvigxz\":1,\"x-djlg\":886,\"x-f\":896}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/8",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-o\":476,\"x-n\":605,\"x-kf\":888}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "patternLabels.create/valid/9",
+            "document": "zoo",
+            "operationId": "patternLabels.create",
+            "request": {
+                "method": "POST",
+                "target": "/pattern-labels",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"x-snu\":496,\"x-yuzhngrw\":339}"
+                }
             },
             "expect": {
                 "valid": true

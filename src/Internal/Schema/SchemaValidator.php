@@ -40,7 +40,7 @@ final class SchemaValidator
      * alone on purpose — what a `readOnly` property means under a negation
      * is not something either specification says.
      */
-    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
+    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'propertyNames', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
 
     /**
      * Every keyword under which the compiler emits a subschema, by the shape
@@ -50,9 +50,9 @@ final class SchemaValidator
      * @var array{single: list<string>, list: list<string>, map: list<string>}
      */
     private const array SUBSCHEMA_KEYWORDS = [
-        'single' => ['additionalProperties', 'items', 'not'],
+        'single' => ['additionalProperties', 'items', 'not', 'propertyNames'],
         'list' => ['allOf', 'anyOf', 'oneOf'],
-        'map' => ['$defs', 'properties'],
+        'map' => ['$defs', 'properties', 'patternProperties'],
     ];
 
     /**
@@ -590,7 +590,7 @@ final class SchemaValidator
                     $defs[$name] = $this->effectiveSchema($def, $direction);
                 }
                 $schema['$defs'] = $defs;
-            } elseif ($keyword === 'properties' && is_array($schema[$keyword])) {
+            } elseif (($keyword === 'properties' || $keyword === 'patternProperties') && is_array($schema[$keyword])) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $foreign */
@@ -606,18 +606,20 @@ final class SchemaValidator
                         continue;
                     }
                     /** @var array<string, mixed> $property */
-                    if (($property[$flag] ?? false) === true) {
+                    if ($keyword === 'properties' && ($property[$flag] ?? false) === true) {
                         $foreign[(string) $name] = true;
                     }
                     $properties[$name] = $this->effectiveSchema($property, $direction);
                 }
-                $schema['properties'] = $properties;
-                /** @var mixed $required */
-                $required = $schema['required'] ?? null;
-                if (is_array($required)) {
-                    $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($foreign[$name])));
+                $schema[$keyword] = $properties;
+                if ($keyword === 'properties') {
+                    /** @var mixed $required */
+                    $required = $schema['required'] ?? null;
+                    if (is_array($required)) {
+                        $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($foreign[$name])));
+                    }
                 }
-            } elseif (($keyword === 'items' || $keyword === 'additionalProperties') && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
+            } elseif (($keyword === 'items' || $keyword === 'additionalProperties' || $keyword === 'propertyNames') && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
                 /** @var array<string, mixed> $items */
                 $items = $schema[$keyword];
                 $schema[$keyword] = $this->effectiveSchema($items, $direction);

@@ -65,6 +65,26 @@ final class ContractTest
         Assert::same($matched->pathParameters, []);
     }
 
+    public function validatesPatternPropertiesAndPropertyNamesInContracts(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'paths' => ['/labels' => ['get' => ['responses' => [
+                '200' => ['content' => ['application/json' => ['schema' => [
+                    'type' => 'object',
+                    'patternProperties' => ['^x-' => ['type' => 'integer', 'minimum' => 1]],
+                    'propertyNames' => ['pattern' => '^x-[a-z]+$'],
+                    'additionalProperties' => false,
+                ]]]],
+            ]]]],
+        ]);
+        $response = static fn(string $body): Response => new Response(200, ['Content-Type' => 'application/json'], $body);
+
+        Assert::true($contract->validateResponse('GET /labels', $response('{"x-count":2}'))->isValid());
+        Assert::false($contract->validateResponse('GET /labels', $response('{"x-count":0}'))->isValid());
+        Assert::false($contract->validateResponse('GET /labels', $response('{"count":2}'))->isValid());
+    }
+
     public function decodesPathParameterExactlyOnce(): void
     {
         $contract = Contract::fromArray([
@@ -2001,7 +2021,6 @@ final class ContractTest
         $response = static fn(array $schema): array => $operation(['responses' => ['200' => ['content' => ['application/json' => ['schema' => $schema]]]]]);
         $unsupported = 'assertion is outside the v0.1 support matrix';
 
-        yield 'patternProperties on a parameter' => [$parameter(['type' => 'object', 'patternProperties' => ['^x' => ['type' => 'string']]]), $unsupported];
         yield 'a draft-07 $schema on a request body' => [
             ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
                 'requestBody' => ['content' => ['application/json' => ['schema' => ['$schema' => 'http://json-schema.org/draft-07/schema#', 'type' => 'object']]]],
@@ -2014,7 +2033,6 @@ final class ContractTest
             ['openapi' => '3.0.3', 'paths' => ['/q' => ['get' => ['responses' => ['200' => ['headers' => ['X-N' => ['schema' => ['type' => 'integer', 'exclusiveMinimum' => 5]]]]]]]]],
             'OAS 3.0 requires a boolean',
         ];
-        yield 'propertyNames on a response body' => [$response(['type' => 'object', 'propertyNames' => ['pattern' => '^x']]), $unsupported];
         yield 'a minimum that is not a number, under items of a parameter' => [$parameter(['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => '5']]), 'minimum must contain a valid number'];
         yield 'an if/then on a multipart part header' => [
             ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [

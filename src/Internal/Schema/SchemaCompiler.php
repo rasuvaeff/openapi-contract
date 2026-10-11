@@ -39,6 +39,7 @@ final class SchemaCompiler
         'additionalProperties' => true,
         'items' => false,
         'not' => false,
+        'propertyNames' => false,
     ];
 
     /** @var list<string> */
@@ -66,6 +67,7 @@ final class SchemaCompiler
     private const array SCHEMA_MAP_KEYWORDS = [
         '$defs',
         'properties',
+        'patternProperties',
     ];
 
     /** @var list<string> */
@@ -76,9 +78,7 @@ final class SchemaCompiler
         'dependentSchemas',
         'else',
         'if',
-        'patternProperties',
         'prefixItems',
-        'propertyNames',
         'then',
         'unevaluatedItems',
         'unevaluatedProperties',
@@ -113,7 +113,7 @@ final class SchemaCompiler
     private function shareSchemaGraph(\stdClass $schema): array
     {
         $referenceFree = !property_exists($schema, '$ref');
-        foreach (['additionalProperties', 'items', 'not'] as $keyword) {
+        foreach (['additionalProperties', 'items', 'not', 'propertyNames'] as $keyword) {
             /** @var bool|\stdClass|null $member */
             $member = $schema->{$keyword} ?? null;
             if ($member instanceof \stdClass) {
@@ -138,7 +138,7 @@ final class SchemaCompiler
             }
             $schema->{$keyword} = $members;
         }
-        foreach (['properties', '$defs'] as $keyword) {
+        foreach (['properties', 'patternProperties', '$defs'] as $keyword) {
             /** @var mixed $members */
             $members = $schema->{$keyword} ?? null;
             if (!$members instanceof \stdClass) {

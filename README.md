@@ -56,7 +56,7 @@ Every Schema Object the validators will read — each parameter's, each
 request and response media type's, each response header's and multipart
 part header's — is compiled while the contract is built, in the direction
 it will be read in, so a schema this package cannot evaluate (an assertion
-keyword outside the support matrix such as `patternProperties`, a `$schema`
+keyword outside the support matrix such as `prefixItems`, a `$schema`
 naming another dialect, an OAS 3.0 `exclusiveMinimum` written as a number,
 a `pattern` the backend cannot parse, wherever it is nested) is
 `InvalidContract` out of the factory and never out of a `validate*()` call.
