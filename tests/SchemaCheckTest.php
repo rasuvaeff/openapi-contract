@@ -167,6 +167,14 @@ final class SchemaCheckTest
         yield 'closed object' => [[...$item, 'additionalProperties' => false], (object) ['id' => 1, 'name' => 'a']];
         yield 'list of items' => [['type' => 'array', 'items' => $item], [(object) ['name' => 'a']]];
         yield 'map of items' => [['type' => 'object', 'additionalProperties' => $item], (object) ['k' => (object) ['name' => 'a']]];
+        yield 'pattern properties' => [[
+            'type' => 'object',
+            'patternProperties' => ['^x-' => $item],
+        ], (object) ['x-item' => (object) ['name' => 'a']]];
+        yield 'property names' => [[
+            'type' => 'object',
+            'propertyNames' => ['pattern' => '^x-'],
+        ], (object) ['x-item' => 'a']];
         yield 'composition' => [['allOf' => [$item, ['type' => 'object']]], (object) ['name' => 'a']];
         yield 'negation is left alone' => [['not' => $item], (object) ['name' => 'a']];
         yield 'boolean member passes through' => [['type' => 'object', 'properties' => ['open' => true], 'required' => ['open']], (object) []];

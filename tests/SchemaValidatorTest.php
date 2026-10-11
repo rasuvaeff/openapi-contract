@@ -268,6 +268,47 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid((object) ['k' => $value], ['type' => 'object', 'additionalProperties' => $object], SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
+    public function evaluatesPatternPropertiesAndPropertyNames(): void
+    {
+        $validator = new SchemaValidator();
+        $patternProperties = [
+            'type' => 'object',
+            'patternProperties' => ['^x-' => ['type' => 'integer']],
+            'additionalProperties' => false,
+        ];
+        $propertyNames = [
+            'type' => 'object',
+            'propertyNames' => ['pattern' => '^x-[a-z]+$'],
+        ];
+
+        Assert::true($validator->isValid((object) ['x-count' => 3], $patternProperties, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['x-count' => '3'], $patternProperties, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['count' => 3], $patternProperties, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['x-count' => 3], $propertyNames, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['count' => 3], $propertyNames, SchemaDialect::OpenApi31));
+    }
+
+    public function patternSchemasApplyTogetherAndPropertyNamesChecksDeclaredKeys(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'properties' => ['x-id' => ['type' => 'integer']],
+            'patternProperties' => [
+                '^x-' => ['minimum' => 1],
+                'id$' => ['maximum' => 5],
+            ],
+            'propertyNames' => ['pattern' => '^x-'],
+            'additionalProperties' => true,
+        ];
+
+        Assert::true($validator->isValid((object) ['x-id' => 3], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['x-id' => 6], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['x-id' => 0], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['x-other' => 1], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['count' => 1], $schema, SchemaDialect::OpenApi31));
+    }
+
     /**
      * The guards `SchemaCheck` relies on live here, and mutants in this class
      * are matched to this test class alone — see the package AGENTS.md on
