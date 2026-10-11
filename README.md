@@ -56,7 +56,7 @@ Every Schema Object the validators will read — each parameter's, each
 request and response media type's, each response header's and multipart
 part header's — is compiled while the contract is built, in the direction
 it will be read in, so a schema this package cannot evaluate (an assertion
-keyword outside the support matrix such as `prefixItems`, a `$schema`
+keyword outside the support matrix such as `contentSchema`, a `$schema`
 naming another dialect, an OAS 3.0 `exclusiveMinimum` written as a number,
 a `pattern` the backend cannot parse, wherever it is nested) is
 `InvalidContract` out of the factory and never out of a `validate*()` call.
@@ -488,8 +488,10 @@ carries a `readOnly` `id` is judged by `id`'s schema and a closed object
 (`additionalProperties: false`) still admits it, exactly as both
 specifications have it ("the required will take effect on the response
 only"). The rewrite recurses through `properties`, `patternProperties`,
-`propertyNames`, `items`, `additionalProperties`, the conditional keywords
-(`if`, `then`, `else`), the composition keywords and `$defs`, leaves `not` alone, and
+`propertyNames`, `items`, `prefixItems`, `contains`, `dependentSchemas`,
+`unevaluatedProperties`, `unevaluatedItems`, `additionalProperties`, the
+conditional keywords (`if`, `then`, `else`), the composition keywords and
+`$defs`, leaves `not` alone, and
 is what makes the same value and the same schema answer differently in the two
 directions.
 

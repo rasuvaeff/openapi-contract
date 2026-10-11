@@ -40,7 +40,7 @@ final class SchemaValidator
      * alone on purpose — what a `readOnly` property means under a negation
      * is not something either specification says.
      */
-    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'propertyNames', 'items', 'additionalProperties', 'if', 'then', 'else', 'allOf', 'anyOf', 'oneOf'];
+    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'propertyNames', 'items', 'additionalProperties', 'if', 'then', 'else', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'contains', 'unevaluatedProperties', 'unevaluatedItems', 'dependentSchemas'];
 
     /**
      * {@see SUBSCHEMA_KEYWORDS}['single'] without `not`: the members the
@@ -49,7 +49,7 @@ final class SchemaValidator
      *
      * @var list<string>
      */
-    private const array REWRITTEN_SINGLE_KEYWORDS = ['additionalProperties', 'items', 'propertyNames', 'if', 'then', 'else'];
+    private const array REWRITTEN_SINGLE_KEYWORDS = ['additionalProperties', 'items', 'propertyNames', 'if', 'then', 'else', 'contains', 'unevaluatedProperties', 'unevaluatedItems'];
 
     /**
      * Every keyword under which the compiler emits a subschema, by the shape
@@ -59,9 +59,9 @@ final class SchemaValidator
      * @var array{single: list<string>, list: list<string>, map: list<string>}
      */
     private const array SUBSCHEMA_KEYWORDS = [
-        'single' => ['additionalProperties', 'items', 'not', 'propertyNames', 'if', 'then', 'else'],
-        'list' => ['allOf', 'anyOf', 'oneOf'],
-        'map' => ['$defs', 'properties', 'patternProperties'],
+        'single' => ['additionalProperties', 'items', 'not', 'propertyNames', 'if', 'then', 'else', 'contains', 'unevaluatedProperties', 'unevaluatedItems'],
+        'list' => ['allOf', 'anyOf', 'oneOf', 'prefixItems'],
+        'map' => ['$defs', 'properties', 'patternProperties', 'dependentSchemas'],
     ];
 
     /**
@@ -599,7 +599,7 @@ final class SchemaValidator
                     $defs[$name] = $this->effectiveSchema($def, $direction);
                 }
                 $schema['$defs'] = $defs;
-            } elseif (($keyword === 'properties' || $keyword === 'patternProperties') && is_array($schema[$keyword])) {
+            } elseif (($keyword === 'properties' || $keyword === 'patternProperties' || $keyword === 'dependentSchemas') && is_array($schema[$keyword])) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $foreign */

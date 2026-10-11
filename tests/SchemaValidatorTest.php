@@ -93,6 +93,85 @@ final class SchemaValidatorTest
         Assert::true($first->{'$defs'}->Value === $second->{'$defs'}->Value);
     }
 
+    public function sharingWalksEverySubschemaPositionAndKeepsReferencesLocal(): void
+    {
+        foreach (['if', 'then', 'else', 'contains', 'unevaluatedProperties', 'unevaluatedItems', 'prefixItems', 'dependentSchemas'] as $keyword) {
+            $compiler = new SchemaCompiler();
+            $wrap = static fn(array $node): array => match ($keyword) {
+                'prefixItems' => [$keyword => [$node]],
+                'dependentSchemas' => [$keyword => ['trigger' => $node]],
+                default => [$keyword => $node],
+            };
+            $shared = $wrap(['type' => 'string']);
+            Assert::true($compiler->compile($shared, SchemaDialect::OpenApi31) === $compiler->compile($shared, SchemaDialect::OpenApi31));
+            $referenced = [...$wrap(['$ref' => '#/$defs/Value']), '$defs' => ['Value' => ['type' => 'string']]];
+            Assert::false($compiler->compile($referenced, SchemaDialect::OpenApi31) === $compiler->compile($referenced, SchemaDialect::OpenApi31));
+        }
+    }
+
+    public function dependentRequiredPreservesNumericAndEmptyMemberMaps(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = ['type' => 'object', 'dependentRequired' => [0 => ['other']]];
+        Assert::false($validator->isValid((object) ['0' => true], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['0' => true, 'other' => true], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) [], ['dependentRequired' => []], SchemaDialect::OpenApi31));
+    }
+
+    #[Property(runs: 150)]
+    public function directionalRewriteReachesEveryNewPositionAndIsAFixedPoint(string $keyword, bool $response): void
+    {
+        $direction = $response ? SchemaDirection::Response : SchemaDirection::Request;
+        $node = ['required' => ['id', 'secret'], 'properties' => [
+            'id' => ['type' => 'integer', 'readOnly' => true],
+            'secret' => ['type' => 'string', 'writeOnly' => true],
+        ]];
+        $wrap = static fn(array $member): array => match ($keyword) {
+            'prefixItems' => [$keyword => [$member]],
+            'dependentSchemas' => [$keyword => ['trigger' => $member]],
+            default => [$keyword => $member],
+        };
+        $schema = $wrap($node);
+        $expected = $wrap([...$node, 'required' => [$response ? 'id' : 'secret']]);
+        $validator = new SchemaValidator();
+        $effective = $validator->effectiveSchema($schema, $direction);
+
+        Assert::same($effective, $expected);
+        Assert::same($validator->effectiveSchema($effective, $direction), $effective);
+    }
+
+    public static function directionalRewriteReachesEveryNewPositionAndIsAFixedPointGenerators(): array
+    {
+        return ['keyword' => Gen::elements(['prefixItems', 'contains', 'dependentSchemas', 'unevaluatedProperties', 'unevaluatedItems']), 'response' => Gen::bool()];
+    }
+
+    #[Property(runs: 150)]
+    public function directionalRewriteKeepsEvaluatedAnnotations(bool $extra, bool $response, int $id): void
+    {
+        $direction = $response ? SchemaDirection::Response : SchemaDirection::Request;
+        $flag = $direction->foreignFlag();
+        $node = ['type' => 'object', 'required' => ['id'], 'properties' => ['id' => ['type' => 'integer', $flag => true]]];
+        $object = (object) ($extra ? ['id' => $id, 'extra' => true] : ['id' => $id]);
+        $validator = new SchemaValidator();
+        $schemasAndValues = [
+            [['allOf' => [$node], 'unevaluatedProperties' => false], $object, !$extra],
+            [['anyOf' => [$node, ['type' => 'null']], 'unevaluatedProperties' => false], $object, !$extra],
+            [['type' => 'array', 'prefixItems' => [$node], 'unevaluatedItems' => false], [$object], true],
+            [['type' => 'array', 'contains' => $node, 'unevaluatedItems' => false], [$object], true],
+            [['type' => 'object', 'properties' => ['trigger' => ['type' => 'boolean']], 'dependentSchemas' => ['trigger' => $node], 'unevaluatedProperties' => false], (object) ['trigger' => true, ...get_object_vars($object)], !$extra],
+        ];
+        foreach ($schemasAndValues as [$schema, $value, $expected]) {
+            $effective = $validator->effectiveSchema($schema, $direction);
+            Assert::same($validator->isValid($value, $schema, SchemaDialect::OpenApi31, $direction), $expected);
+            Assert::same($validator->isValid($value, $effective, SchemaDialect::OpenApi31, $direction), $expected);
+        }
+    }
+
+    public static function directionalRewriteKeepsEvaluatedAnnotationsGenerators(): array
+    {
+        return ['extra' => Gen::bool(), 'response' => Gen::bool(), 'id' => Gen::int()];
+    }
+
 
     /** @return iterable<string, array{SchemaDialect, array<string, mixed>, mixed, mixed}> */
     public static function dialectProvider(): iterable
@@ -237,17 +316,39 @@ final class SchemaValidatorTest
     {
         try {
             (new SchemaValidator())->isValid(
-                value: ['a'],
-                schema: ['type' => 'array', 'prefixItems' => [['type' => 'string']]],
+                value: '{"a":1}',
+                schema: ['type' => 'string', 'contentMediaType' => 'application/json', 'contentSchema' => ['type' => 'object']],
                 dialect: SchemaDialect::OpenApi31,
             );
         } catch (UnsupportedSchema $exception) {
-            Assert::string($exception->getMessage())->contains('prefixItems');
+            Assert::string($exception->getMessage())->contains('contentSchema');
 
             return;
         }
 
         Assert::true(actual: false, message: 'Expected unsupported schema exception');
+    }
+
+    public function refusesMalformedDependentRequiredAndThirtyBooleanTupleItems(): void
+    {
+        foreach ([
+            ['dependentRequired' => ['card' => 'address']],
+            ['dependentRequired' => ['card' => ['address', 1]]],
+        ] as $malformed) {
+            try {
+                (new SchemaValidator())->isValid((object) [], $malformed, SchemaDialect::OpenApi31);
+                Assert::true(actual: false, message: 'Expected malformed dependentRequired to be refused');
+            } catch (UnsupportedSchema $exception) {
+                Assert::string($exception->getMessage())->contains('dependentRequired');
+            }
+        }
+
+        try {
+            (new SchemaValidator())->isValid(['x'], ['prefixItems' => [true]], SchemaDialect::OpenApi30);
+            Assert::true(actual: false, message: 'Expected a boolean tuple item to be refused under OAS 3.0');
+        } catch (UnsupportedSchema $exception) {
+            Assert::string($exception->getMessage())->contains('boolean schemas require OAS 3.1');
+        }
     }
 
     public function filtersDirectionalPropertiesInsideNestedStructures(): void
@@ -325,6 +426,116 @@ final class SchemaValidatorTest
         Assert::true($validator->isValid((object) ['kind' => 'dog', 'sound' => 'bark'], $schema, SchemaDialect::OpenApi31));
         Assert::false($validator->isValid((object) ['kind' => 'cat', 'sound' => 'bark'], $schema, SchemaDialect::OpenApi31));
         Assert::false($validator->isValid((object) ['kind' => 'dog', 'sound' => 'meow'], $schema, SchemaDialect::OpenApi31));
+    }
+
+    public function evaluatesTupleAndContainsSchemasIncludingBounds(): void
+    {
+        $validator = new SchemaValidator();
+        $tuple = [
+            'type' => 'array',
+            'prefixItems' => [
+                ['type' => 'string', 'const' => 'v1'],
+                ['type' => 'integer', 'minimum' => 1],
+            ],
+            'items' => false,
+        ];
+        $contains = [
+            'type' => 'array',
+            'items' => ['type' => 'integer'],
+            'contains' => ['type' => 'integer', 'minimum' => 5],
+            'minContains' => 2,
+            'maxContains' => 3,
+        ];
+
+        Assert::true($validator->isValid(['v1', 2], $tuple, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid(['v1', 0], $tuple, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid(['v1', 2, 3], $tuple, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid([5, 6, 1], $contains, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid([5, 1], $contains, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid([5, 6, 7, 8], $contains, SchemaDialect::OpenApi31));
+    }
+
+    public function evaluatesDependentSchemasAndRequiredMembers(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'creditCard' => ['type' => 'string'],
+                'billingAddress' => ['type' => 'string'],
+                'shippingAddress' => ['type' => 'string'],
+                'kind' => ['type' => 'string'],
+                'taxId' => ['type' => 'string'],
+            ],
+            'dependentRequired' => ['creditCard' => ['billingAddress']],
+            'dependentSchemas' => [
+                'shippingAddress' => ['required' => ['kind']],
+                'kind' => ['if' => ['properties' => ['kind' => ['const' => 'business']]], 'then' => ['required' => ['taxId']]],
+            ],
+        ];
+
+        Assert::true($validator->isValid((object) [], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['creditCard' => 'x'], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['creditCard' => 'x', 'billingAddress' => 'a'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['shippingAddress' => 'a'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['kind' => 'business'], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['kind' => 'business', 'taxId' => 'x'], $schema, SchemaDialect::OpenApi31));
+    }
+
+    public function evaluatesUnevaluatedClosuresAcrossApplicators(): void
+    {
+        $validator = new SchemaValidator();
+        $properties = [
+            'type' => 'object',
+            'properties' => [
+                'id' => ['type' => 'integer', 'readOnly' => true],
+                'name' => ['type' => 'string'],
+            ],
+            'unevaluatedProperties' => false,
+        ];
+        $items = [
+            'type' => 'array',
+            'prefixItems' => [['type' => 'string']],
+            'items' => ['type' => 'integer'],
+            'unevaluatedItems' => false,
+        ];
+
+        Assert::true($validator->isValid((object) ['id' => 1, 'name' => 'x'], $properties, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['id' => 1, 'name' => 'x', 'extra' => true], $properties, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid(['v1', 1, 2], $items, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid(['v1', 1, 'extra'], $items, SchemaDialect::OpenApi31));
+    }
+
+    public function directionalRewriteReachesTupleAndDependentSubschemas(): void
+    {
+        $validator = new SchemaValidator();
+        $tuple = [
+            'type' => 'array',
+            'prefixItems' => [[
+                'type' => 'object',
+                'required' => ['id', 'name'],
+                'properties' => [
+                    'id' => ['type' => 'integer', 'readOnly' => true],
+                    'name' => ['type' => 'string'],
+                ],
+            ]],
+        ];
+        $dependent = [
+            'type' => 'object',
+            'properties' => ['trigger' => ['type' => 'boolean']],
+            'dependentSchemas' => ['trigger' => [
+                'required' => ['id', 'name'],
+                'properties' => [
+                    'id' => ['type' => 'integer', 'readOnly' => true],
+                    'name' => ['type' => 'string'],
+                ],
+            ]],
+        ];
+
+        Assert::true($validator->isValid([(object) ['name' => 'x']], $tuple, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid([(object) ['id' => 1, 'name' => 'x']], $tuple, SchemaDialect::OpenApi31, SchemaDirection::Response));
+        Assert::true($validator->isValid((object) ['trigger' => true, 'name' => 'x'], $dependent, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['trigger' => true, 'id' => 1, 'name' => 'x'], $dependent, SchemaDialect::OpenApi31, SchemaDirection::Response));
     }
 
     public function directionalRewriteReachesConditionalSchemas(): void
@@ -488,6 +699,11 @@ final class SchemaValidatorTest
         yield 'under items' => [['type' => 'array', 'items' => $bad], 'pattern value must be a valid regex'];
         yield 'under additionalProperties' => [['type' => 'object', 'additionalProperties' => $bad], 'pattern value must be a valid regex'];
         yield 'under not' => [['not' => $bad], 'pattern value must be a valid regex'];
+        foreach (['contains', 'unevaluatedProperties', 'unevaluatedItems'] as $keyword) {
+            yield $keyword => [[$keyword => $bad], 'pattern value must be a valid regex'];
+        }
+        yield 'prefixItems' => [['prefixItems' => [$bad]], 'pattern value must be a valid regex'];
+        yield 'dependentSchemas' => [['dependentSchemas' => ['trigger' => $bad]], 'pattern value must be a valid regex'];
         yield 'under oneOf, with no allOf before it' => [['oneOf' => [['type' => 'integer'], $bad]], 'pattern value must be a valid regex'];
         yield 'under anyOf' => [['anyOf' => [$bad]], 'pattern value must be a valid regex'];
         yield 'under properties, with no $defs before it' => [['type' => 'object', 'properties' => ['ok' => ['type' => 'string'], 'a' => $bad]], 'pattern value must be a valid regex'];

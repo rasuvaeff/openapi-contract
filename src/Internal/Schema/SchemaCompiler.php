@@ -43,6 +43,14 @@ final class SchemaCompiler
         'if' => false,
         'then' => false,
         'else' => false,
+        // A tuple position, a membership test and a "nothing else evaluated"
+        // closure. `contains` is judged against a subschema rather than
+        // being one the value walks into, and `unevaluated*` against the
+        // annotations its siblings left — the two need no special handling
+        // here beyond being normalized like any other subschema.
+        'contains' => false,
+        'unevaluatedProperties' => false,
+        'unevaluatedItems' => false,
     ];
 
     /** @var list<string> */
@@ -50,6 +58,9 @@ final class SchemaCompiler
         'allOf',
         'anyOf',
         'oneOf',
+        // The tuple form: each position its own subschema. Boolean entries are
+        // refused under 3.0 by normalizeSchemaValue(), like `allOf` members.
+        'prefixItems',
     ];
 
     /**
@@ -71,17 +82,13 @@ final class SchemaCompiler
         '$defs',
         'properties',
         'patternProperties',
+        // A member name's subschema, keyed the same way `properties` is.
+        'dependentSchemas',
     ];
 
     /** @var list<string> */
     private const array UNSUPPORTED_ASSERTION_KEYWORDS = [
-        'contains',
         'contentSchema',
-        'dependentRequired',
-        'dependentSchemas',
-        'prefixItems',
-        'unevaluatedItems',
-        'unevaluatedProperties',
     ];
 
     /**
@@ -113,7 +120,7 @@ final class SchemaCompiler
     private function shareSchemaGraph(\stdClass $schema): array
     {
         $referenceFree = !property_exists($schema, '$ref');
-        foreach (['additionalProperties', 'items', 'not', 'propertyNames'] as $keyword) {
+        foreach (array_keys(self::SINGLE_SCHEMA_KEYWORDS) as $keyword) {
             /** @var bool|\stdClass|null $member */
             $member = $schema->{$keyword} ?? null;
             if ($member instanceof \stdClass) {
@@ -121,7 +128,7 @@ final class SchemaCompiler
                 $referenceFree = $referenceFree && $childIsReferenceFree;
             }
         }
-        foreach (['allOf', 'anyOf', 'oneOf'] as $keyword) {
+        foreach (self::SCHEMA_LIST_KEYWORDS as $keyword) {
             /** @var mixed $members */
             $members = $schema->{$keyword} ?? null;
             if (!is_array($members)) {
@@ -138,7 +145,7 @@ final class SchemaCompiler
             }
             $schema->{$keyword} = $members;
         }
-        foreach (['properties', 'patternProperties', '$defs'] as $keyword) {
+        foreach (self::SCHEMA_MAP_KEYWORDS as $keyword) {
             /** @var mixed $members */
             $members = $schema->{$keyword} ?? null;
             if (!$members instanceof \stdClass) {
@@ -202,6 +209,7 @@ final class SchemaCompiler
             SchemaDialect::OpenApi30 => $this->normalizeOpenApi30($schema),
             SchemaDialect::OpenApi31 => $this->normalizeOpenApi31($schema),
         };
+        /** @var array<string, mixed> $schema */
 
         foreach (self::UNSUPPORTED_ASSERTION_KEYWORDS as $keyword) {
             if (array_key_exists($keyword, $schema)) {
@@ -214,6 +222,11 @@ final class SchemaCompiler
                 throw UnsupportedSchema::atKeyword($keyword, 'reference identity is outside the support matrix');
             }
         }
+
+        if (array_key_exists('dependentRequired', $schema)) {
+            $schema['dependentRequired'] = $this->normalizeDependentRequired($schema['dependentRequired']);
+        }
+        /** @var array<string, mixed> $schema */
 
         foreach (self::SINGLE_SCHEMA_KEYWORDS as $keyword => $booleanAllowed) {
             if (array_key_exists($keyword, $schema)) {
@@ -269,6 +282,47 @@ final class SchemaCompiler
     }
 
     /**
+     * `dependentRequired` as a map of member names to the names each one's
+     * presence demands. Nothing here is a subschema, so nothing is compiled:
+     * the shape is checked where it is written and the map goes to the backend
+     * as written, with a numeric-string member name cast back to the string
+     * PHP turned it into — a legal name, not a malformed one.
+     *
+     */
+    private function normalizeDependentRequired(mixed $value): \stdClass
+    {
+        if (!is_array($value)) {
+            throw UnsupportedSchema::atKeyword('dependentRequired', 'expected an object of member name to required member names');
+        }
+
+        /** @var array<array-key, mixed> $value */
+        $normalized = [];
+        /** @var mixed $required */
+        foreach ($value as $name => $required) {
+            if (!is_array($required) || !array_is_list($required)) {
+                throw UnsupportedSchema::atKeyword('dependentRequired', sprintf('the members required by "%s" must be a list of names', (string) $name));
+            }
+            /** @var mixed $member */
+            foreach ($required as $member) {
+                if (!is_string($member)) {
+                    throw UnsupportedSchema::atKeyword('dependentRequired', sprintf('a member required by "%s" must be a name', (string) $name));
+                }
+            }
+            /** @var list<string> $members */
+            $members = $required;
+            if (count(array_unique($members)) !== count($members)) {
+                throw UnsupportedSchema::atKeyword('dependentRequired', sprintf('the members required by "%s" must be unique', (string) $name));
+            }
+            $normalized[(string) $name] = $members;
+        }
+
+        /** @var \stdClass $object */
+        $object = (object) $normalized;
+
+        return $object;
+    }
+
+    /**
      * @param array<string, mixed> $schema
      * @return array<string, mixed>
      */
@@ -291,6 +345,7 @@ final class SchemaCompiler
             unset($schema['nullable']);
         }
 
+        /** @var array<string, mixed> $schema */
         $schema = $this->normalizeExclusiveBound($schema, 'minimum');
 
         return $this->normalizeExclusiveBound($schema, 'maximum');
