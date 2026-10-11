@@ -93,7 +93,8 @@ Rules:
   a response — the `required` entry is dropped, the subschema is kept, so the
   property stays declared and typed (a closed object still admits it, an open
   one still checks its type); recursive through `properties`,
-  `patternProperties`, `propertyNames`, `items`, `additionalProperties`,
+  `patternProperties`, `propertyNames`, `items`, `prefixItems`, `contains`,
+  `dependentSchemas`, `unevaluatedProperties`, `unevaluatedItems`, `additionalProperties`,
   `if`/`then`/`else`, `allOf`/`anyOf`/`oneOf` and `$defs`, never into `not`;
   `SchemaCheck::effective($schema, $direction)` returns exactly that rewrite;
 - declared `security` is NOT enforced: requirements compile and are checked

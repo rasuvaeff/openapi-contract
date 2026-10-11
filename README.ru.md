@@ -56,7 +56,7 @@ $contract = Contract::fromFile('openapi.yaml'); // нужен symfony/yaml
 каждого media type запроса и ответа, у каждого заголовка ответа и заголовка
 multipart-части, — компилируется при сборке контракта, в том направлении, в
 котором будет прочитан, поэтому схема, которую пакет не может вычислить
-(assertion-ключевое слово вне матрицы поддержки вроде `prefixItems`,
+(assertion-ключевое слово вне матрицы поддержки вроде `contentSchema`,
 `$schema` с другим диалектом, `exclusiveMinimum` числом под OAS 3.0,
 `pattern`, который бэкенд не разбирает, — на любой глубине), это
 `InvalidContract` из фабрики и никогда — из `validate*()`.
@@ -489,7 +489,8 @@ $contract->accepts($value, $schema, SchemaDirection::Response);
 `id`, судится по схеме `id`, а закрытый объект (`additionalProperties: false`)
 по-прежнему его принимает, ровно как в обеих спецификациях («the required
 will take effect on the response only»). Перезапись рекурсивно проходит
-`properties`, `patternProperties`, `propertyNames`, `items`,
+`properties`, `patternProperties`, `propertyNames`, `items`, `prefixItems`,
+`contains`, `dependentSchemas`, `unevaluatedProperties`, `unevaluatedItems`,
 `additionalProperties`, условные ключевые слова (`if`, `then`, `else`),
 композиционные ключевые слова и `$defs`, не трогает `not`, и именно из-за неё
 одно и то же значение и одна и та же

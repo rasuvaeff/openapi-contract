@@ -45,13 +45,16 @@ final readonly class DocumentCompiler
     private const array BODYLESS_METHODS_IN_30 = ['delete', 'get', 'head'];
 
     /** Keywords whose value is one subschema. @var list<string> */
-    private const array SINGLE_SUBSCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not', 'if', 'then', 'else'];
+    private const array SINGLE_SUBSCHEMA_KEYWORDS = [
+        'additionalProperties', 'items', 'not', 'propertyNames', 'if', 'then', 'else',
+        'contains', 'unevaluatedProperties', 'unevaluatedItems',
+    ];
 
     /** Keywords whose value is a list of subschemas. @var list<string> */
-    private const array SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf'];
+    private const array SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf', 'prefixItems'];
 
     /** Keywords whose value is a map of subschemas. @var list<string> */
-    private const array SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'properties'];
+    private const array SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'dependentSchemas'];
 
     /** @param array<string, mixed> $document */
     public function compile(array $document, ?DocumentGraph $graph = null, int $resolvedNodes = Limits::DEFAULT_RESOLVED_NODES): CompiledDocument

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Added.** OpenAPI 3.1 schemas now support `prefixItems`, `contains` with
+  `minContains`/`maxContains`, `dependentRequired`, `dependentSchemas`, and
+  `unevaluatedProperties`/`unevaluatedItems` (#157). These keywords are
+  compiled, shape-checked, eagerly parsed, and included in directional
+  rewrites; `contentSchema` remains fail-closed.
 - **Added.** OpenAPI 3.1 schemas support the conditional keywords `if`,
   `then` and `else` (#157). Each is a subschema the compiler emits, the load
   -time check walks, and the backend evaluates under draft 2020-12, at any

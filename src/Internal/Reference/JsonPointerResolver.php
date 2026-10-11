@@ -56,7 +56,7 @@ final class JsonPointerResolver
      *
      * @var list<string>
      */
-    private const array SCHEMA_DATA_KEYWORDS = ['const', 'default', 'enum', 'example', 'examples'];
+    private const array SCHEMA_DATA_KEYWORDS = ['const', 'default', 'enum', 'example', 'examples', 'dependentRequired'];
 
     /**
      * The same, outside a Schema Object: the `example` a Parameter, Header or
