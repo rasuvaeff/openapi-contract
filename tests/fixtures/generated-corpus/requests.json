@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.13.0",
+    "contractVersionAtRecording": "v0.15.1",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -1376,6 +1376,65 @@
                                     }
                                 }
                             }
+                        }
+                    }
+                },
+                "/shipments": {
+                    "post": {
+                        "operationId": "shipments.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "kind"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "standard",
+                                                    "expedited"
+                                                ]
+                                            },
+                                            "weightKg": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 50
+                                            },
+                                            "carrierCode": {
+                                                "type": "string",
+                                                "minLength": 2,
+                                                "maxLength": 8
+                                            }
+                                        },
+                                        "if": {
+                                            "properties": {
+                                                "kind": {
+                                                    "const": "expedited"
+                                                }
+                                            }
+                                        },
+                                        "then": {
+                                            "required": [
+                                                "carrierCode",
+                                                "weightKg"
+                                            ]
+                                        },
+                                        "else": {
+                                            "required": [
+                                                "weightKg"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
                         }
                     }
                 }
@@ -10468,6 +10527,762 @@
                 "body": {
                     "encoding": "utf8",
                     "content": "size=2"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":24,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":2,\"carrierCode\":\"\\uda21\\udf71u]+\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":38,\"carrierCode\":\"\\/at{\\u0308\\u00a3\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-boundary/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "weightKg"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-boundary/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":0,\"carrierCode\":\"\\uda21\\udf71u]+\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "weightKg"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-boundary/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":0,\"carrierCode\":\"\\/at{\\u0308\\u00a3\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "weightKg"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-enum/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"__openapi_misuse__\",\"weightKg\":24}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "kind"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-enum/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"__openapi_misuse__\",\"weightKg\":2,\"carrierCode\":\"\\uda21\\udf71u]+\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "kind"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-enum/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"__openapi_misuse__\",\"weightKg\":38,\"carrierCode\":\"\\/at{\\u0308\\u00a3\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "kind"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-length/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":24,\"carrierCode\":\"a\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-length/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":2,\"carrierCode\":\"a\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-length/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":38,\"carrierCode\":\"a\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-type/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":24,\"carrierCode\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-type/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":2,\"carrierCode\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/body-type/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":38,\"carrierCode\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "carrierCode"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/media-type/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":24}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/media-type/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":2,\"carrierCode\":\"\\uda21\\udf71u]+\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/media-type/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":38,\"carrierCode\":\"\\/at{\\u0308\\u00a3\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "shipments.create/valid/1",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":24}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/10",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":39,\"carrierCode\":\"t\\uda03\\udfed`=\\u0308(\\ud813\\udc86\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/2",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":2,\"carrierCode\":\"\\uda21\\udf71u]+\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/3",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":38,\"carrierCode\":\"\\/at{\\u0308\\u00a3\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/4",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":32,\"carrierCode\":\"\\ud9c1\\ude4b\\udb72\\udef4q\\ud940\\udd1e\\u0301\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/5",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":36}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/6",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":4,\"carrierCode\":\"O\\u987a2\\u67f1\\uebaa\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/7",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":37,\"carrierCode\":\"\\u6207\\ud97c\\udd5d\\ud8c3\\ude11\\ud974\\udea8 \\u01bd\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/8",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"standard\",\"weightKg\":30,\"carrierCode\":\"\\u01eb{\\ud990\\udca5P\\uad03n\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "shipments.create/valid/9",
+            "document": "zoo",
+            "operationId": "shipments.create",
+            "request": {
+                "method": "POST",
+                "target": "/shipments",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"expedited\",\"weightKg\":25,\"carrierCode\":\"x\\ufce6S\\udae7\\udeeaT\\u00e4\"}"
                 }
             },
             "expect": {

@@ -489,8 +489,10 @@ $contract->accepts($value, $schema, SchemaDirection::Response);
 `id`, судится по схеме `id`, а закрытый объект (`additionalProperties: false`)
 по-прежнему его принимает, ровно как в обеих спецификациях («the required
 will take effect on the response only»). Перезапись рекурсивно проходит
-`properties`, `items`, `additionalProperties`, композиционные ключевые слова и
-`$defs`, не трогает `not`, и именно из-за неё одно и то же значение и одна и та же
+`properties`, `patternProperties`, `propertyNames`, `items`,
+`additionalProperties`, условные ключевые слова (`if`, `then`, `else`),
+композиционные ключевые слова и `$defs`, не трогает `not`, и именно из-за неё
+одно и то же значение и одна и та же
 схема отвечают по-разному в двух направлениях.
 
 Сама перезапись экспортирована, чтобы потребитель, который строит значения

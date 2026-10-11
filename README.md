@@ -487,8 +487,9 @@ and keeps its subschema — it stays declared and typed, so a request that
 carries a `readOnly` `id` is judged by `id`'s schema and a closed object
 (`additionalProperties: false`) still admits it, exactly as both
 specifications have it ("the required will take effect on the response
-only"). The rewrite recurses through `properties`, `items`,
-`additionalProperties`, the composition keywords and `$defs`, leaves `not` alone, and
+only"). The rewrite recurses through `properties`, `patternProperties`,
+`propertyNames`, `items`, `additionalProperties`, the conditional keywords
+(`if`, `then`, `else`), the composition keywords and `$defs`, leaves `not` alone, and
 is what makes the same value and the same schema answer differently in the two
 directions.
 

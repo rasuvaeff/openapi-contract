@@ -7,10 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- **Added.** OpenAPI 3.1 schemas now support `patternProperties` and
-  `propertyNames`. Their subschemas are compiled and checked at contract load,
-  and direction-specific `readOnly`/`writeOnly` handling reaches nested
-  `patternProperties` schemas.
+- **Added.** OpenAPI 3.1 schemas support the conditional keywords `if`,
+  `then` and `else` (#157). Each is a subschema the compiler emits, the load
+  -time check walks, and the backend evaluates under draft 2020-12, at any
+  depth and nested inside one another; a document using a conditional
+  `required` — ordinary OpenAPI today — is loadable instead of
+  `InvalidContract`. The directional rewrite reaches all three branches, so a
+  `readOnly`/`writeOnly` property required inside a conditional is not required
+  of the direction that does not own it, exactly as at the top level. Under
+  OAS 3.0 a boolean `if`/`then`/`else` is still refused: that dialect
+  predates boolean schemas, as it does for `items` and `not`.
+- **Added.** OpenAPI 3.1 schemas support `patternProperties` and
+  `propertyNames` (#157). Both are compiled and checked at contract load, and
+  the directional rewrite recurses into them, so a map of `^x-`-prefixed
+  headers whose members are `readOnly` is read in the direction the exchange
+  runs in rather than in both at once.
 
 ## 0.15.0 — 2026-09-20
 

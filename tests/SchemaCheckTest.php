@@ -203,6 +203,57 @@ final class SchemaCheckTest
     }
 
     /**
+     * The rewrite has to enter every branch of a conditional, or a schema is
+     * judged in one direction only where it is read. The check is structural
+     * rather than on verdicts: both forms of the value go through the same
+     * rewrite, so a branch the rewrite skipped would answer the same either
+     * way and the verdict comparison would pass a schema the contract reads
+     * wrongly. What the property fixes is that the `required` entry naming a
+     * foreign property is gone in all three branches and nowhere else, and
+     * that the rewrite is a fixed point of itself.
+     *
+     * @param array<string, mixed> $branch the `if`, `then` or `else` subschema
+     */
+    #[Property(runs: 100)]
+    public function effectiveReachesEveryBranchOfAConditional(array $branch, string $keyword): void
+    {
+        $schema = ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]], $keyword => $branch];
+        $check = new SchemaCheck();
+
+        foreach (SchemaDirection::cases() as $direction) {
+            $effective = $check->effective($schema, $direction);
+            $expected = $direction === SchemaDirection::Request
+                ? array_values(array_filter((array) $branch['required'], static fn(mixed $name): bool => $name !== 'id'))
+                : $branch['required'];
+
+            Assert::same($effective[$keyword]['required'] ?? [], $expected);
+            // The subschema itself is never dropped, whatever the direction:
+            // a value that carries the property is still judged by it.
+            Assert::same($effective[$keyword]['properties']['id'], ['type' => 'integer', 'readOnly' => true]);
+            Assert::same($check->effective($effective, $direction), $effective);
+        }
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function effectiveReachesEveryBranchOfAConditionalGenerators(): array
+    {
+        return [
+            'keyword' => Gen::elements(['if', 'then', 'else']),
+            'branch' => Gen::elements([
+                ['required' => ['id'], 'properties' => ['id' => ['type' => 'integer', 'readOnly' => true]]],
+                ['required' => ['id', 'kind'], 'properties' => [
+                    'id' => ['type' => 'integer', 'readOnly' => true],
+                    'kind' => ['type' => 'string'],
+                ]],
+                ['required' => ['kind'], 'properties' => [
+                    'kind' => ['type' => 'string'],
+                    'id' => ['type' => 'integer', 'readOnly' => true],
+                ]],
+            ]),
+        ];
+    }
+
+    /**
      * A `$defs` member is a schema a local `$ref` reaches — the compiled form
      * of a recursive schema — and is read in the same direction: a
      * `readOnly` member of a tree node is not required at any depth of a

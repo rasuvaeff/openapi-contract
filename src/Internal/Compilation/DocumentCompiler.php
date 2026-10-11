@@ -45,7 +45,7 @@ final readonly class DocumentCompiler
     private const array BODYLESS_METHODS_IN_30 = ['delete', 'get', 'head'];
 
     /** Keywords whose value is one subschema. @var list<string> */
-    private const array SINGLE_SUBSCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not'];
+    private const array SINGLE_SUBSCHEMA_KEYWORDS = ['additionalProperties', 'items', 'not', 'if', 'then', 'else'];
 
     /** Keywords whose value is a list of subschemas. @var list<string> */
     private const array SUBSCHEMA_LIST_KEYWORDS = ['allOf', 'anyOf', 'oneOf'];

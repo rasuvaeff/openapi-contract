@@ -2019,7 +2019,6 @@ final class ContractTest
         $operation = static fn(array $operation, string $version = '3.1.0'): array => ['openapi' => $version, 'paths' => ['/q' => ['get' => [...$operation, 'responses' => $operation['responses'] ?? ['200' => []]]]]];
         $parameter = static fn(array $schema, string $version = '3.1.0'): array => $operation(['parameters' => [['name' => 'q', 'in' => 'query', 'schema' => $schema]]], $version);
         $response = static fn(array $schema): array => $operation(['responses' => ['200' => ['content' => ['application/json' => ['schema' => $schema]]]]]);
-        $unsupported = 'assertion is outside the v0.1 support matrix';
 
         yield 'a draft-07 $schema on a request body' => [
             ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
@@ -2034,16 +2033,6 @@ final class ContractTest
             'OAS 3.0 requires a boolean',
         ];
         yield 'a minimum that is not a number, under items of a parameter' => [$parameter(['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => '5']]), 'minimum must contain a valid number'];
-        yield 'an if/then on a multipart part header' => [
-            ['openapi' => '3.1.0', 'paths' => ['/b' => ['post' => [
-                'requestBody' => ['content' => ['multipart/form-data' => [
-                    'schema' => ['type' => 'object', 'properties' => ['file' => ['type' => 'string']]],
-                    'encoding' => ['file' => ['headers' => ['X-Part' => ['schema' => ['if' => ['type' => 'string'], 'then' => ['minLength' => 1]]]]]],
-                ]]],
-                'responses' => ['204' => []],
-            ]]]],
-            $unsupported,
-        ];
         yield 'nullable under 3.1, in a oneOf branch of a parameter' => [$parameter(['oneOf' => [['type' => 'string'], ['type' => 'integer', 'nullable' => true]]]), 'use a type union containing null in OAS 3.1'];
         yield 'a pattern the backend cannot parse, in an anyOf under additionalProperties' => [$parameter(['type' => 'object', 'additionalProperties' => ['anyOf' => [['type' => 'integer'], ['type' => 'string', 'pattern' => '[']]]]), 'pattern value must be a valid regex'];
     }

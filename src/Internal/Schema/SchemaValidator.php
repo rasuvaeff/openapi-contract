@@ -40,7 +40,16 @@ final class SchemaValidator
      * alone on purpose — what a `readOnly` property means under a negation
      * is not something either specification says.
      */
-    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'propertyNames', 'items', 'additionalProperties', 'allOf', 'anyOf', 'oneOf'];
+    private const array DIRECTIONAL_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'propertyNames', 'items', 'additionalProperties', 'if', 'then', 'else', 'allOf', 'anyOf', 'oneOf'];
+
+    /**
+     * {@see SUBSCHEMA_KEYWORDS}['single'] without `not`: the members the
+     * directional rewrite recurses into as one subschema. `not` is the one
+     * it deliberately does not enter, so the two lists cannot be one.
+     *
+     * @var list<string>
+     */
+    private const array REWRITTEN_SINGLE_KEYWORDS = ['additionalProperties', 'items', 'propertyNames', 'if', 'then', 'else'];
 
     /**
      * Every keyword under which the compiler emits a subschema, by the shape
@@ -50,7 +59,7 @@ final class SchemaValidator
      * @var array{single: list<string>, list: list<string>, map: list<string>}
      */
     private const array SUBSCHEMA_KEYWORDS = [
-        'single' => ['additionalProperties', 'items', 'not', 'propertyNames'],
+        'single' => ['additionalProperties', 'items', 'not', 'propertyNames', 'if', 'then', 'else'],
         'list' => ['allOf', 'anyOf', 'oneOf'],
         'map' => ['$defs', 'properties', 'patternProperties'],
     ];
@@ -619,7 +628,7 @@ final class SchemaValidator
                         $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($foreign[$name])));
                     }
                 }
-            } elseif (($keyword === 'items' || $keyword === 'additionalProperties' || $keyword === 'propertyNames') && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
+            } elseif (in_array($keyword, self::REWRITTEN_SINGLE_KEYWORDS, strict: true) && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
                 /** @var array<string, mixed> $items */
                 $items = $schema[$keyword];
                 $schema[$keyword] = $this->effectiveSchema($items, $direction);

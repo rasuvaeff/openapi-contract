@@ -97,7 +97,7 @@ final readonly class SchemaCheck
      * `writeOnly` on a response) loses its `required` entry and keeps its
      * subschema; the rewrite recurses through `properties`,
      * `patternProperties`, `propertyNames`, `items`, `additionalProperties`,
-     * `allOf`, `anyOf` and `oneOf`, leaves `not`
+     * `if`, `then`, `else`, `allOf`, `anyOf` and `oneOf`, leaves `not`
      * alone, and is idempotent. Members it does not read are passed through
      * as written. The dialect plays no part: the rewrite is the same under
      * OAS 3.0 and 3.1.
