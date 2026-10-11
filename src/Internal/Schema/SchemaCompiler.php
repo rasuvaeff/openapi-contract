@@ -40,6 +40,9 @@ final class SchemaCompiler
         'items' => false,
         'not' => false,
         'propertyNames' => false,
+        'if' => false,
+        'then' => false,
+        'else' => false,
     ];
 
     /** @var list<string> */
@@ -76,10 +79,7 @@ final class SchemaCompiler
         'contentSchema',
         'dependentRequired',
         'dependentSchemas',
-        'else',
-        'if',
         'prefixItems',
-        'then',
         'unevaluatedItems',
         'unevaluatedProperties',
     ];

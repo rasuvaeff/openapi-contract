@@ -309,6 +309,87 @@ final class SchemaValidatorTest
         Assert::false($validator->isValid((object) ['count' => 1], $schema, SchemaDialect::OpenApi31));
     }
 
+    public function evaluatesConditionalSchemas(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'required' => ['kind'],
+            'properties' => ['kind' => ['type' => 'string']],
+            'if' => ['properties' => ['kind' => ['const' => 'cat']]],
+            'then' => ['required' => ['sound'], 'properties' => ['sound' => ['const' => 'meow']]],
+            'else' => ['required' => ['sound'], 'properties' => ['sound' => ['const' => 'bark']]],
+        ];
+
+        Assert::true($validator->isValid((object) ['kind' => 'cat', 'sound' => 'meow'], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['kind' => 'dog', 'sound' => 'bark'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['kind' => 'cat', 'sound' => 'bark'], $schema, SchemaDialect::OpenApi31));
+        Assert::false($validator->isValid((object) ['kind' => 'dog', 'sound' => 'meow'], $schema, SchemaDialect::OpenApi31));
+    }
+
+    public function directionalRewriteReachesConditionalSchemas(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'if' => ['required' => ['id'], 'properties' => ['id' => ['readOnly' => true, 'type' => 'integer']]],
+            'then' => ['required' => ['name'], 'properties' => ['name' => ['type' => 'string']]],
+        ];
+
+        Assert::true($validator->isValid((object) ['name' => 'x'], $schema, SchemaDialect::OpenApi31));
+        Assert::true($validator->isValid((object) ['id' => 1, 'name' => 'x'], $schema, SchemaDialect::OpenApi31, SchemaDirection::Response));
+    }
+
+    /**
+     * A conditional nested in another conditional, and one under a keyword
+     * the rewrite walks past: `if` is not a leaf of the schema, and a
+     * document that puts one under `properties` means it as much as at the
+     * top. Both used to be refused at load time as a keyword outside the
+     * support matrix, so the schema was unloadable rather than misjudged.
+     */
+    public function evaluatesNestedConditionalSchemas(): void
+    {
+        $validator = new SchemaValidator();
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'mode' => ['type' => 'string'],
+                'payload' => [
+                    'type' => 'object',
+                    'properties' => ['kind' => ['type' => 'string'], 'detail' => ['type' => 'integer']],
+                    'if' => ['required' => ['kind']],
+                    'then' => ['required' => ['detail']],
+                ],
+            ],
+            'if' => ['properties' => ['mode' => ['const' => 'strict']]],
+            'then' => ['required' => ['payload'], 'properties' => ['payload' => ['required' => ['kind', 'detail']]]],
+        ];
+
+        Assert::true($validator->isValid(
+            (object) ['mode' => 'strict', 'payload' => (object) ['kind' => 'x', 'detail' => 1]],
+            $schema,
+            SchemaDialect::OpenApi31,
+        ));
+        // The inner conditional demands `detail` of a payload carrying `kind`,
+        // whatever the outer one says about it.
+        Assert::false($validator->isValid(
+            (object) ['mode' => 'lax', 'payload' => (object) ['kind' => 'x']],
+            $schema,
+            SchemaDialect::OpenApi31,
+        ));
+        // The outer one, a level higher, demands a payload of a strict request
+        // and leaves a lax one free of it.
+        Assert::false($validator->isValid(
+            (object) ['mode' => 'strict'],
+            $schema,
+            SchemaDialect::OpenApi31,
+        ));
+        Assert::true($validator->isValid(
+            (object) ['mode' => 'lax'],
+            $schema,
+            SchemaDialect::OpenApi31,
+        ));
+    }
+
     /**
      * The guards `SchemaCheck` relies on live here, and mutants in this class
      * are matched to this test class alone — see the package AGENTS.md on

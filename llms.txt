@@ -92,8 +92,9 @@ Rules:
   property is NOT REQUIRED on a request and a `writeOnly` one NOT REQUIRED on
   a response — the `required` entry is dropped, the subschema is kept, so the
   property stays declared and typed (a closed object still admits it, an open
-  one still checks its type); recursive through `properties`, `items`,
-  `additionalProperties`, `allOf`/`anyOf`/`oneOf` and `$defs`, never into `not`;
+  one still checks its type); recursive through `properties`,
+  `patternProperties`, `propertyNames`, `items`, `additionalProperties`,
+  `if`/`then`/`else`, `allOf`/`anyOf`/`oneOf` and `$defs`, never into `not`;
   `SchemaCheck::effective($schema, $direction)` returns exactly that rewrite;
 - declared `security` is NOT enforced: requirements compile and are checked
   for referencing a declared scheme, but a request missing its credential
