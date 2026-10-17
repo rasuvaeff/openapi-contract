@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 
 use Opis\JsonSchema\Errors\ValidationError;
+use Opis\JsonSchema\Helper;
 use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Schemas\ExceptionSchema;
@@ -233,6 +234,9 @@ final class SchemaValidator
     {
         $path = $this->dataPath($error);
         $expected = $this->assertion($error);
+        if ($this->isSpuriousAdditionalProperties($error)) {
+            return [];
+        }
         if ($error->keyword() === 'required') {
             /** @var mixed $missing */
             $missing = $error->args()['missing'] ?? null;
@@ -249,6 +253,69 @@ final class SchemaValidator
         }
 
         return [new SchemaFailure(path: $path, keyword: $error->keyword(), actual: $error->data()->value(), expected: $expected)];
+    }
+
+    /**
+     * A closed object (`additionalProperties: false`) whose declared member
+     * fails its own subschema still receives an `additionalProperties` error
+     * naming it: the backend marks a member as evaluated only when every
+     * declared member passed, so the failing one counts as unchecked by the
+     * time `additionalProperties` runs. A member the sibling `properties`
+     * map declares, or one of its `patternProperties` patterns matches, is
+     * not additional — its own subschema is what the `properties` keyword
+     * judged, and its failure is already reported there. If no flagged name
+     * escapes that, the leaf exists only because of the missing mark and is
+     * dropped.
+     *
+     * The object form of `additionalProperties` is left alone: there the
+     * backend itself judges the flagged members against the added schema,
+     * so a name it reports there failed both the declaration and it.
+     */
+    private function isSpuriousAdditionalProperties(ValidationError $error): bool
+    {
+        if ($error->keyword() !== 'additionalProperties') {
+            return false;
+        }
+        /** @var mixed $flagged */
+        $flagged = $error->args()['properties'] ?? null;
+        if (!is_array($flagged)) {
+            return false;
+        }
+        $schema = $error->schema()->info()->data();
+        if (!$schema instanceof \stdClass || !property_exists($schema, 'additionalProperties') || $schema->additionalProperties !== false) {
+            return false;
+        }
+
+        /** @var mixed $declared */
+        $declared = $schema->properties ?? null;
+        /** @var mixed $patterned */
+        $patterned = $schema->patternProperties ?? null;
+        /** @var array<array-key, mixed> $patterns */
+        $patterns = is_array($patterned) ? $patterned : (is_object($patterned) ? (array) $patterned : []);
+
+        foreach ($flagged as $name) {
+            if (!is_string($name)) {
+                return false;
+            }
+            if (is_object($declared) && property_exists($declared, $name)) {
+                continue;
+            }
+            foreach (array_keys($patterns) as $pattern) {
+                if (!is_string($pattern) || $pattern === '') {
+                    continue;
+                }
+                // The delimiter prefix and the flags make the pattern non-empty in every case psalm already narrowed `$pattern` to non-empty-string.
+                /** @var non-empty-string $regex */
+                $regex = Helper::patternToRegex($pattern);
+                if (preg_match($regex, $name) === 1) {
+                    continue 2;
+                }
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
