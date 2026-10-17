@@ -1064,6 +1064,80 @@ final class SchemaValidatorTest
     }
 
     /**
+     * A closed object's declared member failing its own subschema is not
+     * additionally reported as an `additionalProperties` failure of the
+     * parent (#175): the backend marks a member as evaluated only when every
+     * declared member passed, so the failing one is still unchecked when
+     * `additionalProperties: false` runs. An undeclared member is a real
+     * failure of it and keeps its leaf; so does a member that failed the
+     * object form of `additionalProperties`, which the backend carries on
+     * the member's own path.
+     */
+    public function closedObjectDoesNotReportItsDeclaredMemberAsAdditional(): void
+    {
+        $validator = new SchemaValidator();
+        $closed = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['a'],
+            'properties' => ['a' => ['type' => 'array', 'minItems' => 1]],
+        ];
+
+        // The declared member fails its own subschema: its leaf, and no word
+        // about `additionalProperties` at the root.
+        Assert::false($validator->isValid(json_decode('{"a":[]}'), $closed, SchemaDialect::OpenApi31));
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"a":[]}'), $closed, SchemaDialect::OpenApi31)),
+            [['a', 'minItems', []]],
+        );
+
+        // An undeclared member beside it is `additionalProperties`'s to report.
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"a":[],"b":1}'), $closed, SchemaDialect::OpenApi31)),
+            [['a', 'minItems', []], ['', 'additionalProperties', ['a' => [], 'b' => 1]]],
+        );
+
+        // A name `patternProperties` matches is no more additional dropped.
+        $patternClosed = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'patternProperties' => ['^x-' => ['type' => 'integer']],
+            'properties' => ['x-a' => ['type' => 'integer']],
+        ];
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"x-a":"3"}'), $patternClosed, SchemaDialect::OpenApi31)),
+            [['x-a', 'type', '3']],
+        );
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"x-a":"3","count":9}'), $patternClosed, SchemaDialect::OpenApi31)),
+            [['x-a', 'type', '3'], ['', 'additionalProperties', ['x-a' => '3', 'count' => 9]]],
+        );
+
+        // Nested closed objects: the same at the member's own path.
+        $nested = ['type' => 'object', 'additionalProperties' => false, 'properties' => ['inner' => [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => ['i' => ['type' => 'string', 'minLength' => 2]],
+        ]]];
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"inner":{"i":"x"}}'), $nested, SchemaDialect::OpenApi31)),
+            [['inner.i', 'minLength', 'x']],
+        );
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"inner":{"i":"x","j":2}}'), $nested, SchemaDialect::OpenApi31)),
+            [['inner.i', 'minLength', 'x'], ['inner', 'additionalProperties', ['i' => 'x', 'j' => 2]]],
+        );
+
+        // The object form is untouched: a member failing it as well is named
+        // on its own path, under each keyword.
+        $open = ['type' => 'object', 'properties' => ['s' => ['type' => 'integer']], 'additionalProperties' => ['minLength' => 5]];
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"s":"x"}'), $open, SchemaDialect::OpenApi31)),
+            [['s', 'type', 'x'], ['s', 'minLength', 'x']],
+        );
+    }
+
+    /**
      * A discriminated union's diagnostics follow the branch the value names
      * — through `mapping` as a reference or a component name, or implicitly
      * by component name — and say so when it names none. The compiled form

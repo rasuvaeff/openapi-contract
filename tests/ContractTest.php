@@ -570,16 +570,19 @@ final class ContractTest
 
         $valid = '{"name":"a","children":[{"name":"b","children":[{"name":"c","children":[{"name":"d"}]}]}]}';
         Assert::true($contract->validateRequest($request($valid))->isValid());
+        // The four older leaf rungs — the two genuine failures here, and the
+        // backend's spurious `additionalProperties` at each closed ancestor
+        // whose declared member carried the failure (#175) — are now two.
         Assert::same(
             array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request('{"name":"a","children":[{"name":"b","children":[{"nam":"c"}]}]}'))->violations),
-            ['request.body.schema', 'request.body.schema', 'request.body.schema', 'request.body.schema'],
+            ['request.body.schema', 'request.body.schema'],
         );
         // `id` is readOnly: never demanded on a request, at any depth, and
         // demanded at every depth of a response.
         Assert::true($contract->validateRequest($request('{"name":"a","children":[{"name":"b","id":1}]}'))->isValid());
         Assert::same(
             array_map(static fn(Violation $v): string => $v->code, $contract->validateResponse('tree.create', $response($valid))->violations),
-            ['response.body.schema', 'response.body.schema', 'response.body.schema', 'response.body.schema', 'response.body.schema', 'response.body.schema', 'response.body.schema'],
+            ['response.body.schema', 'response.body.schema', 'response.body.schema', 'response.body.schema'],
         );
         Assert::true($contract->validateResponse('tree.create', $response('{"id":1,"name":"a","children":[{"id":2,"name":"b","children":[{"id":3,"name":"c"}]}]}'))->isValid());
 
@@ -685,7 +688,7 @@ final class ContractTest
         Assert::true($contract->validateRequest($request(sprintf('{"sendTo":[%s],"billTo":[%s]}', $noCode, $address([]))))->isValid());
         Assert::same(
             array_map(static fn(Violation $v): string => $v->code, $contract->validateRequest($request(sprintf('{"sendTo":[%s],"billTo":[%s]}', $address([]), $address(['city' => 5]))))->violations),
-            ['request.body.schema', 'request.body.schema'],
+            ['request.body.schema'],
         );
         Assert::true($contract->validateResponse('parcels.create', $response(sprintf('{"sendTo":[%s],"billTo":[%s],"code":1}', $address([]), $address([]))))->isValid());
         Assert::same(

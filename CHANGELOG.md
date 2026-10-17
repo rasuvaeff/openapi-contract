@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.16.1 — 2026-10-17
+
+- **Fixed.** A closed object (`additionalProperties: false`) whose declared
+  member fails its own subschema no longer receives an extra
+  `additionalProperties` violation of the parent over the member's own
+  failure (#175). The backend marks a member as evaluated only when every
+  declared member passed, so the failing one still counted as unchecked when
+  `additionalProperties` ran; a member the sibling `properties` map declares,
+  or one of its `patternProperties` patterns matches, is now what the leaf
+  filter treats as not additional. An undeclared member, and a member that
+  fails the object form of `additionalProperties`, keep their leaves; the
+  verdict never moved.
+
 ## 0.16.0 — 2026-10-11
 
 - **Added.** OpenAPI 3.1 schemas now support `prefixItems`, `contains` with
