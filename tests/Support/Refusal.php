@@ -26,7 +26,7 @@ final readonly class Refusal
     }
 
     /**
-     * Runs the call with every PHP diagnostic turned into an exception, so a
+     * Runs the call with every PHP warning and notice turned into an exception, so a
      * code path that only warns (an undefined key, a property read on a
      * scalar) cannot pass unnoticed.
      *
@@ -36,7 +36,13 @@ final readonly class Refusal
      */
     public static function quietly(callable $call): mixed
     {
-        set_error_handler(static function (int $severity, string $message, string $file, int $line): never {
+        set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+            // A deprecation is the dependency's to answer for on a newer PHP; a warning or a
+            // notice from this package's own code is what this exists to surface.
+            if (($severity & (E_DEPRECATED | E_USER_DEPRECATED)) !== 0) {
+                return false;
+            }
+
             throw new \ErrorException($message, 0, $severity, $file, $line);
         });
 
