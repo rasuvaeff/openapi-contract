@@ -294,13 +294,13 @@ final readonly class DocumentCompiler
     }
 
     /**
-     * @param list<array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}> $fallback
+     * @param list<array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}>|null $fallback the servers to answer when none are declared; the any-host server when null
      * @return list<array{scheme: null|non-empty-string, host: null|non-empty-string, port: null|int, base: non-empty-string}>
      */
-    private function servers(mixed $servers, array $fallback = [['scheme' => null, 'host' => null, 'port' => null, 'base' => '/']]): array
+    private function servers(mixed $servers, ?array $fallback = null): array
     {
         if (!is_array($servers) || $servers === []) {
-            return $fallback;
+            return $fallback ?? [['scheme' => null, 'host' => null, 'port' => null, 'base' => '/']];
         }
         $compiled = [];
         /** @var mixed $server */

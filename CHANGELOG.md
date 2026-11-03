@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **Tests.** Mutation testing now counts code no test names (`infection --with-uncovered`),
+  and the `minMsi` gate of 92 holds on the larger mutant set (3387 mutants). Added table-driven tests for the malformed-document refusals, the schema compiler
+  refusals, the form and multipart body decoders, `DecimalMultiple`, the violation fields of
+  response validation, path template matching and the discriminated-union branches. `src/`
+  behaviour is unchanged; four signatures were split over several lines and the root servers
+  default moved from a parameter default into the method body.
+
 ## 0.16.1 — 2026-10-17
 
 - **Fixed.** A closed object (`additionalProperties: false`) whose declared

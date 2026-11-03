@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedReference;
+use Rasuvaeff\OpenApiContract\Internal\Reference\DeferredReference;
 use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
 use Testo\Assert;
@@ -15,6 +16,7 @@ use Testo\Test;
 #[Test]
 #[Covers(JsonPointerResolver::class)]
 #[Covers(UnsupportedReference::class)]
+#[Covers(DeferredReference::class)]
 final class JsonPointerResolverTest
 {
     public function resolvesEscapedSameDocumentReferences(): void

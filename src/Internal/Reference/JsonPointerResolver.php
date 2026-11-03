@@ -160,8 +160,11 @@ final class JsonPointerResolver
      *
      * @return array<array-key, mixed>
      */
-    public function resolve(array $node, int $referenceDepth = 0, bool $inSchema = false): array
-    {
+    public function resolve(
+        array $node,
+        int $referenceDepth = 0,
+        bool $inSchema = false,
+    ): array {
         $file = $this->graph?->entryPath() ?? '';
         $resolved = $inSchema
             ? $this->resolveSchema($node, $file, $referenceDepth)
@@ -251,8 +254,13 @@ final class JsonPointerResolver
      *
      * @return array<array-key, mixed>|DeferredReference
      */
-    private function resolveIn(array $node, string $file, int $referenceDepth, bool $inSchema, int $schemaDepth = 0): array|DeferredReference
-    {
+    private function resolveIn(
+        array $node,
+        string $file,
+        int $referenceDepth,
+        bool $inSchema,
+        int $schemaDepth = 0,
+    ): array|DeferredReference {
         if (++$this->resolvedNodes > $this->maximumResolvedNodes) {
             throw new InvalidContract(sprintf(
                 'OpenAPI document exceeds the reference-resolution budget of %d nodes',

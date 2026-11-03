@@ -404,8 +404,12 @@ final class SchemaCompiler
     /**
      * @return bool|array<string, mixed>|\stdClass
      */
-    private function normalizeSchemaValue(mixed $value, SchemaDialect $dialect, string $keyword, bool $booleanAllowed = false): bool|array|\stdClass
-    {
+    private function normalizeSchemaValue(
+        mixed $value,
+        SchemaDialect $dialect,
+        string $keyword,
+        bool $booleanAllowed = false,
+    ): bool|array|\stdClass {
         if (is_bool($value)) {
             if (!$booleanAllowed && $dialect === SchemaDialect::OpenApi30) {
                 throw UnsupportedSchema::atKeyword($keyword, 'boolean schemas require OAS 3.1');

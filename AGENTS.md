@@ -148,16 +148,55 @@ make release-check
 
 ## Mutation gate: known equivalent classes
 
-**A class that appears in no `#[Covers]` gets no mutants at all.** Infection is
-fed by testo's codecov map, which is built from those attributes, so an
-unlisted class is not "covered by whatever executes it" — it is invisible, and
-so is every regression in it. The body decoders, the value decoder, the
-message-reading trait and the response selection value object were in that
-position until the 1.0 preparation wave; adding them raised the mutant count
-by roughly 470 and dropped the measured MSI by two and a half points before
-the tests caught up. Add the `#[Covers]` when you add a class, and check the
-mutant total after — a number that did not move is the symptom.
+**`composer mutation` runs `infection --with-uncovered`.** Infection is fed by
+testo's codecov map, which is built from `#[Covers]`, so a class that no test
+names is not "covered by whatever executes it": its mutants are `Not Covered`
+and count against the score. Without the flag they would not exist at all (the
+body decoders, the value decoder, the message-reading trait and the response
+selection object were in that position until the 1.0 preparation wave, and
+adding them moved the mutant count by roughly 470). Add the `#[Covers]` when you
+add a class and check the mutant total after. The differential and corpus tests
+stay `#[CoversNothing]` on purpose: naming the classes there bought about five
+kills and made the heavy replay run once per mutant.
 
+State at the `--with-uncovered` rollout: 3387 mutants, about 95% overall MSI
+with assertions off (CI conditions), 33 Not Covered, about 140 Escaped, 4 Timed
+Out (real infinite loops: the `$offset` and `$index` mutants, the empty-chunk
+loop in `MessageReading`). What is left falls into the classes below; a new
+survivor outside them is a test to write, not a class to add.
+
+- Dead guards, reachable only by a hand-built value or never: the
+  `\LogicException` shape checks (`Contract` usort, `DocumentCompiler` regex
+  failures, `ResponseSelector` empty key, `JsonPointerResolver` deferred
+  reference), the unreachable arms of `SchemaValidator::isSpuriousAdditionalProperties()`
+  (`args()['properties']` is always a list, the error's schema is always the
+  closed object) and `assertion()` (the keyword is always in its own schema),
+  the `DeepObject` match arm of `ParameterCodec::serialize()`, the default arm
+  of `DocumentCompiler::assertSupportedStyle()`, "YAML loading requires
+  symfony/yaml" (a dev dependency) and the unreadable-after-`is_file()` branch of
+  `DocumentGraph` (needs a file that vanishes between two calls; `chmod` does
+  nothing to root and means nothing on Windows).
+- Arithmetic that cannot change a verdict: `DecimalMultiple` works on digit
+  strings, so `(int)` casts of numeric strings, the sign (`ltrim` of `-`,
+  `$remainder * 10 - $digit` is the negated value), the leading zeros, the
+  `JSON_PRESERVE_ZERO_FRACTION` flag and the early `return` for a zero value are
+  all absorbed by the later steps; `DecimalMultipleOfKeyword` is only called
+  with numbers, and its error arguments are diagnostics the package does not
+  expose. The `is_nan`/`is_finite` guard of the keyword parser is dead: a
+  schema reaches it through `json_encode`, which refuses both.
+- Backend options that gate keywords with nothing registered behind them
+  (`allowGlobals`, `allowKeywordValidators`, `allowMappers`, `allowPragmas`,
+  `allowTemplates`, `decodeJsonString`). `allowDataKeyword`, `allowFilters` and
+  `allowSlots` are NOT in this class: each changes whether a malformed value
+  refuses, and `SchemaBackendTest` pins that.
+- Keys and caches: the concatenations that build `SchemaValidator`'s dedupe and
+  compilation keys are injective whatever their order (keyword names and the
+  two enum names cannot be suffixes of one another), and the cache `return` is
+  an optimization.
+- The rest of the classes in the paragraph below (`MediaType` and
+  `explode()` limits, `array_pad` over inputs that always split in two,
+  `MessageReading` chunk arithmetic, route bucketing, `array_values()` over
+  decoded lists, the DocumentGraph filesize pre-check).
 
 `composer mutation` (minMsi 92) leaves a stable set of escaped mutants that
 are equivalent by analysis — do not chase them, and re-classify anything new:
