@@ -225,8 +225,11 @@ final readonly class ParameterCodec
         ));
     }
 
-    private function pair(string $name, string $value, bool $encoded = false): string
-    {
+    private function pair(
+        string $name,
+        string $value,
+        bool $encoded = false,
+    ): string {
         return $this->encode($name) . '=' . ($encoded ? $value : $this->encode($value));
     }
 

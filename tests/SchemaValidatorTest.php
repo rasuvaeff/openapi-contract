@@ -6,6 +6,11 @@ namespace Rasuvaeff\OpenApiContract\Tests;
 
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedDialect;
 use Rasuvaeff\OpenApiContract\Internal\Exception\UnsupportedSchema;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\DecimalMultiple;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\DecimalMultipleOfKeyword;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\DecimalMultipleOfKeywordParser;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\Draft;
+use Rasuvaeff\OpenApiContract\Internal\Schema\Backend\Parser;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaCompiler;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaFailure;
 use Rasuvaeff\OpenApiContract\Internal\Schema\SchemaValidator;
@@ -26,6 +31,11 @@ use Testo\Test;
 #[Covers(SchemaFailure::class)]
 #[Covers(UnsupportedSchema::class)]
 #[Covers(SchemaDialect::class)]
+#[Covers(DecimalMultiple::class)]
+#[Covers(DecimalMultipleOfKeyword::class)]
+#[Covers(DecimalMultipleOfKeywordParser::class)]
+#[Covers(Draft::class)]
+#[Covers(Parser::class)]
 final class SchemaValidatorTest
 {
     #[DataProvider('dialectProvider')]

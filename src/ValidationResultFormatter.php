@@ -60,8 +60,10 @@ final readonly class ValidationResultFormatter
      * @param bool $maskNames replace the value of every member whose name
      *        matches the credential pattern — see {@see redactsActual()}
      */
-    private function value(mixed $value, bool $maskNames = false): string
-    {
+    private function value(
+        mixed $value,
+        bool $maskNames = false,
+    ): string {
         $encoded = json_encode(
             $this->normalize($value, depth: 0, maskNames: $maskNames),
             JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION,
@@ -71,8 +73,11 @@ final readonly class ValidationResultFormatter
     }
 
     /** @return null|bool|int|float|string|array<array-key, mixed> */
-    private function normalize(mixed $value, int $depth, bool $maskNames = false): bool|int|float|string|array|null
-    {
+    private function normalize(
+        mixed $value,
+        int $depth,
+        bool $maskNames = false,
+    ): bool|int|float|string|array|null {
         if ($depth >= self::MAX_VALUE_DEPTH && (is_array($value) || is_object($value))) {
             return '[depth limit]';
         }
