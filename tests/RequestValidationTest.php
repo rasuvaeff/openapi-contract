@@ -786,6 +786,24 @@ final class RequestValidationTest
     }
 
     /**
+     * A declared member whose name PHP turns into an integer key is declared:
+     * its own failure must not be echoed as an undeclared member (#182).
+     */
+    public function doesNotReportADeclaredNumericMemberAsAdditional(): void
+    {
+        $contract = $this->bodyContract(['application/json' => ['schema' => [
+            'type' => 'object', 'properties' => ['1' => ['type' => 'integer']], 'additionalProperties' => false,
+        ]]]);
+        $request = static fn(string $body): ServerRequest => new ServerRequest('POST', '/b', ['Content-Type' => 'application/json'], $body);
+
+        $declared = $contract->validateRequest($request('{"1":"s"}'));
+        Assert::same(count($declared->violations), 1);
+        Assert::true($contract->validateRequest($request('{"1":5}'))->isValid());
+        $undeclared = $contract->validateRequest($request('{"1":5,"2":6}'));
+        Assert::same(count($undeclared->violations), 1);
+    }
+
+    /**
      * OAS 3.0.3: "additionalProperties — Value can be boolean or object".
      * Rejecting the boolean form made the commonest closed-object idiom of
      * the 3.0 corpus throw out of the first validation call, after the

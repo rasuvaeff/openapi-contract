@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fix.** A violation of a declared property whose name is numeric (`"1"`) no longer comes with a spurious `additionalProperties` violation at the object root (#182).
 - **Tests.** Mutation testing now counts code no test names (`infection --with-uncovered`),
   and the `minMsi` gate of 92 holds on the larger mutant set (3387 mutants). Added table-driven tests for the malformed-document refusals, the schema compiler
   refusals, the form and multipart body decoders, `DecimalMultiple`, the violation fields of
