@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.16.2 — 2026-11-03
 
 - **Fix.** A violation of a declared property whose name is numeric (`"1"`) no longer comes with a spurious `additionalProperties` violation at the object root (#182).
 - **Tests.** Mutation testing now counts code no test names (`infection --with-uncovered`),
