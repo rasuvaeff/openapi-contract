@@ -293,10 +293,12 @@ final class SchemaValidator
         /** @var array<array-key, mixed> $patterns */
         $patterns = is_array($patterned) ? $patterned : (is_object($patterned) ? (array) $patterned : []);
 
-        foreach ($flagged as $name) {
-            if (!is_string($name)) {
+        /** @var mixed $flagName */
+        foreach ($flagged as $flagName) {
+            if (!is_string($flagName) && !is_int($flagName)) {
                 return false;
             }
+            $name = (string) $flagName;
             if (is_object($declared) && property_exists($declared, $name)) {
                 continue;
             }
