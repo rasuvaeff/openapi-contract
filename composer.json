@@ -42,7 +42,7 @@
         "symfony/yaml": "^6.4 || ^7.0 || ^8.0",
         "testo/bridge-infection": "^0.1.6",
         "testo/testo": "^0.10.25",
-        "vimeo/psalm": "^6.16"
+        "vimeo/psalm": "^6.16 || ^7.0"
     },
     "suggest": {
         "symfony/yaml": "Load OpenAPI documents written in YAML"
