@@ -50,7 +50,7 @@ final readonly class SchemaValueDecoder
     }
 
     /**
-     * @param string|list<string>|array<string, string> $value
+     * @param string|list<string>|array<string, mixed> $value
      * @param array<string, mixed> $schema
      */
     public function coerce(string|array $value, array $schema): string|int|float|bool|array|object|null
