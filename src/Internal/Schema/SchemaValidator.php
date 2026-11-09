@@ -668,7 +668,7 @@ final class SchemaValidator
                     $defs[$name] = $this->effectiveSchema($def, $direction);
                 }
                 $schema['$defs'] = $defs;
-            } elseif (($keyword === 'properties' || $keyword === 'patternProperties' || $keyword === 'dependentSchemas') && is_array($schema[$keyword])) {
+            } elseif ((in_array($keyword, ['properties', 'patternProperties', 'dependentSchemas'], strict: true)) && is_array($schema[$keyword])) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $foreign */
