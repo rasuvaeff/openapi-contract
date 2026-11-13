@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Changed.** `opis/json-schema` 2.6.2 no longer applies the object form of
+  `additionalProperties` to members `properties` declares: such a member's
+  failure is reported under its own `properties` subschema only, never twice.
+- **Added.** PSR-15 request middleware `ContractMiddleware` (observe-only by default,
+  `strict()` rejects with 400 + JSON violation summary) and the CLI fixture runner
+  `bin/openapi-contract <contract-file> <fixtures-dir>` with CI-friendly exit codes (#188).
+  Runtime dependencies gained `nyholm/psr7`, `psr/http-factory` and
+  `psr/http-server-middleware`.
 - Raised `vimeo/psalm` to `^7.0` (dev dependency); `SchemaValueDecoder::coerce()` now declares
   `array<string, mixed>` map values it really takes.
 

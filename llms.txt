@@ -166,6 +166,25 @@ Rules:
   deep `$ref` chains and fast rejection of cross-file cycles.
 
 API reference:
+- `ContractMiddleware` (`implements Psr\Http\Server\MiddlewareInterface`,
+  readonly): PSR-15 request gate. `new ContractMiddleware(Contract $contract,
+  ?Closure $onViolations = null)` — the closure takes
+  `(list<Violation>, ServerRequestInterface)` and answers a PSR-7 response
+  (short-circuits the pipeline) or `null` (request passes; `null` closure is
+  a pure no-op observer). `ContractMiddleware::strict(Contract,
+  ResponseFactoryInterface)` answers 400 `application/json` with
+  `{"error": "request does not match the OpenAPI contract", "violations":
+  [{code, operation, location, instancePath, message}]}` — never
+  expected/actual, whose redaction rules belong to the formatter. Response
+  validation is not in the middleware: use `validateExchange()` after the
+  handler or the CLI runner.
+- `bin/openapi-contract <contract-file> <fixtures-dir>` (composer `bin`):
+  validates every `*.json` fixture — `{"request": {method, uri, headers?,
+  body?}, "response"?: {status, headers?, body?}}` — request-only or as an
+  exchange; one `PASS`/`FAIL` line per file plus a `N passed, M failed`
+  summary. Exit `0` all hold, `1` a fixture violates the contract or is
+  malformed, `2` usage (bad args, unloadable contract, no `*.json`
+  fixtures — fail closed).
 - `Contract::fromArray(array $document, ?Limits $limits = null): Contract` /
   `fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null)` /
   `fromFile(string $path, ?Limits $limits = null)` (YAML via suggested

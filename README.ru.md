@@ -19,6 +19,9 @@ OpenAPI 3.0 и 3.1.
 
 - PHP 8.3 – 8.5
 - реализации `psr/http-message` для валидируемых exchanges
+  (`nyholm/psr7` едет в пакете — для CLI-раннера и примеров)
+- `psr/http-server-middleware` (PSR-15) и `psr/http-factory` (PSR-17) для
+  `ContractMiddleware`
 - `symfony/yaml` только для загрузки YAML-документов (suggest, не require)
 - никаких расширений сверх `json`: `multipleOf` судится по десятичной
   записи, которой документ и сообщение записали числа (`64.1` — кратное
@@ -551,6 +554,76 @@ $check->accepts($value, $schema, $operation->dialect);
 которое он собирается оставить в `integer`-ветви, спрашивает здесь, а не
 держит вторую копию правила. Судит по десятичной записи чисел (`64.1` —
 кратное `0.1`, `64.10000000000001` — нет), точно, на любой машине.
+
+### PSR-15 middleware
+
+`ContractMiddleware` валидирует каждый входящий запрос против контракта внутри
+PSR-15-пайплайна. Что происходит при нарушении, решает замыкание — оно
+получает список нарушений и запрос и отвечает либо PSR-7-ответом (короткое
+замыкание пайплайна), либо `null` (пропустить запрос дальше):
+
+```php
+use Rasuvaeff\OpenApiContract\ContractMiddleware;
+
+// Только наблюдение: ничего не блокируется, обработчик по умолчанию — no-op.
+$observe = new ContractMiddleware($contract);
+
+// Строгий режим: нарушающий контракт запрос не доходит до handler'а и
+// получает 400 с JSON-телом из стабильных полей нарушения.
+$strict = ContractMiddleware::strict($contract, $responseFactory);
+
+// Своя политика: лог, счётчик, 429 — или null, чтобы пропустить.
+$custom = new ContractMiddleware(
+    $contract,
+    static fn (array $violations, $request): ?ResponseInterface => $logger->warning(
+        (new ValidationResultFormatter())->format(new ValidationResult($violations)),
+    ),
+);
+```
+
+Тело строгого 400 несёт `code`, `operation`, `location`, `instancePath` и
+`message` каждого нарушения — но никогда `expected`/`actual`: правила их
+редакции принадлежат форматтеру и не пережили бы сырой JSON-дамп.
+Валидация ответов в middleware сознательно не входит: middleware не может
+отклонить ответ, не подменив ответ приложения, поэтому double-pass — дело
+вызывающего (`validateExchange()` после handler'а) или CLI-раннера ниже.
+
+### CLI-раннер фикстур
+
+`bin/openapi-contract` валидирует каталог JSON-фикстур против одного
+документа-контракта и возвращает CI-friendly код выхода:
+
+```bash
+vendor/bin/openapi-contract openapi.yaml tests/api-fixtures
+```
+
+Каждая фикстура `*.json` в каталоге — одно сообщение: только запрос или
+целый exchange:
+
+```json
+{
+    "request": {
+        "method": "GET",
+        "uri": "https://api.test/pets/7",
+        "headers": {"X-Tenant": "public"},
+        "body": "..."
+    },
+    "response": {
+        "status": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": "{\"id\":7}"
+    }
+}
+```
+
+`headers` и `body` опциональны с обеих сторон; уберите член `response` —
+будет валидация только запроса. Отчёт — по строке `PASS`/`FAIL` на фикстуру
+(сортировка по имени файла), под каждой неудачей — сдвинутый вывод
+форматтера, в конце — `N passed, M failed`. Коды выхода: `0` — все фикстуры
+держат; `1` — фикстура нарушает контракт или сама некорректна; `2` —
+ошибка использования (неверные аргументы, не загружающийся контракт,
+каталог без `*.json`-фикстур — fail closed: пустой прогон не должен
+выглядеть зелёным).
 
 ### Коды нарушений
 

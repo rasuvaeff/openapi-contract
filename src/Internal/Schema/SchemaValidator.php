@@ -648,14 +648,16 @@ final class SchemaValidator
             if (!array_key_exists($keyword, $schema)) {
                 continue;
             }
-            if ($keyword === '$defs' && is_array($schema[$keyword])) {
+            /** @var mixed $member */
+            $member = $schema[$keyword] ?? null;
+            if ($keyword === '$defs' && is_array($member)) {
                 // A def is a schema a local `$ref` reaches — the member of a
                 // reference cycle the compiler could not inline — and is
                 // read in the same direction as the schema that holds it.
                 // Not a property: nothing here drops a `required` entry.
                 $defs = [];
                 /** @var array<array-key, mixed> $defMap */
-                $defMap = $schema[$keyword];
+                $defMap = $member;
                 foreach (array_keys($defMap) as $name) {
                     /** @var mixed $def */
                     $def = $defMap[$name];
@@ -668,13 +670,13 @@ final class SchemaValidator
                     $defs[$name] = $this->effectiveSchema($def, $direction);
                 }
                 $schema['$defs'] = $defs;
-            } elseif ((in_array($keyword, ['properties', 'patternProperties', 'dependentSchemas'], strict: true)) && is_array($schema[$keyword])) {
+            } elseif ((in_array($keyword, ['properties', 'patternProperties', 'dependentSchemas'], strict: true)) && is_array($member)) {
                 $flag = $direction->foreignFlag();
                 $properties = [];
                 /** @var array<string, true> $foreign */
                 $foreign = [];
                 /** @var array<array-key, mixed> $propertyMap */
-                $propertyMap = $schema[$keyword];
+                $propertyMap = $member;
                 foreach (array_keys($propertyMap) as $name) {
                     /** @var mixed $property */
                     $property = $propertyMap[$name];
@@ -697,13 +699,13 @@ final class SchemaValidator
                         $schema['required'] = array_values(array_filter($required, static fn(mixed $name): bool => !is_string($name) || !isset($foreign[$name])));
                     }
                 }
-            } elseif (in_array($keyword, self::REWRITTEN_SINGLE_KEYWORDS, strict: true) && is_array($schema[$keyword]) && !array_is_list($schema[$keyword])) {
+            } elseif (in_array($keyword, self::REWRITTEN_SINGLE_KEYWORDS, strict: true) && is_array($member) && !array_is_list($member)) {
                 /** @var array<string, mixed> $items */
-                $items = $schema[$keyword];
+                $items = $member;
                 $schema[$keyword] = $this->effectiveSchema($items, $direction);
-            } elseif (is_array($schema[$keyword]) && array_is_list($schema[$keyword])) {
+            } elseif (is_array($member) && array_is_list($member)) {
                 /** @var list<mixed> $parts */
-                $parts = $schema[$keyword];
+                $parts = $member;
                 $schema[$keyword] = array_map(function (mixed $part) use ($direction): mixed {
                     if (!is_array($part) || array_is_list($part)) {
                         return $part;

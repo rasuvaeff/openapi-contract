@@ -1,0 +1,12 @@
+{
+    "name": "GET one pet — a request and a response that both hold",
+    "request": {
+        "method": "GET",
+        "uri": "https://api.test/pets/7"
+    },
+    "response": {
+        "status": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": "{\"id\":7,\"name\":\"Rex\"}"
+    }
+}
