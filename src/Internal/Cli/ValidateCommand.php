@@ -153,10 +153,18 @@ final readonly class ValidateCommand
             throw new \InvalidArgumentException('Fixture request needs non-empty string "method" and "uri"');
         }
 
+        /** @var mixed $rawHeaders */
+        $rawHeaders = $fixture['headers'] ?? null;
+        if ($rawHeaders !== null && !is_array($rawHeaders)) {
+            throw new \InvalidArgumentException('Fixture request "headers" must be a JSON object');
+        }
         /** @var array<string, string> $headers */
-        $headers = is_array($fixture['headers'] ?? null) ? $fixture['headers'] : [];
+        $headers = is_array($rawHeaders) ? $rawHeaders : [];
         /** @var mixed $rawBody */
         $rawBody = $fixture['body'] ?? null;
+        if ($rawBody !== null && !is_string($rawBody)) {
+            throw new \InvalidArgumentException('Fixture request "body" must be a JSON string');
+        }
         $body = is_string($rawBody) ? $rawBody : null;
 
         return new Request($method, $uri, $headers, $body);
@@ -173,10 +181,18 @@ final readonly class ValidateCommand
             throw new \InvalidArgumentException('Fixture response needs an integer "status"');
         }
 
+        /** @var mixed $rawHeaders */
+        $rawHeaders = $fixture['headers'] ?? null;
+        if ($rawHeaders !== null && !is_array($rawHeaders)) {
+            throw new \InvalidArgumentException('Fixture response "headers" must be a JSON object');
+        }
         /** @var array<string, string> $headers */
-        $headers = is_array($fixture['headers'] ?? null) ? $fixture['headers'] : [];
+        $headers = is_array($rawHeaders) ? $rawHeaders : [];
         /** @var mixed $rawBody */
         $rawBody = $fixture['body'] ?? null;
+        if ($rawBody !== null && !is_string($rawBody)) {
+            throw new \InvalidArgumentException('Fixture response "body" must be a JSON string');
+        }
         $body = is_string($rawBody) ? $rawBody : null;
 
         return new Response($status, $headers, $body);

@@ -567,18 +567,22 @@ PSR-15-пайплайна. Что происходит при нарушении
 use Rasuvaeff\OpenApiContract\ContractMiddleware;
 
 // Только наблюдение: ничего не блокируется, обработчик по умолчанию — no-op.
+// Дефолт наблюдает молча: пакет не тянет зависимость PSR-3 и сам ничего не
+// записывает — для log-only подключите замыкание, как ниже.
 $observe = new ContractMiddleware($contract);
 
 // Строгий режим: нарушающий контракт запрос не доходит до handler'а и
-// получает 400 с JSON-телом из стабильных полей нарушения.
+// получает 400 с телом application/problem+json из стабильных полей нарушения.
 $strict = ContractMiddleware::strict($contract, $responseFactory);
 
 // Своя политика: лог, счётчик, 429 — или null, чтобы пропустить.
 $custom = new ContractMiddleware(
     $contract,
-    static fn (array $violations, $request): ?ResponseInterface => $logger->warning(
-        (new ValidationResultFormatter())->format(new ValidationResult($violations)),
-    ),
+    static function (array $violations, $request): ?ResponseInterface {
+        $logger->warning((new ValidationResultFormatter())->format(new ValidationResult($violations)));
+
+        return null;
+    },
 );
 ```
 

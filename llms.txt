@@ -171,8 +171,9 @@ API reference:
   ?Closure $onViolations = null)` — the closure takes
   `(list<Violation>, ServerRequestInterface)` and answers a PSR-7 response
   (short-circuits the pipeline) or `null` (request passes; `null` closure is
-  a pure no-op observer). `ContractMiddleware::strict(Contract,
-  ResponseFactoryInterface)` answers 400 `application/json` with
+  a pure no-op observer; the default records nothing — the package ships no
+  PSR-3 dependency, wire a closure for log-only). `ContractMiddleware::strict(Contract,
+  ResponseFactoryInterface)` answers 400 `application/problem+json` with
   `{"error": "request does not match the OpenAPI contract", "violations":
   [{code, operation, location, instancePath, message}]}` — never
   expected/actual, whose redaction rules belong to the formatter. Response

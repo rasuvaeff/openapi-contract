@@ -21,7 +21,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  * through). The default handler is a no-op: an observability-only middleware
  * that never changes the outcome, so wiring one is always safe to ship first.
  * `strict()` builds the rejecting variant over a PSR-17 response factory: a
- * request that breaks the contract gets a 400 `application/json` body whose
+ * request that breaks the contract gets a 400 `application/problem+json` body whose
  * `violations` entries carry the stable violation fields — code, location,
  * instance path and message — and never the expected/actual values, which
  * the formatter redacts per location and a JSON body would not.
@@ -49,8 +49,8 @@ final readonly class ContractMiddleware implements MiddlewareInterface
 
     /**
      * The rejecting variant: a request that breaks the contract never
-     * reaches the handler and is answered with 400 and a JSON body built
-     * from the stable violation fields.
+     * reaches the handler and is answered with 400 and an
+     * `application/problem+json` body built from the stable violation fields.
      */
     public static function strict(Contract $contract, ResponseFactoryInterface $responseFactory): self
     {
@@ -73,11 +73,16 @@ final readonly class ContractMiddleware implements MiddlewareInterface
                 );
 
                 $response = $responseFactory->createResponse(400);
-                $response->getBody()->write(is_string($body) ? $body : '{"error":"' . self::STRICT_ERROR . '"}');
+                $stream = $response->getBody();
+                $stream->write(is_string($body) ? $body : '{"error":"' . self::STRICT_ERROR . '"}');
+                if ($stream->isSeekable()) {
+                    $stream->rewind();
+                }
 
-                return $response
-                    ->withHeader('Content-Type', 'application/json')
-                    ->withHeader('Content-Length', (string) $response->getBody()->getSize());
+                $response = $response->withHeader('Content-Type', 'application/problem+json');
+                $size = $stream->getSize();
+
+                return $size === null ? $response : $response->withHeader('Content-Length', (string) $size);
             },
         );
     }

@@ -104,6 +104,29 @@ final class ValidateCommandTest
         Assert::same($this->lines[count($this->lines) - 1], '0 passed, 4 failed');
     }
 
+    public function failsOnWronglyTypedHeadersAndBody(): void
+    {
+        $dir = $this->fixtures([
+            'request-headers-not-object.json' => '{"request": {"method": "GET", "uri": "https://api.test/pets/7", "headers": "nope"}}',
+            'request-body-not-string.json' => '{"request": {"method": "GET", "uri": "https://api.test/pets/7", "body": {"id": 7}}}',
+            'response-headers-not-object.json' => '{"request": {"method": "GET", "uri": "https://api.test/pets/7"}, "response": {"status": 200, "headers": 42}}',
+            'response-body-not-string.json' => '{"request": {"method": "GET", "uri": "https://api.test/pets/7"}, "response": {"status": 200, "body": 7}}',
+        ]);
+
+        $exit = $this->command()->run([$this->contractFile(), $dir]);
+
+        Assert::same($exit, ValidateCommand::EXIT_VIOLATIONS);
+        Assert::same($this->lines[0], 'FAIL  request-body-not-string.json');
+        Assert::same($this->lines[1], '  Fixture request "body" must be a JSON string');
+        Assert::same($this->lines[2], 'FAIL  request-headers-not-object.json');
+        Assert::same($this->lines[3], '  Fixture request "headers" must be a JSON object');
+        Assert::same($this->lines[4], 'FAIL  response-body-not-string.json');
+        Assert::same($this->lines[5], '  Fixture response "body" must be a JSON string');
+        Assert::same($this->lines[6], 'FAIL  response-headers-not-object.json');
+        Assert::same($this->lines[7], '  Fixture response "headers" must be a JSON object');
+        Assert::same($this->lines[count($this->lines) - 1], '0 passed, 4 failed');
+    }
+
     public function usageErrorsAnswerExitCodeTwo(): void
     {
         $command = $this->command();

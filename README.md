@@ -567,19 +567,24 @@ the request through):
 ```php
 use Rasuvaeff\OpenApiContract\ContractMiddleware;
 
-// Observe-only: nothing is blocked, the default handler is a no-op.
+// Observe-only: nothing is blocked, the default handler is a no-op. The
+// default observes silently — the package ships no PSR-3 dependency and
+// records nothing by itself; wire a closure like the one below for log-only.
 $observe = new ContractMiddleware($contract);
 
 // Strict: a violating request never reaches the handler and is answered
-// with 400 and a JSON body built from the stable violation fields.
+// with 400 and an application/problem+json body built from the stable
+// violation fields.
 $strict = ContractMiddleware::strict($contract, $responseFactory);
 
 // Your own policy: log, count, answer 429 — or return null to pass through.
 $custom = new ContractMiddleware(
     $contract,
-    static fn (array $violations, $request): ?ResponseInterface => $logger->warning(
-        (new ValidationResultFormatter())->format(new ValidationResult($violations)),
-    ),
+    static function (array $violations, $request): ?ResponseInterface {
+        $logger->warning((new ValidationResultFormatter())->format(new ValidationResult($violations)));
+
+        return null;
+    },
 );
 ```
 
