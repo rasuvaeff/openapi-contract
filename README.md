@@ -18,8 +18,9 @@ OpenAPI 3.0 and 3.1 contracts.
 ## Requirements
 
 - PHP 8.3 – 8.5
-- `psr/http-message` implementations for the exchanges you validate
-  (`nyholm/psr7` ships with the package for the CLI runner and the examples)
+- `psr/http-message` implementations for the exchanges you validate — bring
+  your own (`nyholm/psr7` is suggested for the CLI runner and the examples:
+  `composer require nyholm/psr7`)
 - `psr/http-server-middleware` (PSR-15) and `psr/http-factory` (PSR-17) for
   `ContractMiddleware`
 - `symfony/yaml` only when loading YAML documents (suggested, not required)

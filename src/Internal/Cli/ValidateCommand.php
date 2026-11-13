@@ -48,6 +48,13 @@ final readonly class ValidateCommand
      */
     public function run(array $args): int
     {
+        if (!class_exists(\Nyholm\Psr7\Request::class)) {
+            $this->line('The CLI runner needs a PSR-7 implementation that is not installed.');
+            $this->line('Install one: composer require nyholm/psr7');
+
+            return self::EXIT_USAGE;
+        }
+
         if (count($args) !== 2 || !is_file($args[0]) || !is_dir($args[1])) {
             $this->line('Usage: openapi-contract <contract-file> <fixtures-dir>');
             $this->line('  <contract-file>  path to the OpenAPI document (JSON or YAML)');

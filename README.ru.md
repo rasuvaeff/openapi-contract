@@ -19,7 +19,8 @@ OpenAPI 3.0 и 3.1.
 
 - PHP 8.3 – 8.5
 - реализации `psr/http-message` для валидируемых exchanges
-  (`nyholm/psr7` едет в пакете — для CLI-раннера и примеров)
+  (`nyholm/psr7` — suggest для CLI-раннера и примеров:
+  `composer require nyholm/psr7`)
 - `psr/http-server-middleware` (PSR-15) и `psr/http-factory` (PSR-17) для
   `ContractMiddleware`
 - `symfony/yaml` только для загрузки YAML-документов (suggest, не require)
