@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Rasuvaeff\OpenApiContract\Internal\Cli\ValidateCommand;
+
+if (PHP_SAPI !== 'cli') {
+    fwrite(STDERR, 'This script must be run from the command line' . "\n");
+    exit(1);
+}
+
+$autoloads = [
+    __DIR__ . '/../vendor/autoload.php', // development checkout
+    __DIR__ . '/../../../autoload.php',  // installed as a dependency
+];
+foreach ($autoloads as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+if (!class_exists(ValidateCommand::class)) {
+    fwrite(STDERR, "Composer autoloader not found — run 'composer install' first\n");
+    exit(1);
+}
+
+$command = new ValidateCommand(
+    write: static function (string $line): void {
+        fwrite(STDOUT, $line . "\n");
+    },
+);
+
+exit($command->run(array_slice($argv, 1)));

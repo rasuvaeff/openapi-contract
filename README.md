@@ -18,7 +18,11 @@ OpenAPI 3.0 and 3.1 contracts.
 ## Requirements
 
 - PHP 8.3 – 8.5
-- `psr/http-message` implementations for the exchanges you validate
+- `psr/http-message` implementations for the exchanges you validate — bring
+  your own (`nyholm/psr7` is suggested for the CLI runner and the examples:
+  `composer require nyholm/psr7`)
+- `psr/http-server-middleware` (PSR-15) and `psr/http-factory` (PSR-17) for
+  `ContractMiddleware`
 - `symfony/yaml` only when loading YAML documents (suggested, not required)
 - no extension beyond `json`: `multipleOf` is judged on the decimals the
   document and the message spell (`64.1` is a multiple of `0.1`;
@@ -551,6 +555,82 @@ it is about to keep on the `integer` branch asks this instead of keeping a
 second copy of the rule. It judges on the decimals the two numbers spell
 (`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly, on
 every machine.
+
+### PSR-15 middleware
+
+`ContractMiddleware` validates every incoming request against the contract
+from inside a PSR-15 pipeline. What happens on a violation is a closure you
+choose — it receives the violation list and the request, and answers either
+a PSR-7 response (which short-circuits the pipeline) or `null` (which lets
+the request through):
+
+```php
+use Rasuvaeff\OpenApiContract\ContractMiddleware;
+
+// Observe-only: nothing is blocked, the default handler is a no-op. The
+// default observes silently — the package ships no PSR-3 dependency and
+// records nothing by itself; wire a closure like the one below for log-only.
+$observe = new ContractMiddleware($contract);
+
+// Strict: a violating request never reaches the handler and is answered
+// with 400 and an application/problem+json body built from the stable
+// violation fields.
+$strict = ContractMiddleware::strict($contract, $responseFactory);
+
+// Your own policy: log, count, answer 429 — or return null to pass through.
+$custom = new ContractMiddleware(
+    $contract,
+    static function (array $violations, $request): ?ResponseInterface {
+        $logger->warning((new ValidationResultFormatter())->format(new ValidationResult($violations)));
+
+        return null;
+    },
+);
+```
+
+The strict 400 body carries each violation's `code`, `operation`, `location`,
+`instancePath` and `message` — never `expected`/`actual`, whose redaction
+rules belong to the formatter and would not survive a raw JSON dump.
+Response validation is deliberately not part of the middleware: a middleware
+cannot reject a response without swallowing the application's answer, so the
+double-pass belongs to the caller (`validateExchange()` after the handler) or
+to the CLI runner below.
+
+### CLI fixture runner
+
+`bin/openapi-contract` validates a directory of JSON fixtures against one
+contract document and answers a CI-friendly exit code:
+
+```bash
+vendor/bin/openapi-contract openapi.yaml tests/api-fixtures
+```
+
+Each `*.json` fixture in the directory is one message — a request alone, or
+a whole exchange:
+
+```json
+{
+    "request": {
+        "method": "GET",
+        "uri": "https://api.test/pets/7",
+        "headers": {"X-Tenant": "public"},
+        "body": "..."
+    },
+    "response": {
+        "status": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": "{\"id\":7}"
+    }
+}
+```
+
+`headers` and `body` are optional on both sides; drop the `response` member
+to validate the request alone. The report is one `PASS`/`FAIL` line per
+fixture (sorted by file name) with the formatter's rendering indented under
+each failure, and a final `N passed, M failed` summary. Exit codes: `0` —
+every fixture holds; `1` — a fixture violates the contract or is itself
+malformed; `2` — misuse (bad arguments, an unloadable contract, a directory
+with no `*.json` fixtures — fail closed, an empty run must not look green).
 
 ### Violation codes
 

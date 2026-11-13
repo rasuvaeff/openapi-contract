@@ -1,0 +1,19 @@
+{
+    "symbol-whitelist": [
+        "Nyholm\\Psr7\\Request",
+        "Nyholm\\Psr7\\Response"
+    ],
+    "php-core-extensions": [
+        "Core",
+        "date",
+        "json",
+        "hash",
+        "pcre",
+        "Phar",
+        "Reflection",
+        "SPL",
+        "random",
+        "standard"
+    ],
+    "scan-files": []
+}

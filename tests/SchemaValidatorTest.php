@@ -1079,9 +1079,10 @@ final class SchemaValidatorTest
      * parent (#175): the backend marks a member as evaluated only when every
      * declared member passed, so the failing one is still unchecked when
      * `additionalProperties: false` runs. An undeclared member is a real
-     * failure of it and keeps its leaf; so does a member that failed the
-     * object form of `additionalProperties`, which the backend carries on
-     * the member's own path.
+     * failure of it and keeps its leaf; so does an undeclared member that
+     * failed the object form of `additionalProperties`, which the backend
+     * carries on the member's own path — a declared member is never the
+     * object form's to judge (backend 2.6.2, #188).
      */
     public function closedObjectDoesNotReportItsDeclaredMemberAsAdditional(): void
     {
@@ -1138,12 +1139,18 @@ final class SchemaValidatorTest
             [['inner.i', 'minLength', 'x'], ['inner', 'additionalProperties', ['i' => 'x', 'j' => 2]]],
         );
 
-        // The object form is untouched: a member failing it as well is named
-        // on its own path, under each keyword.
+        // The object form is untouched: an undeclared member failing it is
+        // named on its own path, under its keyword. A declared member is
+        // `properties`' alone — the object form never reads it, which the
+        // backend itself fixed in 2.6.2 (#188).
         $open = ['type' => 'object', 'properties' => ['s' => ['type' => 'integer']], 'additionalProperties' => ['minLength' => 5]];
         Assert::same(
             $this->render($validator->failures(json_decode('{"s":"x"}'), $open, SchemaDialect::OpenApi31)),
-            [['s', 'type', 'x'], ['s', 'minLength', 'x']],
+            [['s', 'type', 'x']],
+        );
+        Assert::same(
+            $this->render($validator->failures(json_decode('{"s":"x","t":"ab"}'), $open, SchemaDialect::OpenApi31)),
+            [['s', 'type', 'x'], ['t', 'minLength', 'ab']],
         );
     }
 
