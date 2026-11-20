@@ -1437,10 +1437,280 @@
                             "204": []
                         }
                     }
+                },
+                "/composed": {
+                    "post": {
+                        "operationId": "composed.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "allOf": [
+                                            {
+                                                "$ref": "#/components/schemas/Named"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/Tagged"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/codes": {
+                    "post": {
+                        "operationId": "codes.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "code"
+                                        ],
+                                        "properties": {
+                                            "code": {
+                                                "$ref": "#/components/schemas/Code",
+                                                "maxLength": 4
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/nullable-objects": {
+                    "post": {
+                        "operationId": "nullableObjects.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "any"
+                                        ],
+                                        "properties": {
+                                            "any": {
+                                                "anyOf": [
+                                                    {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "k": {
+                                                                "type": "string",
+                                                                "maxLength": 3
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "type": "null"
+                                                    }
+                                                ]
+                                            },
+                                            "one": {
+                                                "oneOf": [
+                                                    {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "k": {
+                                                                "type": "integer",
+                                                                "minimum": 0,
+                                                                "maximum": 9
+                                                            }
+                                                        }
+                                                    },
+                                                    {
+                                                        "type": "null"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/years": {
+                    "post": {
+                        "operationId": "years.create",
+                        "parameters": [
+                            {
+                                "name": "since",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "integer",
+                                    "minimum": 1900
+                                }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "year",
+                                            "ratio",
+                                            "depth"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "year": {
+                                                "type": "integer",
+                                                "minimum": 1900
+                                            },
+                                            "ratio": {
+                                                "type": "number",
+                                                "minimum": 2000.5
+                                            },
+                                            "depth": {
+                                                "type": "integer",
+                                                "maximum": -5000
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/annotated": {
+                    "post": {
+                        "operationId": "annotated.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "meta",
+                                            "level"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "meta": {
+                                                "description": "free-form"
+                                            },
+                                            "level": {
+                                                "type": "integer",
+                                                "maximum": 5,
+                                                "enum": [
+                                                    1,
+                                                    3,
+                                                    100
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/parts": {
+                    "post": {
+                        "operationId": "parts.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "multipart/form-data": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "note"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "note": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 6
+                                            }
+                                        }
+                                    },
+                                    "encoding": {
+                                        "note": {
+                                            "headers": {
+                                                "X-Revision": {
+                                                    "required": true,
+                                                    "schema": {
+                                                        "type": "integer",
+                                                        "minimum": 1,
+                                                        "maximum": 9
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
                 }
             },
             "components": {
                 "schemas": {
+                    "Named": {
+                        "type": "object",
+                        "description": "Has a name",
+                        "required": [
+                            "name"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 6
+                            }
+                        }
+                    },
+                    "Tagged": {
+                        "type": "object",
+                        "description": "Has tags",
+                        "properties": {
+                            "tags": {
+                                "type": "array",
+                                "maxItems": 2,
+                                "items": {
+                                    "type": "string",
+                                    "maxLength": 3
+                                }
+                            }
+                        }
+                    },
+                    "Code": {
+                        "type": "string",
+                        "description": "A short code",
+                        "minLength": 1
+                    },
                     "Node": {
                         "type": "object",
                         "required": [
@@ -1603,6 +1873,55 @@
                         },
                         "responses": {
                             "204": []
+                        }
+                    }
+                },
+                "/owners": {
+                    "post": {
+                        "operationId": "owners.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "owner"
+                                        ],
+                                        "properties": {
+                                            "owner": {
+                                                "nullable": true,
+                                                "allOf": [
+                                                    {
+                                                        "$ref": "#/components/schemas/Owner"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                }
+            },
+            "components": {
+                "schemas": {
+                    "Owner": {
+                        "type": "object",
+                        "description": "An owner",
+                        "required": [
+                            "name"
+                        ],
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 4
+                            }
                         }
                     }
                 }
@@ -1970,6 +2289,528 @@
                 "body": {
                     "encoding": "utf8",
                     "content": "{\"amount\":-6,\"step\":15450.4}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\",\"level\":1,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"Z\\ud894\\udc61C)\\u200bQ\\u338a\",\"level\":1,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":false,\"level\":3,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/body-enum/1",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\",\"level\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "level"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/body-enum/2",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"Z\\ud894\\udc61C)\\u200bQ\\u338a\",\"level\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "level"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/body-enum/3",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":false,\"level\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "enum",
+                    "location": "body",
+                    "name": "level"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/media-type/1",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/media-type/2",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"Z\\ud894\\udc61C)\\u200bQ\\u338a\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/media-type/3",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":false,\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "annotated.create/valid/1",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/10",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\\u50e0\\u00adq&+{\",\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/2",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"Z\\ud894\\udc61C)\\u200bQ\\u338a\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/3",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":false,\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/4",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":-954,\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/5",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"&6nBli\\ud888\\ude80\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/6",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"8\\u8b2f\\u020c\\udbd7\\ude0f\\ud9c9\\udc46\\u200f\",\"level\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/7",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":false,\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/8",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":\"\",\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "annotated.create/valid/9",
+            "document": "zoo",
+            "operationId": "annotated.create",
+            "request": {
+                "method": "POST",
+                "target": "/annotated",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"meta\":746,\"level\":3}"
                 }
             },
             "expect": {
@@ -2570,6 +3411,738 @@
                 "body": {
                     "encoding": "utf8",
                     "content": "{\"name\":\"\\u2df6\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/media-type/1",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"(ZX\\ud855\\udf4f\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/media-type/2",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"$\\uda21\\udf71u]\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/media-type/3",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"\\uaf93\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "codes.create/valid/1",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"(ZX\\ud855\\udf4f\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/10",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"cC\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/2",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"$\\uda21\\udf71u]\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/3",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"\\uaf93\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/4",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"e\\u0301\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/5",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"\\u89ad\\u0121_\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/6",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"0\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/7",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"N\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/8",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"[\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "codes.create/valid/9",
+            "document": "zoo",
+            "operationId": "codes.create",
+            "request": {
+                "method": "POST",
+                "target": "/codes",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"code\":\"a\\n\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/media-type/1",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1\",\"tags\":[]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/media-type/2",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"$\\uda21\\udf71u]\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/media-type/3",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\uaf93\\/a\",\"tags\":[\"\\u0308\\u00a3\\u0308\"]}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "composed.create/valid/1",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"(ZX\\ud855\\udf4f\\udb55\\ude7a\\u01a1\",\"tags\":[]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/10",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"cC\\u21bc\\/\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/2",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"$\\uda21\\udf71u]\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/3",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\uaf93\\/a\",\"tags\":[\"\\u0308\\u00a3\\u0308\"]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/4",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"e\\u0301\",\"tags\":[\"\",\"\"]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/5",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"\\u89ad\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/6",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"0\",\"tags\":[\"\\u987a\",\"\\u67f1\"]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/7",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"N6\\u6207\\ud97c\\udd5d\\ud8c3\\ude11\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/8",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"[\\u7c0a\\u01eb{\\ud990\\udca5\",\"tags\":[\"nM\\u2ead\"]}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "composed.create/valid/9",
+            "document": "zoo",
+            "operationId": "composed.create",
+            "request": {
+                "method": "POST",
+                "target": "/composed",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"name\":\"a\\n\"}"
                 }
             },
             "expect": {
@@ -6797,6 +8370,372 @@
             }
         },
         {
+            "name": "nullableObjects.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/media-type/1",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null,\"one\":{}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/media-type/2",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{\"k\":\"\"}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/media-type/3",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/1",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null,\"one\":{}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/10",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null,\"one\":{\"k\":5}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/2",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{\"k\":\"\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/3",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/4",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{},\"one\":{}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/5",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/6",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{\"k\":\"\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/7",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/8",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":null}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "nullableObjects.create/valid/9",
+            "document": "zoo",
+            "operationId": "nullableObjects.create",
+            "request": {
+                "method": "POST",
+                "target": "/nullable-objects",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"any\":{},\"one\":{\"k\":8}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "numeric.create/additional-properties/1",
             "document": "zoo",
             "operationId": "numeric.create",
@@ -7475,6 +9414,372 @@
             }
         },
         {
+            "name": "owners.create/json-syntax/1",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/json-syntax/2",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/json-syntax/3",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/media-type/1",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"(ZX\\ud855\\udf4f\"}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/media-type/2",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"$\\uda21\\udf71u]\"}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/media-type/3",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"\\uaf93\"}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "owners.create/valid/1",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"(ZX\\ud855\\udf4f\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/10",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"cC\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/2",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"$\\uda21\\udf71u]\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/3",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"\\uaf93\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/4",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"e\\u0301\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/5",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"\\u89ad\\u0121_\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/6",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"0\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/7",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"N\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/8",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"[\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "owners.create/valid/9",
+            "document": "legacy",
+            "operationId": "owners.create",
+            "request": {
+                "method": "POST",
+                "target": "/owners",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"owner\":{\"name\":\"a\\n\"}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "pages.get/boundary/1",
             "document": "zoo",
             "operationId": "pages.get",
@@ -8008,6 +10313,216 @@
                 "target": "/pages?v=v1&code=nzw",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/1",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-291e63e4d9b36d04"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-291e63e4d9b36d04\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n(ZX\ud855\udf4f\udb55\ude7a\u01a1\r\n--openapi-291e63e4d9b36d04--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/10",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-f65056de8d6e2869"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-f65056de8d6e2869\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\ncC\u21bc/\r\n--openapi-f65056de8d6e2869--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/2",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-9765d94ac51ada54"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-9765d94ac51ada54\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n$\uda21\udf71u]\r\n--openapi-9765d94ac51ada54--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/3",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-d5bfad867542cc8b"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-d5bfad867542cc8b\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n\uaf93/a\r\n--openapi-d5bfad867542cc8b--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/4",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-64ff89bd86e44262"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-64ff89bd86e44262\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\ne\u0301\r\n--openapi-64ff89bd86e44262--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/5",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-82d8c9ef9697b152"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-82d8c9ef9697b152\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n\u89ad\r\n--openapi-82d8c9ef9697b152--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/6",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-106384ef4fbb2956"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-106384ef4fbb2956\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n0\r\n--openapi-106384ef4fbb2956--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/7",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-759a8c677be4f42b"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-759a8c677be4f42b\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\nN6\u6207\ud97c\udd5d\ud8c3\ude11\r\n--openapi-759a8c677be4f42b--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/8",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-a046e524e92535cc"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-a046e524e92535cc\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\n[\u7c0a\u01eb{\ud990\udca5\r\n--openapi-a046e524e92535cc--\r\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "parts.create/valid/9",
+            "document": "zoo",
+            "operationId": "parts.create",
+            "request": {
+                "method": "POST",
+                "target": "/parts",
+                "headers": {
+                    "Content-Type": [
+                        "multipart/form-data; boundary=openapi-e535213f9dcae9ff"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "--openapi-e535213f9dcae9ff\r\nContent-Disposition: form-data; name=\"note\"\r\nContent-Type: text/plain\r\nX-Revision: 7\r\n\r\nx\ufce6S\udae7\udeeaT\u00e4\r\n--openapi-e535213f9dcae9ff--\r\n"
+                }
             },
             "expect": {
                 "valid": true
@@ -14004,6 +16519,762 @@
                 "target": "/version",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3618,\"ratio\":3646.3023756747743,\"depth\":-6239,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "years.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1975,\"ratio\":2919.9765589422123,\"depth\":-7000,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "years.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":2000.5,\"depth\":-5000,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-boundary/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1899,\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "year"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-boundary/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1899,\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "year"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-boundary/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":1999.5,\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "ratio"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-type/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":\"not-a-integer\",\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "year"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-type/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":\"not-a-integer\",\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "year"
+                }
+            }
+        },
+        {
+            "name": "years.create/body-type/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":\"not-a-number\",\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "ratio"
+                }
+            }
+        },
+        {
+            "name": "years.create/boundary/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1899",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3618,\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/boundary/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1899",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1975,\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/boundary/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1899",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":2000.5,\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/media-type/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3618,\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/media-type/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1975,\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/media-type/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":2000.5,\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "years.create/type/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3618,\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/type/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1975,\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/type/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":2000.5,\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "since"
+                }
+            }
+        },
+        {
+            "name": "years.create/valid/1",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3618,\"ratio\":3646.3023756747743,\"depth\":-6239}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/10",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2041",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3875,\"ratio\":2899.796338067106,\"depth\":-5679}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/2",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2125",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1975,\"ratio\":2919.9765589422123,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/3",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3144",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2692,\"ratio\":2000.5,\"depth\":-5000}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/4",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1998,\"ratio\":2114.185745600753,\"depth\":-6130}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/5",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2275",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3415,\"ratio\":3370.2353708869023,\"depth\":-5242}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/6",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=3900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":1920,\"ratio\":3211.1179578260353,\"depth\":-6171}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/7",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":2541,\"ratio\":2687.1226403971705,\"depth\":-5178}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/8",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=2192",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3094,\"ratio\":3615.6043152647244,\"depth\":-7000}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "years.create/valid/9",
+            "document": "zoo",
+            "operationId": "years.create",
+            "request": {
+                "method": "POST",
+                "target": "/years?since=1900",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"year\":3159,\"ratio\":3834.733276802921,\"depth\":-5535}"
+                }
             },
             "expect": {
                 "valid": true
