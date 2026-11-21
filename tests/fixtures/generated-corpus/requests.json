@@ -1674,10 +1674,299 @@
                             "204": []
                         }
                     }
+                },
+                "/prices": {
+                    "post": {
+                        "operationId": "prices.create",
+                        "parameters": [
+                            {
+                                "name": "limit",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "exclusiveMaximum": 10
+                                }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "price",
+                                            "quantity"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "price": {
+                                                "type": "number",
+                                                "exclusiveMinimum": 0,
+                                                "maximum": 1000
+                                            },
+                                            "quantity": {
+                                                "type": "integer",
+                                                "exclusiveMinimum": 0.5,
+                                                "maximum": 5
+                                            },
+                                            "discount": {
+                                                "type": "number",
+                                                "minimum": 0,
+                                                "maximum": 50,
+                                                "exclusiveMaximum": 1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/batches": {
+                    "post": {
+                        "operationId": "batches.create",
+                        "parameters": [
+                            {
+                                "name": "ref",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "minLength": 66,
+                                    "maxLength": 80
+                                }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "note",
+                                            "ids",
+                                            "flags"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "note": {
+                                                "type": "string",
+                                                "minLength": 70
+                                            },
+                                            "ids": {
+                                                "type": "array",
+                                                "minItems": 18,
+                                                "items": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "maximum": 9
+                                                }
+                                            },
+                                            "flags": {
+                                                "type": "object",
+                                                "minProperties": 17,
+                                                "additionalProperties": {
+                                                    "type": "boolean"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/hosts/{name}": {
+                    "post": {
+                        "operationId": "hosts.create",
+                        "parameters": [
+                            {
+                                "name": "name",
+                                "in": "path",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "hostname"
+                                }
+                            },
+                            {
+                                "name": "address",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "ipv6"
+                                }
+                            },
+                            {
+                                "name": "X-At",
+                                "in": "header",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "time"
+                                }
+                            },
+                            {
+                                "name": "ttl",
+                                "in": "cookie",
+                                "schema": {
+                                    "type": "string",
+                                    "format": "duration"
+                                }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "host",
+                                            "address",
+                                            "opens",
+                                            "period"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "host": {
+                                                "type": "string",
+                                                "format": "hostname"
+                                            },
+                                            "address": {
+                                                "type": "string",
+                                                "format": "ipv6"
+                                            },
+                                            "opens": {
+                                                "type": "string",
+                                                "format": "time"
+                                            },
+                                            "period": {
+                                                "type": "string",
+                                                "format": "duration"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/notes": {
+                    "post": {
+                        "operationId": "notes.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "text/plain": {
+                                    "schema": {
+                                        "type": "string",
+                                        "minLength": 2,
+                                        "maxLength": 20
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/blobs": {
+                    "put": {
+                        "operationId": "blobs.put",
+                        "requestBody": {
+                            "content": {
+                                "application/octet-stream": {
+                                    "schema": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/animals": {
+                    "post": {
+                        "operationId": "animals.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "oneOf": [
+                                            {
+                                                "$ref": "#/components/schemas/Cat"
+                                            },
+                                            {
+                                                "$ref": "#/components/schemas/Dog"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
                 }
             },
             "components": {
                 "schemas": {
+                    "Cat": {
+                        "type": "object",
+                        "required": [
+                            "kind",
+                            "lives"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "const": "cat"
+                            },
+                            "lives": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9
+                            }
+                        }
+                    },
+                    "Dog": {
+                        "type": "object",
+                        "required": [
+                            "kind"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "const": "dog"
+                            },
+                            "good": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
                     "Named": {
                         "type": "object",
                         "description": "Has a name",
@@ -2296,6 +2585,372 @@
             }
         },
         {
+            "name": "animals.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/media-type/1",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\",\"good\":false}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/media-type/2",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":9}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/media-type/3",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":2}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "animals.create/valid/1",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\",\"good\":false}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/10",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\",\"good\":false}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/2",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":9}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/3",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":2}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/4",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/5",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/6",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":7}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/7",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/8",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"dog\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "animals.create/valid/9",
+            "document": "zoo",
+            "operationId": "animals.create",
+            "request": {
+                "method": "POST",
+                "target": "/animals",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"kind\":\"cat\",\"lives\":1}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "annotated.create/additional-properties/1",
             "document": "zoo",
             "operationId": "annotated.create",
@@ -2811,6 +3466,859 @@
                 "body": {
                     "encoding": "utf8",
                     "content": "{\"meta\":746,\"level\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u00ea\\ud9e4\\udc18Y\\\\$\\uda58\\udfce\\u0153\\udb40\\udc41]%\\u0226h\\u200b\\ud83c\\udd49\\ud9b1\\uddedM\\u0202\\u010dT\\ub9d8\\ud8c6\\udef4\\udb40\\udc41\\udaec\\udeb6\\udbee\\udc59\\udae9\\udc10\\udb52\\udc18\\u0218-\\uda12\\udf86)B+G\\udad6\\udd39\\ufeff\\u1552\\u1c95\\u0203I\\ud83d\\ude00q-\\u6283&.k\\uad76c\\u0301\\u01f6q\\ud85c\\uddce\\u8c44-\\ud83d\\ude00Kj\\uf97d\\u011f\\udbba\\udf88\\u0209\\udbcf\\udf8e\\uda7b\\udc0a\\ud850\\ude1a\\u0183a\\ud093\\u2028h\\udaff\\udcc1\",\"ids\":[8,8,8,1,4,1,1,8,0,1,0,2,0,8,2,0,0,6],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false},\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "batches.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"z\\udad7\\udf70#\\u00adk\\uda75\\uddda\\n;x*]|{b\\udb8c\\udeb8\\u9bdb)\\r\\ud83d\\ude00@\\ud822\\ude02\\ud9a9\\udea0]z\\uda1b\\ude28\\u2028\\ud903\\udd53rK\\u0203\\u860a&+\\ud8dc\\udc02\\ud9ef\\udfb4\\ud832\\udd67^\\u021bQ\\\"\\u0c1bUn'X\\udb6a\\udf0b\\ud8cb\\uddbd(.Z\\u8271\\udabd\\udc1f\\ud99d\\ude05\\uff64\\ud900\\uddc1f\\u00a0\\u01c19)oa\\uc0c3\\uf4ab\\uf202R\\u200d\\u0301k(\",\"ids\":[4,6,2,5,9,3,7,4,1,8,7,2,2,9,0,8,8,6],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true},\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "batches.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"c\\ubb94V\\ud92a\\udcb1\\u0207\\ud804\\uddcf`e\\u5242;\\ufb32Mb4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<}rh\\u01d0;jj\\uee96\\ud9bf\\udf27>S\\uada4%0}\\ud8b2\\udf16\\udbe9\\udf17.\\uda20\\udfac\\u6686Hm'\\udb43\\uddebc\\u01fa\",\"ids\":[0,1,9,0,5,1,0,9,3,0,9,3,8,3,9,5,7,0],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false},\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-length/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u00ea\\ud9e4\\udc18Y\\\\$\\uda58\\udfce\\u0153\\udb40\\udc41]%\\u0226h\\u200b\\ud83c\\udd49\\ud9b1\\uddedM\\u0202\\u010dT\\ub9d8\\ud8c6\\udef4\\udb40\\udc41\\udaec\\udeb6\\udbee\\udc59\\udae9\\udc10\\udb52\\udc18\\u0218-\\uda12\\udf86)B+G\\udad6\\udd39\\ufeff\\u1552\\u1c95\\u0203I\\ud83d\\ude00q-\\u6283&.k\\uad76c\\u0301\\u01f6q\\ud85c\\uddce\\u8c44-\\ud83d\\ude00Kj\\uf97d\\u011f\\udbba\\udf88\\u0209\\udbcf\\udf8e\\uda7b\\udc0a\\ud850\\ude1a\\u0183a\\ud093\\u2028h\\udaff\\udcc1\",\"ids\":[],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "ids"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-length/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"z\\udad7\\udf70#\\u00adk\\uda75\\uddda\\n;x*]|{b\\udb8c\\udeb8\\u9bdb)\\r\\ud83d\\ude00@\\ud822\\ude02\\ud9a9\\udea0]z\\uda1b\\ude28\\u2028\\ud903\\udd53rK\\u0203\\u860a&+\\ud8dc\\udc02\\ud9ef\\udfb4\\ud832\\udd67^\\u021bQ\\\"\\u0c1bUn'X\\udb6a\\udf0b\\ud8cb\\uddbd(.Z\\u8271\\udabd\\udc1f\\ud99d\\ude05\\uff64\\ud900\\uddc1f\\u00a0\\u01c19)oa\\uc0c3\\uf4ab\\uf202R\\u200d\\u0301k(\",\"ids\":[],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "ids"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-length/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"c\\ubb94V\\ud92a\\udcb1\\u0207\\ud804\\uddcf`e\\u5242;\\ufb32Mb4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<}rh\\u01d0;jj\\uee96\\ud9bf\\udf27>S\\uada4%0}\\ud8b2\\udf16\\udbe9\\udf17.\\uda20\\udfac\\u6686Hm'\\udb43\\uddebc\\u01fa\",\"ids\":[],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "ids"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-type/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":4096,\"ids\":[8,8,8,1,4,1,1,8,0,1,0,2,0,8,2,0,0,6],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-type/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":4096,\"ids\":[4,6,2,5,9,3,7,4,1,8,7,2,2,9,0,8,8,6],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
+            "name": "batches.create/body-type/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":4096,\"ids\":[0,1,9,0,5,1,0,9,3,0,9,3,8,3,9,5,7,0],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "note"
+                }
+            }
+        },
+        {
+            "name": "batches.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/length/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u00ea\\ud9e4\\udc18Y\\\\$\\uda58\\udfce\\u0153\\udb40\\udc41]%\\u0226h\\u200b\\ud83c\\udd49\\ud9b1\\uddedM\\u0202\\u010dT\\ub9d8\\ud8c6\\udef4\\udb40\\udc41\\udaec\\udeb6\\udbee\\udc59\\udae9\\udc10\\udb52\\udc18\\u0218-\\uda12\\udf86)B+G\\udad6\\udd39\\ufeff\\u1552\\u1c95\\u0203I\\ud83d\\ude00q-\\u6283&.k\\uad76c\\u0301\\u01f6q\\ud85c\\uddce\\u8c44-\\ud83d\\ude00Kj\\uf97d\\u011f\\udbba\\udf88\\u0209\\udbcf\\udf8e\\uda7b\\udc0a\\ud850\\ude1a\\u0183a\\ud093\\u2028h\\udaff\\udcc1\",\"ids\":[8,8,8,1,4,1,1,8,0,1,0,2,0,8,2,0,0,6],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "query",
+                    "name": "ref"
+                }
+            }
+        },
+        {
+            "name": "batches.create/length/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"z\\udad7\\udf70#\\u00adk\\uda75\\uddda\\n;x*]|{b\\udb8c\\udeb8\\u9bdb)\\r\\ud83d\\ude00@\\ud822\\ude02\\ud9a9\\udea0]z\\uda1b\\ude28\\u2028\\ud903\\udd53rK\\u0203\\u860a&+\\ud8dc\\udc02\\ud9ef\\udfb4\\ud832\\udd67^\\u021bQ\\\"\\u0c1bUn'X\\udb6a\\udf0b\\ud8cb\\uddbd(.Z\\u8271\\udabd\\udc1f\\ud99d\\ude05\\uff64\\ud900\\uddc1f\\u00a0\\u01c19)oa\\uc0c3\\uf4ab\\uf202R\\u200d\\u0301k(\",\"ids\":[4,6,2,5,9,3,7,4,1,8,7,2,2,9,0,8,8,6],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "query",
+                    "name": "ref"
+                }
+            }
+        },
+        {
+            "name": "batches.create/length/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"c\\ubb94V\\ud92a\\udcb1\\u0207\\ud804\\uddcf`e\\u5242;\\ufb32Mb4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<}rh\\u01d0;jj\\uee96\\ud9bf\\udf27>S\\uada4%0}\\ud8b2\\udf16\\udbe9\\udf17.\\uda20\\udfac\\u6686Hm'\\udb43\\uddebc\\u01fa\",\"ids\":[0,1,9,0,5,1,0,9,3,0,9,3,8,3,9,5,7,0],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "query",
+                    "name": "ref"
+                }
+            }
+        },
+        {
+            "name": "batches.create/media-type/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u00ea\\ud9e4\\udc18Y\\\\$\\uda58\\udfce\\u0153\\udb40\\udc41]%\\u0226h\\u200b\\ud83c\\udd49\\ud9b1\\uddedM\\u0202\\u010dT\\ub9d8\\ud8c6\\udef4\\udb40\\udc41\\udaec\\udeb6\\udbee\\udc59\\udae9\\udc10\\udb52\\udc18\\u0218-\\uda12\\udf86)B+G\\udad6\\udd39\\ufeff\\u1552\\u1c95\\u0203I\\ud83d\\ude00q-\\u6283&.k\\uad76c\\u0301\\u01f6q\\ud85c\\uddce\\u8c44-\\ud83d\\ude00Kj\\uf97d\\u011f\\udbba\\udf88\\u0209\\udbcf\\udf8e\\uda7b\\udc0a\\ud850\\ude1a\\u0183a\\ud093\\u2028h\\udaff\\udcc1\",\"ids\":[8,8,8,1,4,1,1,8,0,1,0,2,0,8,2,0,0,6],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/media-type/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"z\\udad7\\udf70#\\u00adk\\uda75\\uddda\\n;x*]|{b\\udb8c\\udeb8\\u9bdb)\\r\\ud83d\\ude00@\\ud822\\ude02\\ud9a9\\udea0]z\\uda1b\\ude28\\u2028\\ud903\\udd53rK\\u0203\\u860a&+\\ud8dc\\udc02\\ud9ef\\udfb4\\ud832\\udd67^\\u021bQ\\\"\\u0c1bUn'X\\udb6a\\udf0b\\ud8cb\\uddbd(.Z\\u8271\\udabd\\udc1f\\ud99d\\ude05\\uff64\\ud900\\uddc1f\\u00a0\\u01c19)oa\\uc0c3\\uf4ab\\uf202R\\u200d\\u0301k(\",\"ids\":[4,6,2,5,9,3,7,4,1,8,7,2,2,9,0,8,8,6],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/media-type/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"c\\ubb94V\\ud92a\\udcb1\\u0207\\ud804\\uddcf`e\\u5242;\\ufb32Mb4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<}rh\\u01d0;jj\\uee96\\ud9bf\\udf27>S\\uada4%0}\\ud8b2\\udf16\\udbe9\\udf17.\\uda20\\udfac\\u6686Hm'\\udb43\\uddebc\\u01fa\",\"ids\":[0,1,9,0,5,1,0,9,3,0,9,3,8,3,9,5,7,0],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false}}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "batches.create/valid/1",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4-%E3%92%93w%E5%84%AD%5E%3Cq%C6%99f%EA%90%8Fp%F3%A0%81%81%F2%89%8F%849%F2%9D%9C%9BN%F0%93%8E%90%F3%92%BA%BAG%26%F3%9C%9E%B5%F2%9D%8F%B1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u00ea\\ud9e4\\udc18Y\\\\$\\uda58\\udfce\\u0153\\udb40\\udc41]%\\u0226h\\u200b\\ud83c\\udd49\\ud9b1\\uddedM\\u0202\\u010dT\\ub9d8\\ud8c6\\udef4\\udb40\\udc41\\udaec\\udeb6\\udbee\\udc59\\udae9\\udc10\\udb52\\udc18\\u0218-\\uda12\\udf86)B+G\\udad6\\udd39\\ufeff\\u1552\\u1c95\\u0203I\\ud83d\\ude00q-\\u6283&.k\\uad76c\\u0301\\u01f6q\\ud85c\\uddce\\u8c44-\\ud83d\\ude00Kj\\uf97d\\u011f\\udbba\\udf88\\u0209\\udbcf\\udf8e\\uda7b\\udc0a\\ud850\\ude1a\\u0183a\\ud093\\u2028h\\udaff\\udcc1\",\"ids\":[8,8,8,1,4,1,1,8,0,1,0,2,0,8,2,0,0,6],\"flags\":{\"cyjtqmn\":false,\"u\":true,\"vit\":false,\"miinzd\":false,\"icgtob\":false,\"vfwop\":true,\"ntaf\":true,\"el\":true,\"chimkm\":true,\"ohteq\":true,\"l\":false,\"nnpdu\":true,\"johvi\":true,\"wgbqm\":false,\"wdexl\":false,\"zqhnqrx\":false,\"bz\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/10",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=cC%E2%86%BC%2F%C5%859%C7%88f%C7%8C%F0%AC%8F%80a%F2%9C%BA%9BQ%F3%91%BD%B69%2F%F1%94%86%A6C%F3%93%BF%80%E3%B1%93%09%F4%89%A0%A7%C5%A7%F2%A2%B3%8A%C2%A8B%3A%29%E3%8D%86%F1%B8%AA%8C%603%F2%82%97%B72%7B3%F2%91%8D%AA%F0%B0%AC%A8%E3%BE%BC%F3%B0%83%99L%C7%91%C2%A0%3A6%C7%8F%40%F3%AC%93%97%27%09AF%3F%F1%BC%8F%94%2C%C7%A7%C2%A0B-%E2%80%A8%26%F0%97%B5%85%E2%B3%897%C8%91%F2%A4%B1%91",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u01e7,Q\\u0301\\udb91\\udefc-4\\udb58\\udcd2\\ud980\\ude32K7\\u00cd\\u200bah\\uda1b\\udc04\\u015c\\ud8e2\\udf93\\uda44\\udf62$i\\u703b\\udbe4\\udf80m\\udbce\\udf43\\ud95c\\ude82\\uf5ed&\\ud95b\\udf6f\\ud28b\\u200fW9\\udb92\\udd28t\\udade\\udc0cyKG\\uda0d\\udeb1.\\ud841\\udd35+tK\\udb3a\\udc6c\\ud86b\\udede \\u03015>h\\u01f3jM\\ud8fa\\ude2aJr\\u9766\\ud8cc\\udd17[&\\tI\\uda94\\udcecl\\ud9de\\udc9d\\u3fa6\\u0227\",\"ids\":[2,2,7,1,8,1,9,1,7,8,0,0,2,7,6,1,1,0],\"flags\":{\"ayfl\":true,\"xosroo\":false,\"ozkidvm\":false,\"upod\":true,\"mapelzxw\":false,\"omujnwxn\":false,\"kmijex\":true,\"lpjeh\":true,\"d\":true,\"xslqisbn\":true,\"fhd\":false,\"ru\":false,\"igjcqaic\":false,\"pndjtb\":true,\"knwtyiub\":false,\"ohpbns\":false,\"t\":true}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/2",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%24%F2%98%9D%B1u%5D%2B%F0%AB%93%92%CC%81%F1%A8%91%AE%C4%91%27X%2F8%F2%BD%AC%8A%26%C3%B0%C9%84%F1%8D%BF%AEa%E6%A6%A8%F3%8C%A6%B5%3AJFT%3C%F3%85%A3%8E%7B%F0%9F%98%80O~%C8%A1%F1%AF%A7%9F%C4%8B%261%EE%BE%A9i%F2%A2%8F%92k%5CuRi%7B%F1%B7%B5%B6%C3%B5cv%25%5E%F1%89%B6%A9N%EF%BF%BD%2B%F2%A4%A3%A1%C6%ABWF%3DT%2C%CC%88%21-%7C",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"z\\udad7\\udf70#\\u00adk\\uda75\\uddda\\n;x*]|{b\\udb8c\\udeb8\\u9bdb)\\r\\ud83d\\ude00@\\ud822\\ude02\\ud9a9\\udea0]z\\uda1b\\ude28\\u2028\\ud903\\udd53rK\\u0203\\u860a&+\\ud8dc\\udc02\\ud9ef\\udfb4\\ud832\\udd67^\\u021bQ\\\"\\u0c1bUn'X\\udb6a\\udf0b\\ud8cb\\uddbd(.Z\\u8271\\udabd\\udc1f\\ud99d\\ude05\\uff64\\ud900\\uddc1f\\u00a0\\u01c19)oa\\uc0c3\\uf4ab\\uf202R\\u200d\\u0301k(\",\"ids\":[4,6,2,5,9,3,7,4,1,8,7,2,2,9,0,8,8,6],\"flags\":{\"rp\":true,\"p\":false,\"x\":false,\"igrqs\":true,\"hv\":false,\"oibwdnmu\":false,\"gvit\":false,\"xni\":true,\"saln\":false,\"lzu\":true,\"tfjh\":false,\"uhuwd\":false,\"qxwvjpm\":true,\"vviw\":false,\"c\":false,\"rpqrjamw\":true,\"al\":true}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/3",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%EA%BE%93%2Fat%7B%CC%88%C2%A3%CC%88%24%C3%A50%7D%EF%87%AAa%7Bn%F2%81%88%84uIe%C3%B7%2B%C6%89%EF%A7%ABI%E1%BF%B6%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U%27%3C%22A%22m%2A%2A%C5%BAv%F1%8D%BF%B7A3%E7%BD%85%EF%86%B8_%23G%EB%A3%8F",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"c\\ubb94V\\ud92a\\udcb1\\u0207\\ud804\\uddcf`e\\u5242;\\ufb32Mb4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<}rh\\u01d0;jj\\uee96\\ud9bf\\udf27>S\\uada4%0}\\ud8b2\\udf16\\udbe9\\udf17.\\uda20\\udfac\\u6686Hm'\\udb43\\uddebc\\u01fa\",\"ids\":[0,1,9,0,5,1,0,9,3,0,9,3,8,3,9,5,7,0],\"flags\":{\"ikzq\":true,\"svaekazq\":false,\"x\":false,\"onmvnido\":false,\"fuac\":false,\"kuuaxlif\":true,\"sdgqn\":true,\"sgvpuywg\":true,\"lxmlrm\":false,\"raau\":true,\"mv\":true,\"sdsi\":true,\"teh\":false,\"g\":false,\"qbho\":true,\"jqv\":true,\"mfiqhjj\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/4",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%28%F2%80%99%8B%F3%AC%AB%B4q%F1%A0%84%9E%CC%811%E4%94%A9%7C%F3%B1%B1%80%F1%BF%B4%9DGr%F1%8C%BF%BC%F0%9D%AC%84%3B8%C7%AA%CC%88%21%F1%A0%B1%94%E5%87%B0%5B%F1%B3%B9%93%F1%95%A0%9E%C6%8C%C7%96%C2%B8%E8%99%A2%F3%A0%81%81%E2%80%8F3%EC%BF%A9%7C%F0%9F%83%BB%7C%C5%AF%226%EF%BF%BDr%F3%B3%94%84%21R%5B%F0%92%89%98wM%26%27%C8%B2%EE%98%88%F1%B7%8B%A1%F3%A7%BD%9AO%E7%BF%88%C6%A8%F0%96%AC%97%E1%88%B8%3A%F0%B5%A8%9D%F0%A0%B1%B0%26%EF%91%93J%3D",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"K\\udbfa\\udc24\\ud8a1\\ude33\\u01fc\\\"\\u2b5c\\uaac6\\u444f'\\u0178\\udba8\\udf7b\\ud933\\udddbNj\\udb51\\uddc0\\udb09\\udfbf\\u200f6|h|Ln\\ufcb8\\u0130.\\udbb7\\ude585\\udbf8\\udeca\\uc5b9\\ud9b6\\ude81)0\\u00ad.uw\\ud823\\udc5aZt\\uda77\\udd34|M\\u00f4=N\\udaa3\\udd24b\\ud806\\udf9e\\udace\\uddfc\\u00f8P\\ud9db\\ude28\\u00b7\\ud8e2\\udd6a\\uc82d\\ud905\\udf4a\\u00d8\\uda49\\udcaa]\\ud991\\udf8dQ\\u48d02\\ud875\\udff5\\u202e\\ufeffC\\u0170Z\",\"ids\":[1,0,4,3,9,7,2,0,1,0,1,6,5,5,8,3,9,1],\"flags\":{\"xdjza\":false,\"v\":true,\"fkhb\":false,\"znjakm\":true,\"irjveidr\":true,\"vfsazvd\":true,\"jvksti\":false,\"iltjbual\":false,\"n\":true,\"atvtbvtf\":false,\"xcgiosp\":false,\"jf\":false,\"ivaaalen\":true,\"lhy\":false,\"uzfmu\":false,\"vj\":false,\"b\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/5",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%E8%A6%AD%C4%A1_%F1%88%90%BF%F1%B8%B6%B8E%E5%98%A5f%E6%AC%A1%F2%BF%A6%AF%3D%7CQqG%F3%A0%81%81f%E6%B8%BA%0D%C4%A2Em%F1%B1%AE%AD%C4%B1%5E%C7%AA%F4%8D%8A%8F%E4%B2%92%C5%85m%F1%AA%AD%A3%F0%9F%91%A8%F0%B6%92%AC%C8%85%26%EA%85%8B%EF%83%BC%F1%B0%9A%A8%F0%9D%A9%B2P%5C%F0%9D%99%98%F2%BA%B2%8EL%7C%E1%86%96%EF%BB%BFW%5D%3F%C4%89%26n%C3%A4b%C4%A0%F0%B6%8D%8F%F2%90%8C%8A%F3%A0%81%81zg8%22%0DCC",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"i\\ud94c\\udf3f\\ud83d\\udf66o\\\\\\ucc5f\\u01a5y\\uda6a\\udc61\\ud9df\\udffc\\uda8c\\udebbSq\\u9c1c\\uda46\\udeab\\udb05\\udda2*\\t4\\u0171.d\\uda55\\udc2dM\\u3b41@\\udb49\\udebd\\udbc0\\ude8d\\u0113Nw\\ua9e2\\\"\\u012d\\ud8c8\\udd47\\u0173\\uda77\\udd37\\ud820\\udf67)\\uda03\\udd82\\ud2e2\\udbbc\\udef3=R\\u66f1a!{?_J\\ud83d\\ude00Ie\\ud9a2\\uded4\\ud8b8\\udc18\\ud87e\\udc49k6\\udad3\\udd84\\uda76\\udd5f&]\\ud8e6\\ude02\\u00f2U\\u745e?\",\"ids\":[4,1,4,4,6,0,9,7,0,8,1,3,3,1,2,3,2,0],\"flags\":{\"xtspo\":false,\"mj\":false,\"gy\":false,\"qsw\":true,\"fih\":false,\"cg\":true,\"iukj\":true,\"okor\":true,\"wnlne\":true,\"rig\":false,\"hcbsmpl\":true,\"fcwt\":true,\"qpsz\":false,\"lsgg\":true,\"vxsmzwq\":true,\"hoifj\":true,\"mrnitqi\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/6",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=wO%E9%A1%BA2%E6%9F%B1%7F%EE%AE%AA%5B%F0%BF%9B%9C%C8%85%C8%BC%3D%F3%B6%99%B7%5E67f%E8%9F%95AAE5jQ%F1%9A%97%89%096V%203%C7%9D%3C%E2%80%8B%EF%BF%BD%F2%B6%8E%A71j%F1%B3%81%8Ctj8%3F%F2%9F%97%84%F2%A5%94%867%EC%9B%B5%22%E2%A6%99%40a%3CJ%EB%BF%B2j%E3%AA%BCxb%5E%F2%94%B1%94%E7%BF%84%20%C2%BFYX%F0%9F%B6%9C%F3%AC%92%B9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\u014a<h\\u012e\\udbdb\\udd51]\\u620f<\\u00ad-v'*\\udb91\\udc0a\\ud83d\\ude00tI\\udb3b\\udd30%Vj\\ud92c\\ude82\\udac5\\udf8dE\\udb78\\udd127\\uc718\\u2e59\\u326aW\\u200d\\u08cbK\\udadd\\udd4f(G;\\u0c5c\\u37cc\\/\\udb6d\\udcd5@\\udb9a\\udf50\\ud80a\\udf5d\\uda23\\udeadrrR>8\\ufeffq\\ufe50su\\u010aA8Q\\udb23\\udf22\\u0301d\\u200b\\ud90d\\ude13\\u00baNEPR^\",\"ids\":[6,1,0,2,0,9,8,9,0,9,9,2,0,2,9,6,1,1],\"flags\":{\"cztagfo\":false,\"c\":true,\"lafcqx\":true,\"agnj\":true,\"enettm\":true,\"qqnriw\":true,\"b\":true,\"cce\":false,\"twzcvqu\":false,\"qzb\":false,\"bhb\":false,\"zwcsdm\":false,\"sueo\":true,\"twrbjdy\":true,\"lyeukoc\":true,\"rl\":false,\"sdvquhir\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/7",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=N6%E6%88%87%F1%AF%85%9D%F1%80%B8%91%F1%AD%8A%A8%20%C6%BD%3C%C8%B0%22%F3%9E%8F%AB%40%28%2A%C4%AE%22%C3%AF%7F%F2%AC%82%941%26%28%27%F1%84%98%9A%E3%81%B3ck%5EEYzB%29T%25%E0%A7%AC%26%3CXC3%F2%84%A5%BA%C4%87%F1%9B%8B%8A%F4%82%B6%93%E7%AF%A9%27Or%C8%A6%F2%B6%81%9C%E8%A1%ABBp9%09%29PdI%F2%B7%96%8CM%F3%AA%BE%90%60%C6%9D",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\ud963\\uddbb;\\u443d\\u00b6\\u00f0\\u0123m,E\\u00c5\\ud955\\udc3a)\\u0308\\ud87f\\udf15MJ Z\\ud9e9\\udfea\\ud846\\ude6d8By&C}\\uda78\\udf5c\\u200fL\\ud83d\\udc68\\n\\ud880\\udcc43a?\\ud8dd\\udcf9u\\ud8fc\\udc21\\uf3dcq\\ud88f\\udcafqM\\ud90e\\udf6b\\\"[\\u0173\\uda1a\\ude89.\\u2cbf\\udb40\\udc41\\ud89b\\udea7\\u510e%\\u00c13\\u00df\\u0107\\uda63\\udfa8\\u81956L\\ud880\\udd04pP\\u9a13\\uaf82az\",\"ids\":[1,8,3,4,0,7,0,7,3,4,4,6,7,6,9,3,1,9],\"flags\":{\"fkck\":false,\"eu\":true,\"a\":false,\"anj\":true,\"cfnbzxu\":true,\"f\":true,\"vqpkwslo\":false,\"npbttqvy\":true,\"g\":true,\"bcxjhue\":false,\"ypwcx\":true,\"v\":false,\"vca\":false,\"n\":false,\"lpubh\":true,\"fvlp\":true,\"oblezmlk\":true}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/8",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=%5B%E7%B0%8A%C7%AB%7B%F1%B4%82%A5P%EA%B4%83nM%E2%BA%AD%E6%B7%8D8oQO%E2%80%8B%5C%3CT%28%E7%98%BAPk%09%F4%8F%A5%9A%E8%B2%9F4d%0D%F1%9C%B4%9F%23s%F3%9B%96%9E%F1%B7%97%A6r%F3%8A%B8%B2%F2%BE%BB%9EJ2Jd7%C7%89%F0%AE%87%92%C2%A0%EC%9D%A0%EC%BD%82%EB%A9%9E%09w%E3%A0%9B%C6%94%2A9%E6%A9%A0%C6%A4%3E~J%60%22N4%E9%A0%BB%C7%92%5B",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"\\uf2af\\u27aa\\uda22\\udeab\\u0301\\udab6\\udd6a\\u2028\\ue8603\\uda0e\\udec8\\udb1b\\udf891k\\ue598\\u0130Ns\\ud961\\uddd5yc\\ud80f\\udf4a\\udb5f\\udcb7 cWf\\udacf\\udead\\ubfcc-\\ud970\\uddcel?\\ud9dd\\ude10do\\u4632\\u6774NwsB\\ud8a6\\udd36N \\u012eUv`\\udb46\\udc1d: \\ud9b9\\uddc9\\u0128\\u1595jZ1rD\\u960cC\\u022b\\udb40\\udc41K\\ni\\u00adF\\u01ec\\u010d\",\"ids\":[2,7,0,1,5,3,7,0,2,8,7,8,9,7,2,6,0,6],\"flags\":{\"kp\":true,\"pyql\":false,\"wllrniks\":false,\"likru\":false,\"jvyl\":true,\"gtdxvc\":true,\"ceancikh\":true,\"j\":false,\"gbu\":true,\"phpgmpi\":false,\"cohv\":true,\"chdbzsb\":false,\"wnod\":true,\"zy\":true,\"vpep\":false,\"ftrh\":true,\"hbzbhn\":false}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "batches.create/valid/9",
+            "document": "zoo",
+            "operationId": "batches.create",
+            "request": {
+                "method": "POST",
+                "target": "/batches?ref=cx%EF%B3%A6S%F3%89%BB%AAT%C3%A4L%5DC%F2%A4%A5%9E%C6%98Y%2AM%F1%95%B2%85f%C2%AC%C2%AD%E5%A9%BB%EC%84%A3K%E4%95%B0cR%3Ec%09%3APb%F1%95%A7%89%EF%89%B3%C3%B2.%E8%A5%85t%F1%82%B4%94%C4%B1%C8%BFu%20%F1%AD%BA%AC%E6%AE%99F1%C9%B2%F0%9B%96%B6X%C3%91%3D%2F0%25iv%0D%F0%B2%86%9F%C5%83%C5%9A%F2%AE%A8%A1b%EE%8D%A0%F2%BB%93%92%C9%B0%F0%A8%94%81",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"note\":\"=\\ud86e\\udf34k\\u0308,=B\\u00cc\\udaf9\\uddd1\\uc83bwW\\ud936\\udc7dtWj\\ud976\\udd56%x\\uda71\\uddd5\\u1fe8P2odjA\\u0156[\\u7944k\\ud558\\u9a72nT\\u00ad\\u0184g\\u0308>\\u020b#>l6`\\uc84a\\udbf3\\udf48&\\u020d\\ud910\\ude6d\\ud8dd\\udd44\\ue76d7kp7><\\udabd\\udf40G %<{T\\udb5e\\udf03\\udba5\\udf18\",\"ids\":[1,2,6,9,3,4,5,5,7,9,9,1,9,1,9,2,3,4],\"flags\":{\"oikhgoj\":false,\"biafm\":false,\"vzghe\":true,\"agmypes\":false,\"vbkl\":false,\"drmqbs\":true,\"mhlr\":false,\"wy\":false,\"ihpvg\":false,\"rnacgb\":false,\"s\":true,\"cmuldl\":true,\"navb\":true,\"ef\":true,\"vzfmklyw\":false,\"vjfwrk\":true,\"vn\":true}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/1",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/10",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/2",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": {
+                    "Content-Type": [
+                        "application/octet-stream"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "Z\ud894\udc61C)\u200bQ\u338aa7b4j \u014aS.7_d\u30f3SM\ud9d5\uddebm\ud8f3\udc77b%\u617e\"\udb2e\udf9f<\udace\udd24\u8781\u017ec\u202e#$0nY9\ud8ab\udd6f\u0168:"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/3",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": {
+                    "Content-Type": [
+                        "application/octet-stream"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\u85e8p&\ud8e1\udc4a \udbb8\udda9\ud97d\udd3e%!\ud843\udc89\u0108\uda3d\udd83=9=y7^iS\r+\"K\u01ebB\u00a0I~R.\u6222\ud88f\udd71\ud83d\udc68\u021e\ue7bdi$\udb40\udc41\udb1f\udedaYGE\nHkl*\udb72\udcbd@C\u0105 `+`\u0204*"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/4",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": {
+                    "Content-Type": [
+                        "application/octet-stream"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "e\u00d4\u014b_\u014d%\u96274}(;N`\ub995|\u4746&kEnc\uda4b\udfb4\uda25\udc46\u9bb1&!\",%\ud96f\udf1eic\udbd5\udeab\u1c80+I%\u01f9\u59e7\u01fa=\tq2\ud85d\udc4b<NPU\ube18\ud0e5y\u0200\u0192FX"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/5",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/6",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": {
+                    "Content-Type": [
+                        "application/octet-stream"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "8\u8b2f\u020c\udbd7\ude0f\ud9c9\udc46\u200fx\udb5e\udc4cI{Ty\udb81\udf7a\ue52dAO'n6V'8\udaec\udf41\ud937\udea2f\u7915tHP5\u00c9H\ufeffn%\u616b"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/7",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/8",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": [],
+                "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "blobs.put/valid/9",
+            "document": "zoo",
+            "operationId": "blobs.put",
+            "request": {
+                "method": "PUT",
+                "target": "/blobs",
+                "headers": {
+                    "Content-Type": [
+                        "application/octet-stream"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\u2df6\udbaa\udcff\udb59\udea1K:5\u0308\udba7\ude8f2(v%L'U\udbbb\ude17{\udb94\udf15\"\u9785<E\u0220\u0cafg'\u1c2d\u48dc\u0194u\u010fJ{rxa\ud925\ude3f!X^VB\uaa9c{\uc6a7~C\u019b&=\u2028?4i\u00a7sS?\u01e2I1#"
                 }
             },
             "expect": {
@@ -6405,6 +7913,825 @@
             }
         },
         {
+            "name": "hosts.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":\"P21DT4H5M\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":\"17:13:44Z\",\"period\":\"P30DT0H59M\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":\"50b0:1c14:ea31:817f:fdf4:1f77:0:fbe9\",\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-format/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":\"not-a-duration\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "body",
+                    "name": "period"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-format/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":\"not-a-time\",\"period\":\"P30DT0H59M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "body",
+                    "name": "opens"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-format/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":\"not-an-ipv6\",\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "body",
+                    "name": "address"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-type/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "period"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-type/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":4096,\"period\":\"P30DT0H59M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "opens"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/body-type/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":4096,\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "address"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/format/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=not-a-duration"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":\"P21DT4H5M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "cookie",
+                    "name": "ttl"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/format/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "not-a-time"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":\"17:13:44Z\",\"period\":\"P30DT0H59M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "header",
+                    "name": "X-At"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/format/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=not-an-ipv6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":\"50b0:1c14:ea31:817f:fdf4:1f77:0:fbe9\",\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "format",
+                    "location": "query",
+                    "name": "address"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/media-type/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":\"P21DT4H5M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/media-type/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":\"17:13:44Z\",\"period\":\"P30DT0H59M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/media-type/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":\"50b0:1c14:ea31:817f:fdf4:1f77:0:fbe9\",\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "hosts.create/valid/1",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/t0w71b5z0k?address=1e47%3A79fc%3A7d19%3Ad514%3A0%3Ac9d4%3A20fc%3A929c",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P7DT14H59M"
+                    ],
+                    "X-At": [
+                        "22:56:03+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"prxi\",\"address\":\"f780:f8d1:e2d8:9a73:8fea:b9c8:2447:85c6\",\"opens\":\"09:47:28+01:00\",\"period\":\"P21DT4H5M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/10",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/vovotz.zwt1e8?address=d900%3A1%3Abda4%3A9610%3Affff%3A836%3Aed6b%3A823e",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P8DT1H29M"
+                    ],
+                    "X-At": [
+                        "23:59:43+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"wi2dk1z.cq.z6z2kvke\",\"address\":\"1d89:4e12:4276:cd58:691:487:631c:f5d4\",\"opens\":\"08:56:01-08:30\",\"period\":\"P1DT20H22M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/2",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/sh0q3iv8?address=1%3Aaa4b%3Affff%3A7d1f%3A1994%3A0%3Acaa7%3Ab466",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P21DT3H20M"
+                    ],
+                    "X-At": [
+                        "00:43:59-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"waz.z2.ge8ac6z7l\",\"address\":\"ffff:0:fded:fd0f:eded:6af7:8396:79fa\",\"opens\":\"17:13:44Z\",\"period\":\"P30DT0H59M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/3",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/c13scotpj.ntid36?address=ffff%3Afa5d%3A198e%3Ae1a%3A85da%3A6342%3A1%3A3281",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "02:40:21+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qyfgz9\",\"address\":\"50b0:1c14:ea31:817f:fdf4:1f77:0:fbe9\",\"opens\":\"20:25:56-08:30\",\"period\":\"P18DT23H49M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/4",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/gvtlw.w9m.gdm7bd?address=ffff%3A1c2c%3Af47e%3A634%3A6400%3Aca15%3Acec9%3A75fd",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P15DT8H1M"
+                    ],
+                    "X-At": [
+                        "00:22:00Z"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"qpc2l4ju.nzx\",\"address\":\"ffff:10f0:72d9:30bb:edcc:b472:fe16:ffff\",\"opens\":\"01:00:42+01:00\",\"period\":\"P1DT17H1M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/5",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/b7lqy.lsjuz8iof?address=ffff%3A75b5%3A6c50%3Aa42c%3Afecb%3A8daf%3A87d4%3A4e7d",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "22:01:05+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"dbwyt.k.g8h\",\"address\":\"ca1b:3302:2126:ffd3:a112:ffff:5b64:e6d\",\"opens\":\"22:31:20Z\",\"period\":\"P30DT14H45M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/6",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/af.ibusi5p7.pe3tsmol?address=7082%3A6fd4%3A641f%3A0%3Ab59a%3A3dd9%3A6e72%3A94c5",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P10DT13H40M"
+                    ],
+                    "X-At": [
+                        "17:53:12+01:00"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"tl6yyj4h.gvabxrp.ya\",\"address\":\"347b:2a18:702a:5387:b04b:ae21:ff72:eba1\",\"opens\":\"05:37:15Z\",\"period\":\"P8DT0H10M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/7",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/tp2.fn4hyj8x?address=fa2a%3Ab388%3A97e6%3Ac5b0%3A0%3Ade00%3Aeb37%3Affff",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P1DT5H2M"
+                    ],
+                    "X-At": [
+                        "04:43:00Z"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"cy.slb.jcfw\",\"address\":\"1:fd76:d55d:9a5c:1:fe0a:cb23:153d\",\"opens\":\"23:15:53+01:00\",\"period\":\"P2DT11H9M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/8",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/d9lpmgfw7.vg5v.awp9?address=588f%3Ad62%3A2e12%3A7c66%3A59b8%3Ad233%3A1%3A3747",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "ttl=P1DT23H8M"
+                    ],
+                    "X-At": [
+                        "02:10:58-08:30"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"pjqfollw.czmo\",\"address\":\"abad:71a6:b7df:ac7b:e4d9:1:f3c4:d56b\",\"opens\":\"02:38:27+01:00\",\"period\":\"P16DT15H17M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "hosts.create/valid/9",
+            "document": "zoo",
+            "operationId": "hosts.create",
+            "request": {
+                "method": "POST",
+                "target": "/hosts/ci5ew7ypt?address=5a3b%3A8efa%3A0%3A995b%3Adadd%3A0%3A60ee%3A69d8",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-At": [
+                        "00:59:00Z"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"host\":\"sk5kvz1.mpc4.h0\",\"address\":\"c1bb:da1:0:1:9e3f:ffff:4b04:e963\",\"opens\":\"10:14:40-08:30\",\"period\":\"P10DT0H6M\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "labels.get/enum/1",
             "document": "zoo",
             "operationId": "labels.get",
@@ -8363,6 +10690,216 @@
                 "body": {
                     "encoding": "utf8",
                     "content": "{\"csnuh\":{\"n\":4},\"rgwbyuz\":{\"n\":9}}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/1",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "(ZX\ud855\udf4f\udb55\ude7a\u01a1HlbU\u00c7&w\ud898\udd9b"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/10",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "cC\u21bc/\u01459\u01c8f\u01cc\ud870\udfc0a\uda33\ude9bQ\udb07\udf769/\ud910\udda6C"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/2",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "$\uda21\udf71"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/3",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\uaf93/at{\u0308\u00a3\u0308$\u00e50}\uf1ea"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/4",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "a\n"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/5",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\u89ad\u0121_\ud8e1\udc3f\ud9a3\uddb8E\u5625f\u6b21\udabe\uddaf=|"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/6",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "e\u0301"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/7",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "N6\u6207\ud97c\udd5d\ud8c3\ude11\ud974\udea8 \u01bd<\u0230\"\udb38\udfeb@(*\u012e\"\u00ef"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/8",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "[\u7c0a\u01eb{\ud990\udca5P\uad03nM\u2ead\u6dcd8oQO\u200b\\<"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "notes.create/valid/9",
+            "document": "zoo",
+            "operationId": "notes.create",
+            "request": {
+                "method": "POST",
+                "target": "/notes",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "a\n"
                 }
             },
             "expect": {
@@ -11278,6 +13815,762 @@
                 "target": "/precise?v=0.123456789012345&step=424.4&big=123456789012345680&expr=g/h",
                 "headers": [],
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":765.7471024716561,\"quantity\":2,\"discount\":0.890556222873222,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "prices.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":291.24883101422125,\"quantity\":3,\"discount\":0,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "prices.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":227.08471300647614,\"quantity\":1,\"discount\":0.39174917361166933,\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-boundary/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":0,\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-boundary/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":0,\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-boundary/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":0,\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-type/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":\"not-a-number\",\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-type/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":\"not-a-number\",\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/body-type/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":\"not-a-number\",\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "price"
+                }
+            }
+        },
+        {
+            "name": "prices.create/boundary/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=0",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":765.7471024716561,\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/boundary/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=0",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":291.24883101422125,\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/boundary/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=0",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":227.08471300647614,\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "boundary",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/media-type/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":765.7471024716561,\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/media-type/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":291.24883101422125,\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/media-type/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":227.08471300647614,\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "prices.create/type/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":765.7471024716561,\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/type/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":291.24883101422125,\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/type/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=not-an-integer",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":227.08471300647614,\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "query",
+                    "name": "limit"
+                }
+            }
+        },
+        {
+            "name": "prices.create/valid/1",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":765.7471024716561,\"quantity\":2,\"discount\":0.890556222873222}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/10",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=4",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":288.421395020519,\"quantity\":5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/2",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=7",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":291.24883101422125,\"quantity\":3,\"discount\":0}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/3",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=6",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":227.08471300647614,\"quantity\":1,\"discount\":0.39174917361166933}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/4",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":942.4432884715437,\"quantity\":5}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/5",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=4",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":639.1721576081084,\"quantity\":1,\"discount\":0.1485714484114483}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/6",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=9",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":122.75208978349406,\"quantity\":3}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/7",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":137.9073529375897,\"quantity\":3,\"discount\":0.1604546031891025}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/8",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=5",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":889.584903984274,\"quantity\":2,\"discount\":0.6552503479238466}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "prices.create/valid/9",
+            "document": "zoo",
+            "operationId": "prices.create",
+            "request": {
+                "method": "POST",
+                "target": "/prices?limit=1",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"price\":656.2850479458018,\"quantity\":3}"
+                }
             },
             "expect": {
                 "valid": true
