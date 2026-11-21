@@ -329,6 +329,11 @@ API reference:
   the static `multipleOf` verdict on the decimals the numbers spell, for a
   consumer that must predict it (a generator keeping an integer on the
   `integer` branch of a `oneOf` only when the `number` branch refuses it).
+- `SchemaCheck::assertsFormat(string $type, string $format): bool` — static;
+  `true` when the contract checks `format` on a value of that JSON type
+  (`string`/`date-time`, `integer`/`int32`; an integer is also checked by a
+  `number` format), `false` for an annotation it ignores (`phone`, `byte`,
+  `binary`, `password`, custom formats) that every value satisfies.
 - `SchemaDirection` (enum): `Request`, `Response`. Decides which properties
   are required — a `readOnly` one is not required on a request, a `writeOnly`
   one not on a response; both stay declared and typed.

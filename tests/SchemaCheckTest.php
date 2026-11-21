@@ -116,6 +116,68 @@ final class SchemaCheckTest
         Assert::false(SchemaCheck::isMultipleOf(INF, 2.5));
     }
 
+    #[DataProvider('formatProvider')]
+    public function assertsFormatNamesTheFormatsTheContractChecks(string $type, string $format, bool $asserted): void
+    {
+        Assert::same(SchemaCheck::assertsFormat($type, $format), $asserted);
+    }
+
+    /** @return iterable<string, array{string, string, bool}> */
+    public static function formatProvider(): iterable
+    {
+        yield 'date-time on a string' => ['string', 'date-time', true];
+        yield 'hostname on a string' => ['string', 'hostname', true];
+        yield 'duration on a string' => ['string', 'duration', true];
+        yield 'phone on a string' => ['string', 'phone', false];
+        yield 'byte on a string' => ['string', 'byte', false];
+        yield 'binary on a string' => ['string', 'binary', false];
+        yield 'password on a string' => ['string', 'password', false];
+        yield 'int32 on an integer' => ['integer', 'int32', true];
+        yield 'int64 on an integer' => ['integer', 'int64', true];
+        yield 'int32 on a string' => ['string', 'int32', false];
+        yield 'date-time on an integer' => ['integer', 'date-time', false];
+        yield 'int32 on a number' => ['number', 'int32', false];
+        yield 'float on a number' => ['number', 'float', false];
+        yield 'an unknown type' => ['text', 'date-time', false];
+    }
+
+    /**
+     * The export is the verdict, not a second list: a format it calls an
+     * annotation admits every string, and one it calls an assertion rejects
+     * one of the strings below. Read in both directions, so a format the
+     * backend learns and this export misses fails here.
+     */
+    #[Property(runs: 200)]
+    public function assertsFormatAgreesWithAccepts(string $format, string $value): void
+    {
+        $check = new SchemaCheck();
+        $schema = ['type' => 'string', 'format' => $format];
+        $asserted = SchemaCheck::assertsFormat('string', $format);
+
+        Classify::cover(condition: $asserted, label: 'asserted', minPercent: 20.0);
+        Classify::cover(condition: !$asserted, label: 'annotation', minPercent: 20.0);
+
+        if (!$asserted) {
+            Assert::true($check->accepts($value, $schema, SchemaDialect::OpenApi31));
+
+            return;
+        }
+        $rejected = array_filter(
+            ['!!', ' ', '(', ':', '%'],
+            static fn(string $candidate): bool => !$check->accepts($candidate, $schema, SchemaDialect::OpenApi31),
+        );
+        Assert::true($rejected !== []);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function assertsFormatAgreesWithAcceptsGenerators(): array
+    {
+        return [
+            'format' => Gen::elements(['date', 'date-time', 'time', 'duration', 'email', 'hostname', 'ipv4', 'ipv6', 'uuid', 'uri', 'uri-reference', 'json-pointer', 'regex', 'phone', 'byte', 'binary', 'password', 'int32', 'x-custom']),
+            'value' => Gen::frequency([[1, Gen::stringAscii()], [1, Gen::elements(['!!', '', '2026-11-21'])]]),
+        ];
+    }
+
     public function theDirectionDecidesWhichPropertiesApply(): void
     {
         $schema = [

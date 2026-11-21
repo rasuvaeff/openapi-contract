@@ -556,6 +556,15 @@ second copy of the rule. It judges on the decimals the two numbers spell
 (`64.1` is a multiple of `0.1`, `64.10000000000001` is not), exactly, on
 every machine.
 
+`SchemaCheck::assertsFormat($type, $format)` says whether a `format` is an
+assertion the contract checks on a value of that JSON type or an annotation
+it ignores: `date-time`, `email`, `uuid`, `hostname` on a string and
+`int32`/`int64` on an integer are assertions; `phone`, `byte`, `binary`,
+`password` and a format of the document's own are annotations, and any
+string satisfies them. It reads the validator's own format list, so a
+generator deciding whether a plain string will do asks this rather than
+keeps a copy.
+
 ### PSR-15 middleware
 
 `ContractMiddleware` validates every incoming request against the contract

@@ -11,7 +11,7 @@ use Psr\Http\Message\StreamInterface;
  * except the size: `getSize()` is always null, the way non-seekable and
  * piped streams report an unknown length.
  */
-final class UnknownSizeStream implements StreamInterface
+final readonly class UnknownSizeStream implements StreamInterface
 {
     public function __construct(
         private StreamInterface $inner,

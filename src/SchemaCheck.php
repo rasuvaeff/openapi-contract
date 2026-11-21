@@ -87,6 +87,27 @@ final readonly class SchemaCheck
     }
 
     /**
+     * Whether `format: $format` constrains a value of the JSON `$type`
+     * (`string`, `integer`, `number`, …) — the contract rejects a value that
+     * does not match it — or is an annotation the contract does not check.
+     * `date-time`, `email`, `uuid`, `hostname` on strings and `int32`/`int64`
+     * on integers are assertions; `phone`, `byte`, `binary`, `password` and
+     * any format of the document's own are annotations, and a string such as
+     * `'!!'` satisfies them. An integer is also checked by a format on
+     * `number`, as the contract applies them.
+     *
+     * Exported so a consumer that has to decide whether any string will do
+     * for a format — a generator, a fuzzer — asks the contract rather than
+     * keeps a copy of its list, which drifts the day the backend learns a
+     * format. Type names are the JSON Schema ones; an unknown type asserts
+     * nothing.
+     */
+    public static function assertsFormat(string $type, string $format): bool
+    {
+        return SchemaValidator::assertsFormat($type, $format);
+    }
+
+    /**
      * The Schema Object as one direction applies it: exactly the rewrite
      * {@see accepts()}, {@see Contract::accepts()} and the validators perform
      * before a value is judged, so a consumer that builds values for a
