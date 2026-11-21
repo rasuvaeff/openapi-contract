@@ -1,7 +1,7 @@
 {
     "version": 1,
     "recordedBy": "rasuvaeff/property-testing-openapi",
-    "contractVersionAtRecording": "v0.16.2",
+    "contractVersionAtRecording": "v0.18.0",
     "seeds": {
         "valid": 10,
         "invalid": 3
@@ -1895,6 +1895,120 @@
                                     "schema": {
                                         "type": "string",
                                         "format": "binary"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/contacts/{phone}": {
+                    "post": {
+                        "operationId": "contacts.create",
+                        "parameters": [
+                            {
+                                "name": "phone",
+                                "in": "path",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "phone"
+                                }
+                            },
+                            {
+                                "name": "sku",
+                                "in": "query",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "x-sku",
+                                    "pattern": "^[A-Z]{2}-[0-9]{3}$"
+                                }
+                            },
+                            {
+                                "name": "X-Token",
+                                "in": "header",
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "format": "byte",
+                                    "maxLength": 12
+                                }
+                            },
+                            {
+                                "name": "locale",
+                                "in": "cookie",
+                                "schema": {
+                                    "type": "string",
+                                    "format": "x-locale"
+                                }
+                            }
+                        ],
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "phone",
+                                            "avatar"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "phone": {
+                                                "type": "string",
+                                                "format": "phone",
+                                                "pattern": "^\\+[0-9]{6,12}$"
+                                            },
+                                            "avatar": {
+                                                "type": "string",
+                                                "format": "byte"
+                                            },
+                                            "notes": {
+                                                "type": "string",
+                                                "format": "binary",
+                                                "maxLength": 10
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "204": []
+                        }
+                    }
+                },
+                "/memos": {
+                    "post": {
+                        "operationId": "memos.create",
+                        "requestBody": {
+                            "required": true,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": [
+                                            "text"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "text": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 12
+                                            }
+                                        }
+                                    }
+                                },
+                                "text/plain": {
+                                    "schema": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 12
                                     }
                                 }
                             }
@@ -5658,6 +5772,999 @@
             }
         },
         {
+            "name": "contacts.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-length/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\",\"notes\":\"aaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "notes"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-length/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"aaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "notes"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-length/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\",\"notes\":\"aaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "notes"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-pattern/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "body",
+                    "name": "phone"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-pattern/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "body",
+                    "name": "phone"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-pattern/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "body",
+                    "name": "phone"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-type/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "avatar"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-type/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "notes"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/body-type/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":4096,\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "phone"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/length/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "aaaaaaaaaaaaa"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Token"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/length/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        "aaaaaaaaaaaaa"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Token"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/length/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        "aaaaaaaaaaaaa"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "header",
+                    "name": "X-Token"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/media-type/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/media-type/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/media-type/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/pattern/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "query",
+                    "name": "sku"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/pattern/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "query",
+                    "name": "sku"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/pattern/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "pattern",
+                    "location": "query",
+                    "name": "sku"
+                }
+            }
+        },
+        {
+            "name": "contacts.create/valid/1",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%28ZX%F0%A5%9D%8F%F3%A5%99%BA%C6%A1HlbU%C3%87%26w%F0%B6%86%9B%F1%A7%A0%88%E8%8B%A7%E9%80%B1X%25%3C%F0%9F%91%A8R%F2%8A%B4%87jk%F0%AE%BD%972e%E4%B6%98%C8%89%F1%88%BF%A4%7Drx%F3%AF%B9%8Fw%3C%0D%F2%B7%9C%B8Ek%E2%80%8B%F1%92%AB%A0%C8%A4?sku=OH-327",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "gpJV8w{c"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+7535599200\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/10",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/7%C8%91%F2%A4%B1%91%F0%98%83%9F%C7%A7%2CQ%CC%81%F3%B4%9B%BC-?sku=LG-983",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "wuIN&qI#|Nr"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+28282094373\",\"avatar\":\"m\\udbce\\udf43\\ud95c\\ude82\\uf5ed&\\ud95b\\udf6f\\ud28b\\u200fW9\\udb92\\udd28t\\udade\\udc0cyKG\\uda0d\\udeb1.\\ud841\\udd35+tK\\udb3a\\udc6c\\ud86b\\udede \",\"notes\":\"\\u010e\\ufeffl38P\\u0124Ph\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/2",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%7B?sku=LG-714",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%5Dz%F2%96%B8%A8%E2%80%A8%F1%90%B5%93rK%C8%83%E8%98%8A%26%2B%F1%87%80%82%F2%8B%BE%B4%F0%9C%A5%A7%5E%C8%9BQ%22%E0%B0%9BUn%27X%F3%AA%AC%8B%F1%82%B6%BD%28.Z%E8%89%B1%F2%BF%90%9F%F1%B7%98%85%EF%BD%A4%F1%90%87%81f%C2%A0%C7%819%29oa%EC%83%83%EF%92%AB%EF%88%82R%E2%80%8D%CC%81k%28Ag%C8%B28%EF%BB%BF%09%2C%D5%B5yY"
+                    ],
+                    "X-Token": [
+                        ",JdrE$~"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+973272\",\"avatar\":\"\\u0301n\\u01f2\\u00db)\\ucc26\\ud80d\\udf2f\\t\\ud83d\\udc68l\\u200f\\ud86f\\udcf5\\udbd4\\udd8b\\u020b\\udbd4\\udf21(\\uda72\\udd28\\u8d4e\\u2028\\u4aadhIa!\\u4eda\\udb76\\udf11l\",\"notes\":\"e\\u6bccK[2\\ud8cf\\ude42\\uda2b\\udc2c\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/3",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%25U%C2%A7KOE%F0%A4%AD%B7%2A%F3%B7%B7%B3%F1%BF%92%80%E8%9F%9EN%F1%92%90%97%F2%8B%AF%B1%F0%B4%A8%B0p%F4%80%B7%ABp%F2%BD%A2%9B%20U?sku=QB-322",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%20%60%2B%60%C8%84%2A%F1%84%9E%85%F2%BE%B0%81%7Cz%26%F0%90%B5%A5%F0%B5%B4%8F%F3%A0%81%81%C8%A2%E5%8A%AB%2AA0F%21"
+                    ],
+                    "X-Token": [
+                        ""
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+0476177845\",\"avatar\":\"4 b)9'\\ud948\\udc86\\ud90c\\udeb5\\ud930\\udc2b}N~V\\u0245LtNF\\ud813\\ude62;\\u0308Y\\uda28\\uddd1\\udacd\\udffa\\ud9d9\\udebcV\\ud9bf\\udc31\\u017b:'<\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/4",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/e%CC%81?sku=BP-962",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "yS4&Uzpl;QQK"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+24129793\",\"avatar\":\"8\\u01ea\\u0308!\\ud943\\udc54\\u51f0[\\ud98f\\ude53\\ud916\\udc1e\\u018c\\u01d6\\u00b8\\u8662\\udb40\\udc41\\u200f3\\ucfe9|\\ud83c\\udcfb|\\u016f\\\"6\\ufffdr\\udb8d\\udd04!R[\\ud808\\ude58wM&'\\u0232\\ue608\\ud99c\\udee1\\udb5f\\udf5aO\\u7fc8\\u01a8\\ud81a\\udf17\\u1238:\\ud896\\ude1d\\ud843\\udc70&\\uf453J=\\u0207K\",\"notes\":\"qa1\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/5",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/%E8%A6%AD%C4%A1_%F1%88%90%BF%F1%B8%B6%B8E%E5%98%A5f%E6%AC%A1%F2%BF%A6%AF%3D%7CQqG?sku=MA-745",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "qt).}]B9Eu"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+6991726417\",\"avatar\":\"\\ud83d\\udc68\\ud899\\udcac\\u0205&\\ua14b\\uf0fc\\ud981\\udea8\\ud836\\ude72P\\\\\\ud835\\ude58\\udaab\\udc8eL|\\u1196\",\"notes\":\"\\n\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/6",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/0?sku=KI-764",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "Cookie": [
+                        "locale=%EE%AE%AA%5B%F0%BF%9B%9C%C8%85%C8%BC%3D%F3%B6%99%B7%5E67f%E8%9F%95AAE"
+                    ],
+                    "X-Token": [
+                        ":"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+149398057324\",\"avatar\":\"P5\\u00c9H\\ufeffn%\\u616b\\udb0b\\uddea9\\udb57\\udec5-0\\u010d\\u0231\\uee67c9\\u016c\\ufa0c(>}\\u6e9f$\\ud9a8\\udfa6)\\ud990\\udd9aV\\ua1b6'dq\\ud822\\udc84m\\u01c9\\ud586>D\\udb8c\\udcb9il\\udb3d\\uded1E\\u00d8<\\uda9c\\udd3dF#19\\n> 3-+\\u2028\\udbc2\\udcb8s\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/7",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/N6%E6%88%87%F1%AF%85%9D%F1%80%B8%91?sku=DK-623",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "W54t3]ptEEP"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+356675091\",\"avatar\":\"&('\\ud8d1\\ude1a\\u3073ck^EYzB)T%\\u09ec&<XC3\\ud9d2\\udd7a\\u0107\\ud92c\\udeca\\udbcb\\udd93\\u7be9'Or\\u0226\\uda98\\udc5c\\u886b\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/8",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/k%09%F4%8F%A5%9A%E8%B2%9F4d%0D%F1%9C%B4%9F%23s%F3%9B%96%9E%F1%B7%97%A6r%F3%8A%B8%B2%F2%BE%BB%9EJ2Jd7%C7%89%F0%AE%87%92%C2%A0%EC%9D%A0%EC%BD%82%EB%A9%9E%09w%E3%A0%9B%C6%94%2A9%E6%A9%A0%C6%A4%3E~J%60%22N4%E9%A0%BB%C7%92%5B9%EF%8A%AF%E2%9E%AA%F2%98%AA%AB%CC%81%F2%BD%A5%AA%E2%80%A8%EE%A1%A03%F2%93%AB%88%F3%96%BE%891k%EE%96%98%C4%B0Ns%F1%A8%97%95?sku=PF-868",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "q|1tSkbz'pt"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+896063655\",\"avatar\":\"do\\u4632\\u6774NwsB\\ud8a6\\udd36N \\u012eUv`\\udb46\\udc1d: \\ud9b9\\uddc9\\u0128\\u1595jZ1rD\\u960cC\\u022b\\udb40\\udc41K\\ni\\u00adF\\u01ec\\u010d\\u024d\\\"\\ube66@<\\u202eS\\u387e{y\\udafb\\udd44\\uc69e\\uf250\\udb8d\\udc20\\u97f48\\u0156\\ud845\\udcb5\\u01b5\",\"notes\":\"}<\\u00ca\\u0171~X\\ud97b\\udee7\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "contacts.create/valid/9",
+            "document": "zoo",
+            "operationId": "contacts.create",
+            "request": {
+                "method": "POST",
+                "target": "/contacts/a%0A?sku=DQ-783",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ],
+                    "X-Token": [
+                        "=AdCm~SNBDpQ"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"phone\":\"+6302452\",\"avatar\":\"\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
             "name": "delimited.get/valid/1",
             "document": "zoo",
             "operationId": "delimited.get",
@@ -8993,6 +10100,606 @@
                     ]
                 },
                 "body": null
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/additional-properties/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"F\\u01fd3\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "memos.create/additional-properties/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"Z\\ud894\\udc61C)\\u200b\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "memos.create/additional-properties/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"\\u85e8p\",\"__openapi_extra_property__\":true}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "additional-properties",
+                    "location": "body",
+                    "name": "__openapi_extra_property__"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-length/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"aaaaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-length/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"aaaaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-length/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"aaaaaaaaaaaaa\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "length",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-type/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-type/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/body-type/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":4096}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "type",
+                    "location": "body",
+                    "name": "text"
+                }
+            }
+        },
+        {
+            "name": "memos.create/json-syntax/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/json-syntax/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/json-syntax/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"malformed\":"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "json-syntax",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/media-type/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"F\\u01fd3\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/media-type/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"Z\\ud894\\udc61C)\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/media-type/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/x-openapi-misuse"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"\\u85e8p\"}"
+                }
+            },
+            "expect": {
+                "valid": false,
+                "misuse": {
+                    "kind": "media-type",
+                    "location": "body",
+                    "name": "body"
+                }
+            }
+        },
+        {
+            "name": "memos.create/valid/1",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\ud99f\udf00"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/10",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\u50e0"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/2",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"Z\\ud894\\udc61C)\\u200b\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/3",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"\\u85e8p\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/4",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"e\\u00d4\\u014b_\\u014d%\\u96274\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/5",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "&6nBli\ud888\ude80m"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/6",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"8\\u8b2f\\u020c\\udbd7\\ude0f\"}"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/7",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\u00d5\u3777"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/8",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "text/plain"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "\udb25\udd9c\u0132'}\ud9ce\uded1\ud821\uddc1\udbc2\udda9 \ud83d\ude00\uf68f"
+                }
+            },
+            "expect": {
+                "valid": true
+            }
+        },
+        {
+            "name": "memos.create/valid/9",
+            "document": "zoo",
+            "operationId": "memos.create",
+            "request": {
+                "method": "POST",
+                "target": "/memos",
+                "headers": {
+                    "Content-Type": [
+                        "application/json"
+                    ]
+                },
+                "body": {
+                    "encoding": "utf8",
+                    "content": "{\"text\":\"\\u2df6\\udbaa\\udcff\\udb59\\udea1K:5\\u0308\"}"
+                }
             },
             "expect": {
                 "valid": true
