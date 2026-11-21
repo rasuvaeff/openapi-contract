@@ -655,15 +655,13 @@ final class SchemaValidator
                 // reference cycle the compiler could not inline — and is
                 // read in the same direction as the schema that holds it.
                 // Not a property: nothing here drops a `required` entry.
-                $defs = [];
                 /** @var array<array-key, mixed> $defMap */
                 $defMap = $member;
+                $defs = $defMap;
                 foreach (array_keys($defMap) as $name) {
                     /** @var mixed $def */
                     $def = $defMap[$name];
                     if (!is_array($def) || array_is_list($def)) {
-                        $defs[$name] = $def;
-
                         continue;
                     }
                     /** @var array<string, mixed> $def */
@@ -672,17 +670,15 @@ final class SchemaValidator
                 $schema['$defs'] = $defs;
             } elseif ((in_array($keyword, ['properties', 'patternProperties', 'dependentSchemas'], strict: true)) && is_array($member)) {
                 $flag = $direction->foreignFlag();
-                $properties = [];
                 /** @var array<string, true> $foreign */
                 $foreign = [];
                 /** @var array<array-key, mixed> $propertyMap */
                 $propertyMap = $member;
+                $properties = $propertyMap;
                 foreach (array_keys($propertyMap) as $name) {
                     /** @var mixed $property */
                     $property = $propertyMap[$name];
                     if (!is_array($property) || array_is_list($property)) {
-                        $properties[$name] = $property;
-
                         continue;
                     }
                     /** @var array<string, mixed> $property */
