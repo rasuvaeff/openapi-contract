@@ -6,6 +6,7 @@ namespace Rasuvaeff\OpenApiContract\Internal\Schema;
 
 use Opis\JsonSchema\Errors\ValidationError;
 use Opis\JsonSchema\Helper;
+use Opis\JsonSchema\Resolvers\FormatResolver;
 use Opis\JsonSchema\Schema;
 use Opis\JsonSchema\SchemaLoader;
 use Opis\JsonSchema\Schemas\ExceptionSchema;
@@ -96,13 +97,7 @@ final class SchemaValidator
             'allowSlots' => false,
             'allowTemplates' => false,
         ]);
-        $formats = $parser->getFormatResolver() ?? throw new \LogicException('The schema backend offers no format resolver');
-        // OpenAPI defines `int32` and `int64` as ranges of the integer type
-        // (RFC 8259 leaves a number's range to the interchange), and the
-        // backend knows neither: without these two an integer `format` was
-        // an annotation and a value outside the declared width passed.
-        $formats->registerCallable('integer', 'int32', static fn(int|float $value): bool => $value >= -2_147_483_648 && $value <= 2_147_483_647);
-        $formats->registerCallable('integer', 'int64', static fn(int|float $value): bool => is_int($value) || ($value >= -9_223_372_036_854_775_808 && $value < 9_223_372_036_854_775_808));
+        $parser->setFormatResolver(self::formats());
         $loader = new SchemaLoader(
             parser: $parser,
             decodeJsonString: true,
@@ -112,6 +107,40 @@ final class SchemaValidator
             max_errors: self::MAX_ERRORS,
             stop_at_first_error: false,
         );
+    }
+
+    /**
+     * Whether the `format` is an assertion on a value of the JSON type rather
+     * than an annotation: read off the resolver {@see __construct()} gives
+     * the backend, never off a list kept beside it. A value of a subtype is
+     * checked by its supertype's format — an `integer` by a `number` one —
+     * as the backend applies them.
+     */
+    public static function assertsFormat(string $type, string $format): bool
+    {
+        $types = self::formats()->resolveAll($format) ?? [];
+        if (isset($types[$type])) {
+            return true;
+        }
+        $super = Helper::JSON_SUBTYPES[$type] ?? null;
+
+        return $super !== null && isset($types[$super]);
+    }
+
+    /**
+     * The backend's formats plus the two OpenAPI defines on integers. OpenAPI
+     * defines `int32` and `int64` as ranges of the integer type (RFC 8259
+     * leaves a number's range to the interchange), and the backend knows
+     * neither: without these two an integer `format` was an annotation and a
+     * value outside the declared width passed.
+     */
+    private static function formats(): FormatResolver
+    {
+        $formats = new FormatResolver();
+        $formats->registerCallable('integer', 'int32', static fn(int|float $value): bool => $value >= -2_147_483_648 && $value <= 2_147_483_647);
+        $formats->registerCallable('integer', 'int64', static fn(int|float $value): bool => is_int($value) || ($value >= -9_223_372_036_854_775_808 && $value < 9_223_372_036_854_775_808));
+
+        return $formats;
     }
 
     /**

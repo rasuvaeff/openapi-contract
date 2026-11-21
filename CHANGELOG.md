@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.18.0 — 2026-11-21
+
+- **Added.** `SchemaCheck::assertsFormat(string $type, string $format): bool`
+  — whether the contract checks a `format` on a value of a JSON type or reads
+  it as an annotation (`phone`, `byte`, custom formats) that every value
+  satisfies. It reads the validator's own format resolver, so
+  `rasuvaeff/property-testing-openapi` can generate a plain string for an
+  annotation without keeping a copy of the list (property-testing-openapi#168).
+  The validator now builds that resolver itself instead of amending the
+  backend's default one; the formats it checks are unchanged.
+
 ## 0.17.0 — 2026-11-13
 
 - **Changed.** `opis/json-schema` 2.6.2 no longer applies the object form of
