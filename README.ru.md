@@ -17,7 +17,7 @@ OpenAPI 3.0 и 3.1.
 
 ## Требования
 
-- PHP 8.3 – 8.5
+- PHP 8.3 – 8.6
 - реализации `psr/http-message` для валидируемых exchanges
   (`nyholm/psr7` — suggest для CLI-раннера и примеров:
   `composer require nyholm/psr7`)
