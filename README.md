@@ -112,6 +112,23 @@ absolute paths, URI schemes, percent-encoded paths, traversal, and symlink
 escapes are rejected before any read, and resolution errors report paths
 relative to the document root. `fromArray()` and `fromJson()` have no
 trusted filesystem root and accept same-document references only.
+
+Pass `only:` to any factory to compile just the operations you use, by key:
+
+```php
+$contract = Contract::fromFile('openapi.yaml', only: ['listTags', 'GET /health']);
+```
+
+The document's other path operations and its webhooks are not compiled, so an
+unsupported one cannot refuse the document; they do not match a request either.
+A key the document does not declare throws `UnknownOperation`. Root servers and
+security schemes are always compiled. Use it for a client of a few operations,
+not for a middleware: a request to an unselected concrete path may match a
+selected templated one.
+
+`Operation` also carries the annotations `summary`, `description` and `tags`, and
+a parameter its `description`; validation never reads them.
+
 Documents are bounded: byte size, JSON depth, `$ref` depth, the number of
 nodes a document expands into, a reference-resolution budget, and — for
 multi-file documents — file-count, byte and node budgets shared across the

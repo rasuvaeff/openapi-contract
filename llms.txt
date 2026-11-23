@@ -186,11 +186,13 @@ API reference:
   summary. Exit `0` all hold, `1` a fixture violates the contract or is
   malformed, `2` usage (bad args, unloadable contract, no `*.json`
   fixtures — fail closed).
-- `Contract::fromArray(array $document, ?Limits $limits = null): Contract` /
-  `fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null)` /
-  `fromFile(string $path, ?Limits $limits = null)` (YAML via suggested
+- `Contract::fromArray(array $document, ?Limits $limits = null, ?array $only = null): Contract` /
+  `fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null, ?array $only = null)` /
+  `fromFile(string $path, ?Limits $limits = null, ?array $only = null)` (YAML via suggested
   symfony/yaml; multi-file relative `$ref`s under the entry directory) build
-  the immutable compiled contract.
+  the immutable compiled contract. `only` = keys of the path operations to
+  compile; the rest and webhooks are skipped (cannot refuse, do not match);
+  an undeclared key throws `UnknownOperation`.
 - `Limits` (readonly): `documentBytes` (default 10 MiB),
   `messageBodyBytes` (default 1 MiB), `documentFiles` (default 64),
   `documentNodes` (default 5 000 000), `resolvedNodes` (default 1 000 000),
@@ -233,8 +235,9 @@ API reference:
   > root precedence, variable defaults substituted; undeclared variables,
   non-enum defaults, unsupported schemes, and userinfo/query/fragment fail
   closed at compile time; read a base path as `$servers[$i]['base']`),
-  `dialect`, `webhook` (`?string`, the `webhooks` map key; append-only
-  constructor, use named arguments).
+  `dialect`, `webhook` (`?string`, the `webhooks` map key), and the annotations
+  `summary`, `description` (`?string`), `tags` (`list<string>`); append-only
+  constructor, use named arguments. A parameter may carry `description`.
 - `Contract::match(RequestInterface): ?MatchedOperation` — method, server
   base paths, concrete-before-templated precedence, split on the raw `/`
   then a single percent-decode per segment (`/pets/a%2Fb` matches

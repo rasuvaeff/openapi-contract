@@ -127,19 +127,30 @@ final readonly class Contract
         $this->byKey = $byKey;
     }
 
-    /** @param array<string, mixed> $document */
-    public static function fromArray(array $document, ?Limits $limits = null): self
+    /**
+     * With `$only` the contract holds just the named path operations (by key:
+     * `operationId`, or `METHOD /path` without one); the document's other
+     * operations and its webhooks are not compiled, so they can neither refuse
+     * it nor match a request. A key the document does not declare throws
+     * {@see UnknownOperation}. Security schemes and root servers are always
+     * compiled.
+     *
+     * @param array<string, mixed> $document
+     * @param list<string>|null $only
+     */
+    public static function fromArray(array $document, ?Limits $limits = null, ?array $only = null): self
     {
         $limits ??= new Limits();
         if (DocumentNodes::within($document, $limits->documentNodes) === null) {
             throw new InvalidContract(sprintf('OpenAPI document expands to more than %d nodes', $limits->documentNodes));
         }
-        $compiled = (new DocumentCompiler())->compile($document, resolvedNodes: $limits->resolvedNodes);
+        $compiled = (new DocumentCompiler())->compile($document, resolvedNodes: $limits->resolvedNodes, only: $only);
 
         return new self($compiled->dialect, $compiled->operations, $compiled->webhooks, $compiled->securitySchemes, $limits);
     }
 
-    public static function fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null): self
+    /** @param list<string>|null $only see {@see fromArray()} */
+    public static function fromJson(string $json, string $source = 'openapi.json', ?Limits $limits = null, ?array $only = null): self
     {
         $limits ??= new Limits();
         if (strlen($json) > $limits->documentBytes) {
@@ -156,19 +167,21 @@ final readonly class Contract
         }
 
         /** @var array<string, mixed> $document */
-        return self::fromArray($document, $limits);
+        return self::fromArray($document, $limits, $only);
     }
 
     /**
      * Unlike {@see fromArray()} and {@see fromJson()}, a file-loaded document
      * may reference sibling files with relative $refs; every referenced file
      * must stay inside the entry file's directory tree.
+     *
+     * @param list<string>|null $only see {@see fromArray()}
      */
-    public static function fromFile(string $path, ?Limits $limits = null): self
+    public static function fromFile(string $path, ?Limits $limits = null, ?array $only = null): self
     {
         $limits ??= new Limits();
         $graph = DocumentGraph::open($path, $limits->documentFiles, $limits->documentBytes, $limits->documentNodes);
-        $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph, $limits->resolvedNodes);
+        $compiled = (new DocumentCompiler())->compile($graph->entryDocument(), $graph, $limits->resolvedNodes, $only);
 
         return new self($compiled->dialect, $compiled->operations, $compiled->webhooks, $compiled->securitySchemes, $limits);
     }
