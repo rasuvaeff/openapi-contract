@@ -5,12 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.19.0 — 2026-11-23
 
 - **Fixed.** A percent-encoded JSON Pointer in a `$ref` (`#/paths/~1pets~1%7Bid%7D/…`)
-  is decoded, as RFC 6901 prescribes; it used to refuse the document.
+  is decoded, as RFC 6901 prescribes; it used to refuse the document
+  (#201).
 - **Added.** `only:` on `Contract::fromArray()`, `fromJson()` and `fromFile()`
-  compiles just the named path operations.
+  compiles just the named path operations (#200).
 - **Added.** `Operation::$summary`, `$description`, `$tags` and the parameter key
   `description`: annotations, never validated.
 
