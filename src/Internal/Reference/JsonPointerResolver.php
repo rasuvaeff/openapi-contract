@@ -670,6 +670,12 @@ final class JsonPointerResolver
         $node = $this->documentOf($file);
         foreach (explode('/', substr($fragment, 2)) as $segment) {
             $segment = $this->decodeSegment($segment, $reference);
+            if (!array_key_exists($segment, $node) && str_contains($segment, '%')) {
+                // RFC 6901, section 6: a pointer in a URI fragment is
+                // percent-encoded (`{id}` is `%7Bid%7D`). The raw spelling is
+                // tried first, for documents that name a key with a bare `%`.
+                $segment = rawurldecode($segment);
+            }
             if (!array_key_exists($segment, $node)) {
                 throw new InvalidContract(sprintf('Unresolvable $ref "%s" in %s', $reference, $this->label($sourceFile)));
             }

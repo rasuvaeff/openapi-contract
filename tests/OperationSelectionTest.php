@@ -8,6 +8,7 @@ use Nyholm\Psr7\Request;
 use Rasuvaeff\OpenApiContract\Contract;
 use Rasuvaeff\OpenApiContract\ContractException;
 use Rasuvaeff\OpenApiContract\Internal\Compilation\DocumentCompiler;
+use Rasuvaeff\OpenApiContract\Internal\Reference\JsonPointerResolver;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Testo\Assert;
@@ -17,6 +18,7 @@ use Testo\Test;
 #[Test]
 #[Covers(Contract::class)]
 #[Covers(DocumentCompiler::class)]
+#[Covers(JsonPointerResolver::class)]
 #[Covers(Operation::class)]
 final class OperationSelectionTest
 {
@@ -85,6 +87,26 @@ final class OperationSelectionTest
 
         Assert::notNull($caught);
         Assert::same($caught->getMessage(), 'Operation "missing" is not present in the OpenAPI document');
+    }
+
+    public function aPercentEncodedReferenceIsDecoded(): void
+    {
+        $contract = Contract::fromArray([
+            'openapi' => '3.1.0',
+            'info' => ['title' => 't', 'version' => '1'],
+            'paths' => [
+                '/a/{id}' => ['parameters' => [['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']]], 'get' => ['responses' => ['204' => ['description' => 'ok']]]],
+                '/b/{id}' => ['parameters' => [['$ref' => '#/paths/~1a~1%7Bid%7D/parameters/0']], 'get' => [
+                    'parameters' => [['name' => 'q', 'in' => 'query', 'schema' => ['$ref' => '#/components/schemas/100%25']], ['name' => 'r', 'in' => 'query', 'schema' => ['$ref' => '#/components/schemas/50%']]],
+                    'responses' => ['204' => ['description' => 'ok']],
+                ]],
+            ],
+            'components' => ['schemas' => ['100%' => ['type' => 'integer'], '50%' => ['type' => 'boolean']]],
+        ]);
+        $parameters = $contract->operation('GET /b/{id}')->parameters;
+
+        Assert::same(array_column($parameters, 'name'), ['id', 'q', 'r']);
+        Assert::same([$parameters[1]['schema']['type'] ?? null, $parameters[2]['schema']['type'] ?? null], ['integer', 'boolean']);
     }
 
     public function anOperationWithAnIdIsNotSelectableByMethodAndPath(): void

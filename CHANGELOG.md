@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Fixed.** A percent-encoded JSON Pointer in a `$ref` (`#/paths/~1pets~1%7Bid%7D/…`)
+  is decoded, as RFC 6901 prescribes; it used to refuse the document.
 - **Added.** `only:` on `Contract::fromArray()`, `fromJson()` and `fromFile()`
   compiles just the named path operations.
 - **Added.** `Operation::$summary`, `$description`, `$tags` and the parameter key
