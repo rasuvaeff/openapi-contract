@@ -43,6 +43,7 @@ use Rasuvaeff\OpenApiContract\Internal\Response\SelectedResponse;
  *     allowReserved: bool,
  *     schema: array<string, mixed>,
  *     specPointer: non-empty-string,
+ *     description?: string,
  *     example?: mixed,
  *     examples?: array<string, mixed>,
  * }
@@ -103,6 +104,9 @@ final readonly class Operation
      *        a Path Item without a path: `$path` is empty, `$servers` is
      *        empty, and no path parameter is declared. Its identity is its
      *        `operationId` when present, otherwise `WEBHOOK <METHOD> <name>`.
+     * @param ?string $summary the declared `summary`; an annotation, never validated
+     * @param ?string $description the declared `description`; an annotation, never validated
+     * @param list<string> $tags the declared `tags`; an annotation, never validated
      *
      * @api append-only: a minor release may add a defaulted parameter at the
      *      end; construct with named arguments.
@@ -119,6 +123,9 @@ final readonly class Operation
         public array $servers = [],
         public SchemaDialect $dialect = SchemaDialect::OpenApi31,
         public ?string $webhook = null,
+        public ?string $summary = null,
+        public ?string $description = null,
+        public array $tags = [],
     ) {}
 
     /**

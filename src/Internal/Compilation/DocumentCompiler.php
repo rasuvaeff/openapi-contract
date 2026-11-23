@@ -11,6 +11,7 @@ use Rasuvaeff\OpenApiContract\InvalidContract;
 use Rasuvaeff\OpenApiContract\Limits;
 use Rasuvaeff\OpenApiContract\Operation;
 use Rasuvaeff\OpenApiContract\SchemaDialect;
+use Rasuvaeff\OpenApiContract\UnknownOperation;
 use Rasuvaeff\OpenApiContract\UnsupportedSerialization;
 use Rasuvaeff\OpenApiContract\UnsupportedVersion;
 
@@ -56,8 +57,11 @@ final readonly class DocumentCompiler
     /** Keywords whose value is a map of subschemas. @var list<string> */
     private const array SUBSCHEMA_MAP_KEYWORDS = ['$defs', 'properties', 'patternProperties', 'dependentSchemas'];
 
-    /** @param array<string, mixed> $document */
-    public function compile(array $document, ?DocumentGraph $graph = null, int $resolvedNodes = Limits::DEFAULT_RESOLVED_NODES): CompiledDocument
+    /**
+     * @param array<string, mixed> $document
+     * @param list<string>|null $only keys of the path operations to compile; null compiles the whole document
+     */
+    public function compile(array $document, ?DocumentGraph $graph = null, int $resolvedNodes = Limits::DEFAULT_RESOLVED_NODES, ?array $only = null): CompiledDocument
     {
         $version = $document['openapi'] ?? null;
         if (!is_string($version) || !preg_match('/^3\.(0|1)\.[0-9]+$/', $version)) {
@@ -89,6 +93,12 @@ final readonly class DocumentCompiler
             );
         }
 
+        if ($only !== null) {
+            // only path operations are selectable: a webhook is validated by
+            // name, never by the key of an operation a consumer calls
+            $rawWebhooks = [];
+        }
+
         $resolver = new JsonPointerResolver($document, $dialect, maximumResolvedNodes: $resolvedNodes, graph: $graph);
         $rootServers = $this->servers($document['servers'] ?? null);
         $securitySchemes = (new SecuritySchemeCompiler())->compile($document['components'] ?? null, $dialect, $resolver);
@@ -116,7 +126,21 @@ final readonly class DocumentCompiler
                 throw new InvalidContract(sprintf('OpenAPI path item "%s" must be an object', $pathString));
             }
             /** @var array<array-key, mixed> $pathItem */
+            if ($only !== null) {
+                // before resolution: an unselected operation must not be able
+                // to refuse the document through a reference of its own
+                $pathItem = $this->selected($pathItem, $pathString, $only);
+
+                if ($pathItem === []) {
+                    continue;
+                }
+            }
             $pathItem = $resolver->resolve($pathItem);
+
+            if ($only !== null) {
+                // again: a referenced Path Item shows its operations only now
+                $pathItem = $this->selected($pathItem, $pathString, $only);
+            }
             $pathServers = $this->servers($pathItem['servers'] ?? null, $rootServers);
             $pathParameters = $this->parameterList($pathItem['parameters'] ?? null, sprintf('path item "%s"', $pathString));
             foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
@@ -168,6 +192,9 @@ final readonly class DocumentCompiler
                         : $rootSecurity,
                     servers: $servers,
                     dialect: $dialect,
+                    summary: $this->annotation($raw['summary'] ?? null),
+                    description: $this->annotation($raw['description'] ?? null),
+                    tags: $this->tags($raw['tags'] ?? null),
                 );
             }
         }
@@ -233,12 +260,21 @@ final readonly class DocumentCompiler
                     servers: [],
                     dialect: $dialect,
                     webhook: $name,
+                    summary: $this->annotation($raw['summary'] ?? null),
+                    description: $this->annotation($raw['description'] ?? null),
+                    tags: $this->tags($raw['tags'] ?? null),
                 );
             }
             if ($compiled === []) {
                 throw new InvalidContract(sprintf('OpenAPI webhook "%s" declares no operations', $name));
             }
             $webhooks[$name] = $compiled;
+        }
+
+        foreach ($only ?? [] as $key) {
+            if (!isset($operations[$key])) {
+                throw new UnknownOperation(sprintf('Operation "%s" is not present in the OpenAPI document', $key));
+            }
         }
 
         if ($operations === [] && $webhooks === []) {
@@ -255,6 +291,50 @@ final readonly class DocumentCompiler
             webhooks: $webhooks,
             securitySchemes: $securitySchemes,
         );
+    }
+
+    /**
+     * The Path Item without the operations that are not in the selection;
+     * empty when none of them is. A Path Item that is a reference keeps its
+     * `$ref`: what it declares is not known before it is resolved.
+     *
+     * @param array<array-key, mixed> $pathItem
+     * @param list<string> $only
+     * @return array<array-key, mixed>
+     */
+    private function selected(array $pathItem, string $path, array $only): array
+    {
+        $kept = array_key_exists('$ref', $pathItem);
+
+        foreach (['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as $method) {
+            if (!array_key_exists($method, $pathItem)) {
+                continue;
+            }
+            /** @var mixed $raw */
+            $raw = $pathItem[$method];
+            /** @var mixed $operationId */
+            $operationId = is_array($raw) ? $raw['operationId'] ?? null : null;
+
+            if (in_array(is_string($operationId) ? $operationId : strtoupper($method) . ' ' . $path, $only, strict: true)) {
+                $kept = true;
+            } else {
+                unset($pathItem[$method]);
+            }
+        }
+
+        return $kept ? $pathItem : [];
+    }
+
+    /** An annotation that is not a string says nothing; it is never a reason to refuse a document. */
+    private function annotation(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /** @return list<string> */
+    private function tags(mixed $tags): array
+    {
+        return is_array($tags) ? array_values(array_filter($tags, static fn(mixed $tag): bool => is_string($tag) && $tag !== '')) : [];
     }
 
     /**
@@ -507,6 +587,7 @@ final readonly class DocumentCompiler
             'explode' => is_bool($explodeValue) ? $explodeValue : $style === 'form',
             'allowReserved' => ($raw['allowReserved'] ?? false) === true,
             'schema' => $schema,
+            ...is_string($raw['description'] ?? null) ? ['description' => $raw['description']] : [],
             ...array_key_exists('example', $raw) ? ['example' => $raw['example']] : [],
             ...array_key_exists('examples', $raw) ? ['examples' => $this->namedExamples($name, $raw['examples'])] : [],
             'specPointer' => $specPointer,
